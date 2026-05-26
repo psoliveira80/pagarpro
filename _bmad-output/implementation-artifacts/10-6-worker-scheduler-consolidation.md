@@ -1,21 +1,21 @@
 ---
 epic: 10
 story: 6
-title: "Worker Scheduler Consolidation and Monitoring"
+title: "Consolidação e Monitoramento do Scheduler de Workers"
 type: "Core"
 status: ready-for-dev
 ---
 
-# Story 10.6: Worker Scheduler Consolidation and Monitoring
+# Story 10.6: Consolidação e Monitoramento do Scheduler de Workers
 
-## User Story
-As a System Administrator,
-I want all scheduled tasks consolidated with proper crontab timing and a monitoring dashboard,
-So that I can verify all automations are running correctly.
+## História de Usuário
+Como Administrador do Sistema,
+quero todas as tasks agendadas consolidadas com timing crontab apropriado e um painel de monitoramento,
+para que eu possa verificar se todas as automações estão rodando corretamente.
 
-## Acceptance Criteria
+## Critérios de Aceite
 
-1. All Celery Beat tasks use `crontab()` with exact times (not intervals):
+1. Todas as tasks Celery Beat usam `crontab()` com horários exatos (não intervalos):
    - 03:00 daily-backup
    - 04:00 generate-recurring-payables
    - 05:00 calculate-customer-scores
@@ -25,29 +25,29 @@ So that I can verify all automations are running correctly.
    - */30 check-paid-installments
    - */5 check-channel-health
    - */60 refresh-materialized-views
-2. Admin endpoint GET `/api/v1/admin/scheduled-tasks` — lists all scheduled tasks with last run, next run, status.
-3. Frontend: "Tarefas Agendadas" page at `/system/settings/scheduler` — table showing each task, schedule, last execution, status badge (ok/failed/never ran).
-4. Failed task sends SSE alert to admin.
-5. Tests: verify crontab configuration is valid.
+2. Endpoint admin GET `/api/v1/admin/scheduled-tasks` — lista todas as tasks agendadas com última execução, próxima execução, status.
+3. Frontend: página "Tarefas Agendadas" em `/system/settings/scheduler` — tabela mostrando cada task, agendamento, última execução, badge de status (ok/falhou/nunca rodou).
+4. Task que falhou envia alerta SSE ao admin.
+5. Testes: verifica que a configuração crontab é válida.
 
-## Technical Context
+## Contexto Técnico
 
-### Files to Create/Modify
+### Arquivos a Criar/Modificar
 ```
 backend-api/
-├── app/workers/__init__.py                    # Consolidate all beat_schedule with crontab
-├── app/api/v1/admin_routes.py                 # Add scheduled-tasks endpoint
+├── app/workers/__init__.py                    # Consolida todo o beat_schedule com crontab
+├── app/api/v1/admin_routes.py                 # Adiciona endpoint de scheduled-tasks
 frontend/
 ├── src/app/features/settings/scheduler.component.ts/html/css
-├── src/app/features/system/system.routes.ts   # Add /settings/scheduler route
+├── src/app/features/system/system.routes.ts   # Adiciona rota /settings/scheduler
 ```
 
-### Technical Notes
-- Use `celery.schedules.crontab` instead of integer intervals
-- Task results stored in Redis (Celery result backend) — read last execution info
-- Add "Tarefas Agendadas" to settings sidebar menu
+### Notas Técnicas
+- Usar `celery.schedules.crontab` em vez de intervalos inteiros
+- Resultados das tasks armazenados em Redis (Celery result backend) — ler informação da última execução
+- Adicionar "Tarefas Agendadas" ao menu da sidebar de configurações
 
-## Dev Checklist
-- [ ] All acceptance criteria met
-- [ ] Tests written and passing
-- [ ] No regressions
+## Checklist do Dev
+- [ ] Todos os critérios de aceite atendidos
+- [ ] Testes escritos e passando
+- [ ] Sem regressões

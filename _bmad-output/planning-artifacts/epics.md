@@ -6,1898 +6,1898 @@ inputDocuments:
 project_name: "{{product_name}}"
 ---
 
-# {{product_name}} — Epic & Story Breakdown
+# {{product_name}} — Detalhamento de Épicos e Histórias
 
-## Overview
+## Visão Geral
 
-This document provides the complete epic and story breakdown for **{{product_name}}**, a generic recurring-billing and collections platform with pluggable vertical asset modules. The platform's **Core** handles: clients, contracts with a flexible installment builder, receivables (7-state lifecycle), payables, an AI-powered WhatsApp collection agent, bank reconciliation, dashboards, and auditing. **Vertical modules** plug in via the Asset Abstraction Layer (`IAssetModule` + Domain Events + Module Hooks) to add domain-specific functionality without touching the Core.
+Este documento fornece o detalhamento completo de épicos e histórias para **{{product_name}}**, uma plataforma genérica de cobrança recorrente e gestão de inadimplência com módulos verticais de ativos plugáveis. O **Core** da plataforma cuida de: clientes, contratos com construtor flexível de parcelas, títulos a receber (ciclo de 7 estados), títulos a pagar, agente de cobrança via WhatsApp com IA, conciliação bancária, dashboards e auditoria. **Módulos verticais** se conectam via Camada de Abstração de Ativos (`IAssetModule` + Eventos de Domínio + Module Hooks) para adicionar funcionalidades específicas de domínio sem tocar no Core.
 
-The **first vertical module is Vehicles** (fleet management), covering FIPE valuation, GPS tracker integration with remote block/unblock, depreciation, ROI per vehicle, and an interactive fleet map.
+O **primeiro módulo vertical é o de Veículos** (gestão de frota), cobrindo valoração FIPE, integração com rastreador GPS com bloqueio/desbloqueio remoto, depreciação, ROI por veículo e mapa interativo da frota.
 
-The system is a greenfield fullstack web application (Angular 21+ / FastAPI) built on Hexagonal (Ports & Adapters) architecture so that external providers (WhatsApp, Open Finance, payment gateways, LLM, OCR, storage, module-specific APIs) are swappable via configuration. Folder references: `backend-api/` (backend), `frontend/` (frontend).
+O sistema é uma aplicação web fullstack greenfield (Angular 21+ / FastAPI) construída sobre arquitetura Hexagonal (Ports & Adapters), de modo que provedores externos (WhatsApp, Open Finance, gateways de pagamento, LLM, OCR, storage, APIs específicas de módulo) sejam intercambiáveis por configuração. Referências de pasta: `backend-api/` (backend), `frontend/` (frontend).
 
-**Key financial design decisions:**
+**Decisões financeiras-chave de design:**
 
-- **Title lifecycle:** Titles (installments) are generated on contract finalization (`status='vigente'`). Contract changes that affect installments cancel open titles and reissue new ones. Paid titles are immutable.
-- **Partial payments:** If paid amount < title amount, the original title receives partial write-off and a NEW title is created for the difference with a new collection cycle.
-- **Default payment:** Pix via WhatsApp (zero cost). The system generates Pix QR Code and sends it via WhatsApp; the client pays directly to the bank account and sends a screenshot; OCR + validation + reconciliation confirm the payment. Gateway plugins (Asaas, Stripe, etc.) are optional.
+- **Ciclo de vida do título:** Títulos (parcelas) são gerados na finalização do contrato (`status='vigente'`). Mudanças no contrato que afetam parcelas cancelam títulos em aberto e reemitem novos. Títulos pagos são imutáveis.
+- **Pagamentos parciais:** Se valor pago < valor do título, o título original recebe baixa parcial e um NOVO título é criado para a diferença, com novo ciclo de cobrança.
+- **Pagamento padrão:** Pix via WhatsApp (custo zero). O sistema gera o QR Code Pix e envia via WhatsApp; o cliente paga diretamente na conta bancária e envia o comprovante; OCR + validação + conciliação confirmam o pagamento. Plugins de gateway (Asaas, Stripe, etc.) são opcionais.
 
-## Requirements Inventory
+## Inventário de Requisitos
 
-### Functional Requirements
+### Requisitos Funcionais
 
-#### Asset Abstraction Layer (AST) — Core
+#### Camada de Abstração de Ativos (AST) — Core
 
-- **FR-CORE-AST-1.** `IAssetModule` interface that each vertical module implements (Protocol with hooks for domain events, asset details, financials, dashboard widgets, report dimensions, collection tools).
-- **FR-CORE-AST-2.** Core NEVER imports module code directly. Communication via Domain Events on an internal event bus (sync in-process for MVP, evolvable to async). Modules register hooks at startup.
-- **FR-CORE-AST-3.** Generic `assets` table: `id`, `module_id`, `external_ref`, `display_name`, `status`, `metadata` (JSONB). Contracts reference `asset_id`.
-- **FR-CORE-AST-4.** Enable/disable vertical modules in Settings > Modules without restart.
-- **FR-CORE-AST-5.** Core lifecycle hooks for domain events: `InstallmentOverdue`, `InstallmentPaid`, `ContractCreated`, `ContractTerminated`, `ReconciliationCompleted`, `CustomerScoreChanged`, `PaymentPartiallyReceived`.
+- **FR-CORE-AST-1.** Interface `IAssetModule` que cada módulo vertical implementa (Protocol com hooks para eventos de domínio, detalhes do ativo, dados financeiros, widgets de dashboard, dimensões de relatório, ferramentas de cobrança).
+- **FR-CORE-AST-2.** O Core NUNCA importa código de módulo diretamente. Comunicação via Eventos de Domínio num event bus interno (síncrono in-process no MVP, evoluível para assíncrono). Módulos registram hooks no startup.
+- **FR-CORE-AST-3.** Tabela genérica `assets`: `id`, `module_id`, `external_ref`, `display_name`, `status`, `metadata` (JSONB). Contratos referenciam `asset_id`.
+- **FR-CORE-AST-4.** Ativar/desativar módulos verticais em Configurações > Módulos sem restart.
+- **FR-CORE-AST-5.** Hooks de ciclo de vida do Core para eventos de domínio: `InstallmentOverdue`, `InstallmentPaid`, `ContractCreated`, `ContractTerminated`, `ReconciliationCompleted`, `CustomerScoreChanged`, `PaymentPartiallyReceived`.
 
-#### Authentication & Access Control (AUTH) — Core
+#### Autenticação e Controle de Acesso (AUTH) — Core
 
-- **FR-CORE-AUTH-1.** Login by email/password with Argon2id hashing and optional MFA (TOTP).
-- **FR-CORE-AUTH-2.** Roles: Admin, Operator, Validator, Auditor (read-only), each with scoped capabilities.
-- **FR-CORE-AUTH-3.** Granular per-module RBAC (CRUD + sensitive actions). Vertical modules can register additional permissions (e.g., Vehicle Module registers "block vehicle via tracker").
-- **FR-CORE-AUTH-4.** Short-lived JWT (15 min) with rotating refresh token (7 days) in `HttpOnly Secure SameSite=Lax` cookie.
-- **FR-CORE-AUTH-5.** Audit login/logout, IP, user-agent, failed attempts; lock after 5 failures in 15 min.
+- **FR-CORE-AUTH-1.** Login por email/senha com hash Argon2id e MFA opcional (TOTP).
+- **FR-CORE-AUTH-2.** Papéis: Administrador, Operador, Validador, Auditor (somente leitura), cada um com capacidades de escopo definido.
+- **FR-CORE-AUTH-3.** RBAC granular por módulo (CRUD + ações sensíveis). Módulos verticais podem registrar permissões adicionais (ex.: Módulo de Veículos registra "bloquear veículo via rastreador").
+- **FR-CORE-AUTH-4.** JWT de curta duração (15 min) com refresh token rotativo (7 dias) em cookie `HttpOnly Secure SameSite=Lax`.
+- **FR-CORE-AUTH-5.** Auditoria de login/logout, IP, user-agent, tentativas falhas; bloqueio após 5 falhas em 15 min.
 
-#### Generic Registrations (CAD) — Core
+#### Cadastros Genéricos (CAD) — Core
 
-- **FR-CORE-CAD-1.** Customer registration with full personal data, validated CPF/CNPJ, ViaCEP address, profile photo, N attachments. Additional fields from vertical modules via schema extension.
-- **FR-CORE-CAD-2.** Generic `assets` table (per FR-CORE-AST-3). Each vertical module manages its own detailed asset records and syncs with core `assets`.
-- **FR-CORE-CAD-3.** Group assets into generic categories for reporting. Vertical modules can add domain-specific categories.
+- **FR-CORE-CAD-1.** Cadastro de cliente com dados pessoais completos, CPF/CNPJ validado, endereço ViaCEP, foto de perfil, N anexos. Campos adicionais de módulos verticais via extensão de schema.
+- **FR-CORE-CAD-2.** Tabela genérica `assets` (conforme FR-CORE-AST-3). Cada módulo vertical gerencia seus próprios registros detalhados de ativo e sincroniza com `assets` do core.
+- **FR-CORE-CAD-3.** Agrupar ativos em categorias genéricas para relatórios. Módulos verticais podem adicionar categorias específicas do domínio.
 
-#### Vehicle Module — Registrations (VH)
+#### Módulo de Veículos — Cadastros (VH)
 
-- **FR-VH-1.** Vehicle registration with Mercosul plate validation, Renavam, chassis, FIPE binding, tracker code, status, insurance/IPVA/licensing data, photo gallery. Synced with core `assets`.
-- **FR-VH-2.** Auto-fetch FIPE via cascading brand/model/year selectors; monthly refresh job (day 5).
-- **FR-VH-3.** Vehicle acquisition payment model (cash, financed Price/SAC, consortium, custom).
-- **FR-VH-4.** Per-vehicle financials: FIPE value, depreciation, total paid to acquisition, balance, total received, ROI %, payback.
-- **FR-VH-5.** Interactive fleet map (Leaflet+OSM, swappable Google Maps) with live positions, popups, block/unblock actions.
-- **FR-VH-6.** Schema extension for Customer: CNH (number, category, expiry, photo).
-- **FR-VH-7.** Hook `on_installment_overdue`: check parametrized block policy (days overdue >= X AND score < Y), dispatch GPS block via `ITrackerGateway` with mandatory human approval.
-- **FR-VH-8.** Additional collection agent tools: `bloquear_veiculo`, `desbloquear_veiculo`, `verificar_localizacao_veiculo` injected via `IAssetModule.get_collection_tools()`.
+- **FR-VH-1.** Cadastro de veículo com validação de placa Mercosul, Renavam, chassi, vínculo FIPE, código do rastreador, status, dados de seguro/IPVA/licenciamento, galeria de fotos. Sincronizado com `assets` do core.
+- **FR-VH-2.** Busca automática FIPE via seletores em cascata marca/modelo/ano; job mensal de atualização (dia 5).
+- **FR-VH-3.** Modelo de pagamento de aquisição do veículo (à vista, financiado Price/SAC, consórcio, customizado).
+- **FR-VH-4.** Dados financeiros por veículo: valor FIPE, depreciação, total pago em aquisição, saldo, total recebido, ROI %, payback.
+- **FR-VH-5.** Mapa interativo da frota (Leaflet+OSM, intercambiável com Google Maps) com posições ao vivo, popups, ações de bloqueio/desbloqueio.
+- **FR-VH-6.** Extensão de schema para Cliente: CNH (número, categoria, validade, foto).
+- **FR-VH-7.** Hook `on_installment_overdue`: verifica política parametrizada de bloqueio (dias em atraso >= X E score < Y), dispara bloqueio GPS via `ITrackerGateway` com aprovação humana obrigatória.
+- **FR-VH-8.** Ferramentas adicionais do agente de cobrança: `bloquear_veiculo`, `desbloquear_veiculo`, `verificar_localizacao_veiculo` injetadas via `IAssetModule.get_collection_tools()`.
 
-#### Contracts (CTR) — Core
+#### Contratos (CTR) — Core
 
-- **FR-CORE-CTR-1.** Contract linking Customer to Asset (`asset_id`) with full terms (dates, installment model, periodicity, due day, interest, fine, grace, purchase option, guarantees, clauses).
-- **FR-CORE-CTR-2.** Visual installment builder: down payment, N regular installments, semestral/annual extras, grace period, custom schedule.
-- **FR-CORE-CTR-3.** On finalization (`vigente`): auto-generate titles (`em_aberto`). Contract changes that affect installments cancel open titles and reissue new ones.
-- **FR-CORE-CTR-4.** PDF rendering (Jinja2 + WeasyPrint), stored in S3-compatible storage with SHA-256 hash.
-- **FR-CORE-CTR-5.** Digital signature (signed-PDF upload; future D4Sign/Clicksign extension point).
-- **FR-CORE-CTR-6.** Bulk-edit open installments (postpone, discount, cancel) in atomic transaction with audit event. Paid titles immutable.
-- **FR-CORE-CTR-7.** Paid installments (`pago`) are immutable. Corrections require explicit reverse-write-off (Admin-only, audited).
-- **FR-CORE-CTR-8.** Contract termination with rescission calculation, final receivable or credit, `ContractTerminated` event for vertical module actions.
-- **FR-CORE-CTR-9.** Contract versioning with timeline of revisions.
-- **FR-CORE-CTR-10.** Contract simulation without persistence.
+- **FR-CORE-CTR-1.** Contrato vinculando Cliente a Ativo (`asset_id`) com termos completos (datas, modelo de parcelamento, periodicidade, dia de vencimento, juros, multa, carência, opção de compra, garantias, cláusulas).
+- **FR-CORE-CTR-2.** Construtor visual de parcelas: entrada, N parcelas regulares, extras semestrais/anuais, carência, cronograma customizado.
+- **FR-CORE-CTR-3.** Na finalização (`vigente`): geração automática de títulos (`em_aberto`). Mudanças no contrato que afetam parcelas cancelam títulos em aberto e reemitem novos.
+- **FR-CORE-CTR-4.** Renderização de PDF (Jinja2 + WeasyPrint), armazenado em storage compatível com S3 com hash SHA-256.
+- **FR-CORE-CTR-5.** Assinatura digital (upload de PDF assinado; ponto de extensão futuro para D4Sign/Clicksign).
+- **FR-CORE-CTR-6.** Edição em lote de parcelas em aberto (adiar, descontar, cancelar) em transação atômica com evento de auditoria. Títulos pagos imutáveis.
+- **FR-CORE-CTR-7.** Parcelas pagas (`pago`) são imutáveis. Correções exigem estorno explícito (somente Admin, auditado).
+- **FR-CORE-CTR-8.** Encerramento de contrato com cálculo de rescisão, título a receber final ou crédito, evento `ContractTerminated` para ações de módulo vertical.
+- **FR-CORE-CTR-9.** Versionamento de contrato com timeline de revisões.
+- **FR-CORE-CTR-10.** Simulação de contrato sem persistência.
 
-#### Receivables (CR) — Core
+#### Títulos a Receber (CR) — Core
 
-- **FR-CORE-CR-1.** Master receivables list with multi-select filters (status, customer, asset, contract, date range, value range, competence).
-- **FR-CORE-CR-2.** Manual write-off with date, value, method, observation, receipt attachment (mandatory for Pix). Status -> `pago_aguardando_verificacao`.
-- **FR-CORE-CR-3.** Partial payments: if paid < title amount, partial write-off + NEW title for the difference with new collection cycle.
-- **FR-CORE-CR-4.** Bulk write-off across multiple installments of same customer.
-- **FR-CORE-CR-5.** Auto-calculate interest + fine on overdue installments; optional discount with mandatory reason.
-- **FR-CORE-CR-6.** Validation queue (Validator/Admin): receipt viewer, expected vs OCR-detected value, Approve/Reject/Request resubmission.
-- **FR-CORE-CR-7.** OCR on Pix receipts (Tesseract + regex heuristics) extracting value, date, transaction ID.
-- **FR-CORE-CR-8.** State machine: validator approval -> `pago_aguardando_verificacao` -> bank reconciliation -> `pago` (immutable).
-- **FR-CORE-CR-9.** Generate Pix QR Code (BR Code) per title, zero cost, via `pix-utils`.
-- **FR-CORE-CR-10.** Optional payment gateway integration (Asaas, Efi, PagBank, Stripe) via adapter, disabled by default.
-- **FR-CORE-CR-11.** Renegotiation: group overdue titles, recalculate, generate new titles, mark originals `renegociado`.
+- **FR-CORE-CR-1.** Lista mestre de títulos a receber com filtros multi-select (status, cliente, ativo, contrato, faixa de data, faixa de valor, competência).
+- **FR-CORE-CR-2.** Baixa manual com data, valor, forma de pagamento, observação, anexo de comprovante (obrigatório para Pix). Status -> `pago_aguardando_verificacao`.
+- **FR-CORE-CR-3.** Pagamentos parciais: se pago < valor do título, baixa parcial + NOVO título para a diferença, com novo ciclo de cobrança.
+- **FR-CORE-CR-4.** Baixa em lote sobre múltiplas parcelas do mesmo cliente.
+- **FR-CORE-CR-5.** Cálculo automático de juros + multa em parcelas vencidas; desconto opcional com motivo obrigatório.
+- **FR-CORE-CR-6.** Fila de validação (Validador/Admin): visualizador de comprovante, valor esperado vs. detectado por OCR, Aprovar/Rejeitar/Solicitar reenvio.
+- **FR-CORE-CR-7.** OCR em comprovantes Pix (Tesseract + heurísticas regex) extraindo valor, data, ID da transação.
+- **FR-CORE-CR-8.** Máquina de estados: aprovação do validador -> `pago_aguardando_verificacao` -> conciliação bancária -> `pago` (imutável).
+- **FR-CORE-CR-9.** Geração de QR Code Pix (BR Code) por título, custo zero, via `pix-utils`.
+- **FR-CORE-CR-10.** Integração opcional com gateway de pagamento (Asaas, Efi, PagBank, Stripe) via adapter, desabilitada por padrão.
+- **FR-CORE-CR-11.** Renegociação: agrupa títulos vencidos, recalcula, gera novos títulos, marca os originais como `renegociado`.
 
-#### Payables (CP) — Core
+#### Títulos a Pagar (CP) — Core
 
-- **FR-CORE-CP-1.** Hierarchical expense categories. Core defaults; modules add extras.
-- **FR-CORE-CP-2.** Suppliers registry.
-- **FR-CORE-CP-3.** One-off Payable with optional asset binding (`asset_id`).
-- **FR-CORE-CP-4.** Recurring expenses auto-generating payables.
-- **FR-CORE-CP-5.** "Quick Pay" shortcut (create + pay atomically).
-- **FR-CORE-CP-6.** Simplified DRE per period, filterable by asset, category, cost center.
+- **FR-CORE-CP-1.** Categorias de despesa hierárquicas. Padrões do core; módulos adicionam extras.
+- **FR-CORE-CP-2.** Cadastro de fornecedores.
+- **FR-CORE-CP-3.** Título a pagar avulso com vínculo opcional a ativo (`asset_id`).
+- **FR-CORE-CP-4.** Despesas recorrentes gerando títulos a pagar automaticamente.
+- **FR-CORE-CP-5.** Atalho "Pagamento Rápido" (cria + paga atomicamente).
+- **FR-CORE-CP-6.** DRE simplificado por período, filtrável por ativo, categoria, centro de custo.
 
-#### Smart Collections & WhatsApp Agent (COB) — Core
+#### Cobrança Inteligente e Agente WhatsApp (COB) — Core
 
-- **FR-CORE-COB-1.** WhatsApp integration via adapter (default: Evolution API; alternatives: Z-API, UazAPI, WPPConnect, Cloud API).
-- **FR-CORE-COB-2.** AI Collection Agent with pluggable LLM, pgvector RAG, core function-calling tools, module-injected tools via `IAssetModule.get_collection_tools()`, persistent memory.
-- **FR-CORE-COB-3.** No-code agent parameterization: tone, greetings, cadence, score-based concession, escalation, templates. Modules register additional policies.
-- **FR-CORE-COB-4.** Customer score (0-100) from punctuality, overdue days, tenure, paid value. Modules contribute additional factors. Formula configurable.
-- **FR-CORE-COB-5.** Auto-send Pix QR via WhatsApp (default payment flow: Pix card -> direct payment -> screenshot -> OCR -> validation -> write-off).
-- **FR-CORE-COB-6.** On inbound media: classify, OCR, match to title, partial or full write-off (`pago_aguardando_verificacao`), reply, enqueue for human validation.
-- **FR-CORE-COB-7.** WhatsApp-style in-app inbox (3-pane: conversations / chat / customer context).
-- **FR-CORE-COB-8.** Manager can intercept ("human takes over"), pause/resume agent.
-- **FR-CORE-COB-9.** Mass dispatch with double confirmation, preview, time-window, rate limiting.
-- **FR-CORE-COB-10.** Immutable message history with external provider IDs.
+- **FR-CORE-COB-1.** Integração WhatsApp via adapter (padrão: Evolution API; alternativas: Z-API, UazAPI, WPPConnect, Cloud API).
+- **FR-CORE-COB-2.** Agente de Cobrança com IA plugável (LLM), RAG com pgvector, ferramentas core de function-calling, ferramentas injetadas por módulo via `IAssetModule.get_collection_tools()`, memória persistente.
+- **FR-CORE-COB-3.** Parametrização no-code do agente: tom, saudações, cadência, concessão baseada em score, escalonamento, modelos de mensagem. Módulos registram políticas adicionais.
+- **FR-CORE-COB-4.** Score do cliente (0-100) baseado em pontualidade, dias em atraso, tempo de relacionamento, valor pago. Módulos contribuem com fatores adicionais. Fórmula configurável.
+- **FR-CORE-COB-5.** Envio automático de QR Pix via WhatsApp (fluxo padrão de pagamento: card Pix -> pagamento direto -> comprovante -> OCR -> validação -> baixa).
+- **FR-CORE-COB-6.** Em mídia recebida: classificar, OCR, casar com título, baixa parcial ou total (`pago_aguardando_verificacao`), responder, enfileirar para validação humana.
+- **FR-CORE-COB-7.** Caixa de entrada in-app estilo WhatsApp (3 painéis: conversas / chat / contexto do cliente).
+- **FR-CORE-COB-8.** Gestor pode interceptar ("humano assume conversa"), pausar/retomar agente.
+- **FR-CORE-COB-9.** Disparo em massa com dupla confirmação, preview, janela de tempo, rate limiting.
+- **FR-CORE-COB-10.** Histórico de mensagens imutável com IDs do provedor externo.
 
-#### Bank Reconciliation (CON) — Core
+#### Conciliação Bancária (CON) — Core
 
-- **FR-CORE-CON-1.** OFX import with FITID deduplication.
-- **FR-CORE-CON-2.** PDF statement import (major Brazilian banks) via pdfplumber + optional LLM fallback.
-- **FR-CORE-CON-3.** Open Finance adapter (default Pluggy; alternatives Belvo, TecnoSpeed, Klavi), disabled by default.
-- **FR-CORE-CON-4.** Reconciliation screen with split panes + drag-and-drop match zone + auto-suggestions.
-- **FR-CORE-CON-5.** Auto-match algorithm with configurable confidence threshold.
-- **FR-CORE-CON-6.** Support 1:N, N:1, and unmatched-as-payable/revenue.
-- **FR-CORE-CON-7.** Divergence panel: orphan transactions, paid titles without bank entry, value mismatches.
-- **FR-CORE-CON-8.** Final reconciliation -> title `pago` (immutable), transaction `conciliada` (locked).
+- **FR-CORE-CON-1.** Importação OFX com deduplicação por FITID.
+- **FR-CORE-CON-2.** Importação de extrato em PDF (principais bancos brasileiros) via pdfplumber + fallback opcional com LLM.
+- **FR-CORE-CON-3.** Adapter de Open Finance (padrão Pluggy; alternativas Belvo, TecnoSpeed, Klavi), desabilitado por padrão.
+- **FR-CORE-CON-4.** Tela de conciliação com painéis lado a lado + zona de match drag-and-drop + auto-sugestões.
+- **FR-CORE-CON-5.** Algoritmo de auto-match com threshold de confiança configurável.
+- **FR-CORE-CON-6.** Suporte a 1:N, N:1, e transações não casadas como título a pagar/receita.
+- **FR-CORE-CON-7.** Painel de divergências: transações órfãs, títulos pagos sem lançamento bancário, mismatches de valor.
+- **FR-CORE-CON-8.** Conciliação final -> título `pago` (imutável), transação `conciliada` (travada).
 
-#### Dashboards & Reports (DSH) — Core
+#### Dashboards e Relatórios (DSH) — Core
 
-- **FR-CORE-DSH-1.** Main Dashboard with generic reactive KPI cards (Signals). Modules inject widgets via `IAssetModule.get_dashboard_widgets()`.
-- **FR-CORE-DSH-2.** Customer Financial Dashboard.
-- **FR-CORE-DSH-3.** Pre-built exportable reports (Excel/PDF). Modules register additional reports via `IAssetModule.get_report_dimensions()`.
-- **FR-CORE-DSH-4.** Custom report builder with drag-and-drop dimensions/measures, saved favorites.
+- **FR-CORE-DSH-1.** Dashboard principal com cards de KPI genéricos reativos (Signals). Módulos injetam widgets via `IAssetModule.get_dashboard_widgets()`.
+- **FR-CORE-DSH-2.** Dashboard Financeiro do Cliente.
+- **FR-CORE-DSH-3.** Relatórios prontos exportáveis (Excel/PDF). Módulos registram relatórios adicionais via `IAssetModule.get_report_dimensions()`.
+- **FR-CORE-DSH-4.** Construtor de relatório customizado com dimensões/medidas drag-and-drop, favoritos salvos.
 
-#### Vehicle Module — Dashboards & Reports (VH)
+#### Módulo de Veículos — Dashboards e Relatórios (VH)
 
-- **FR-VH-9.** Vehicle Dashboard widget: investment, ROI %, profit, depreciation, acquisition vs return, KM, productivity, driver history.
-- **FR-VH-10.** Additional reports: Top Vehicles by ROI, Block History, Fleet Position snapshot.
-- **FR-VH-11.** Main Dashboard injected widgets: Fleet Total (R$ FIPE), Active Vehicles, Parked, In Maintenance.
+- **FR-VH-9.** Widget de Dashboard de Veículo: investimento, ROI %, lucro, depreciação, aquisição vs. retorno, KM, produtividade, histórico de motoristas.
+- **FR-VH-10.** Relatórios adicionais: Top Veículos por ROI, Histórico de Bloqueios, snapshot de Posição da Frota.
+- **FR-VH-11.** Widgets injetados no Dashboard principal: Total da Frota (R$ FIPE), Veículos Ativos, Parados, Em Manutenção.
 
-#### Integrations & Plug-and-Play (INT) — Core
+#### Integrações e Plug-and-Play (INT) — Core
 
-- **FR-CORE-INT-1.** Ports (Protocols) for all external providers: `IWhatsAppGateway`, `IBankReconciliationProvider`, `IPaymentGateway`, `ILLMProvider`, `IStorageProvider`, `IOcrProvider`, `IPdfRenderer`. Modules define additional ports.
-- **FR-CORE-INT-2.** Admin Integrations screen: activate/deactivate adapters, encrypted credentials, test connection, status indicator.
-- **FR-CORE-INT-3.** Webhook ingestion for all providers with signature validation, idempotency, processing queue.
+- **FR-CORE-INT-1.** Ports (Protocols) para todos os provedores externos: `IWhatsAppGateway`, `IBankReconciliationProvider`, `IPaymentGateway`, `ILLMProvider`, `IStorageProvider`, `IOcrProvider`, `IPdfRenderer`. Módulos definem ports adicionais.
+- **FR-CORE-INT-2.** Tela de Integrações do Admin: ativar/desativar adapters, credenciais criptografadas, testar conexão, indicador de status.
+- **FR-CORE-INT-3.** Ingestão de webhook para todos os provedores com validação de assinatura, idempotência, fila de processamento.
 
-#### Vehicle Module — Integrations (VH)
+#### Módulo de Veículos — Integrações (VH)
 
-- **FR-VH-12.** `IFipeProvider` with default `ApiFipeBrAdapter`, alternative `FipeApiBrAdapter`, fallback. 30-day Redis cache.
-- **FR-VH-13.** `ITrackerGateway` with generic REST/MQTT adapters for GPS position, block/unblock. Double approval + audit for block commands.
+- **FR-VH-12.** `IFipeProvider` com `ApiFipeBrAdapter` padrão, `FipeApiBrAdapter` alternativo, fallback. Cache Redis de 30 dias.
+- **FR-VH-13.** `ITrackerGateway` com adapters genéricos REST/MQTT para posição GPS, bloqueio/desbloqueio. Aprovação dupla + auditoria para comandos de bloqueio.
 
-#### Parameterization (PRM) — Core
+#### Parametrização (PRM) — Core
 
-- **FR-CORE-PRM-1.** Centralized Settings screen with sections: General, Company, Billing, AI Agent, Integrations, Modules, Users, Permissions, Templates, Audit.
-- **FR-CORE-PRM-2.** Versioned configuration with change history.
+- **FR-CORE-PRM-1.** Tela de Configurações centralizada com seções: Geral, Empresa, Cobrança, Agente de IA, Integrações, Módulos, Usuários, Permissões, Modelos de Mensagem, Auditoria.
+- **FR-CORE-PRM-2.** Configuração versionada com histórico de mudanças.
 
-#### Auditing (AUD) — Core
+#### Auditoria (AUD) — Core
 
-- **FR-CORE-AUD-1.** Append-only audit log for all relevant operations. Modules register additional actions.
-- **FR-CORE-AUD-2.** Searchable audit log with filters and export.
-- **FR-CORE-AUD-3.** HMAC-signed entries for tamper detection.
+- **FR-CORE-AUD-1.** Log de auditoria append-only para todas as operações relevantes. Módulos registram ações adicionais.
+- **FR-CORE-AUD-2.** Log de auditoria pesquisável com filtros e exportação.
+- **FR-CORE-AUD-3.** Entradas assinadas por HMAC para detecção de adulteração.
 
-### Non-Functional Requirements
+### Requisitos Não-Funcionais
 
-- **NFR-1 (Performance).** P95 read <= 300 ms, write <= 500 ms, dashboard render <= 1.5 s on 4G.
-- **NFR-2 (Scalability).** 10k assets / 50k active titles / 100k WhatsApp messages/month without restructuring.
-- **NFR-3 (Availability).** SLA 99.5%.
-- **NFR-4 (Security).** OWASP ASVS Level 2; Argon2id; JWT RS256; AES-256-GCM at rest; TLS 1.3; security headers; rate limiting.
-- **NFR-5 (LGPD).** Data export + deletion; consent; PII access logs.
-- **NFR-6 (Financial Auditability).** Every state change on a financial title generates an immutable event; reconciliation is reproducible.
-- **NFR-7 (Observability).** JSON structured logs, Prometheus, OpenTelemetry, Grafana.
-- **NFR-8 (Accessibility).** WCAG 2.1 AA.
-- **NFR-9 (i18n).** pt-BR default; ready for en-US/es-ES.
-- **NFR-10 (Plug-and-Play).** Switching a provider = config + new adapter, zero domain change. Adding a module = implement `IAssetModule`, zero core change.
-- **NFR-11 (Mobile-First).** Responsive; PWA-ready.
-- **NFR-12 (Real-time).** Chat, receipts, title status in UI <= 2 s without refresh.
-- **NFR-13 (Backup & DR).** Daily full + continuous WAL; RPO <= 1h, RTO <= 4h.
-- **NFR-14 (Cost).** Default stack 100% open-source; no mandatory paid SaaS.
-- **NFR-15 (Modular Verticals).** Core works fully without any vertical module active (billing-only mode). Each module independently enable/disable.
+- **NFR-1 (Performance).** P95 leitura <= 300 ms, escrita <= 500 ms, render de dashboard <= 1.5 s em 4G.
+- **NFR-2 (Escalabilidade).** 10k ativos / 50k títulos ativos / 100k mensagens WhatsApp/mês sem reestruturação.
+- **NFR-3 (Disponibilidade).** SLA 99,5%.
+- **NFR-4 (Segurança).** OWASP ASVS Nível 2; Argon2id; JWT RS256; AES-256-GCM em repouso; TLS 1.3; security headers; rate limiting.
+- **NFR-5 (LGPD).** Exportação + exclusão de dados; consentimento; logs de acesso a PII.
+- **NFR-6 (Auditabilidade Financeira).** Toda mudança de estado em título financeiro gera evento imutável; conciliação é reproduzível.
+- **NFR-7 (Observabilidade).** Logs JSON estruturados, Prometheus, OpenTelemetry, Grafana.
+- **NFR-8 (Acessibilidade).** WCAG 2.1 AA.
+- **NFR-9 (i18n).** pt-BR padrão; pronto para en-US/es-ES.
+- **NFR-10 (Plug-and-Play).** Trocar um provedor = config + novo adapter, zero mudança de domínio. Adicionar um módulo = implementar `IAssetModule`, zero mudança no core.
+- **NFR-11 (Mobile-First).** Responsivo; PWA-ready.
+- **NFR-12 (Tempo Real).** Chat, comprovantes, status de título na UI <= 2 s sem refresh.
+- **NFR-13 (Backup e DR).** Full diário + WAL contínuo; RPO <= 1h, RTO <= 4h.
+- **NFR-14 (Custo).** Stack padrão 100% open-source; nenhum SaaS pago obrigatório.
+- **NFR-15 (Verticais Modulares).** Core funciona plenamente sem nenhum módulo vertical ativo (modo billing-only). Cada módulo é ativado/desativado independentemente.
 
-### Additional Requirements
+### Requisitos Adicionais
 
-- **Greenfield, two-directory structure:** `backend-api/` (FastAPI) and `frontend/` (Angular) under a project root with `docker-compose.yml`. No product name in folder or package names. Product name injected via `PRODUCT_NAME` env var.
-- **Hexagonal Architecture non-negotiable:** every external provider behind a Protocol in `app/domain/ports/`; domain never imports `infrastructure/`.
-- **Tech stack locked** by Architecture doc; new tech requires approved ADR.
-- **PostgreSQL extensions:** `pgcrypto`, `pg_trgm`, `unaccent`, `pgvector` enabled in first migration.
-- **DB triggers:** `audit_log` append-only trigger, `installments` `enforce_paid_immutability` trigger in first migrations.
-- **Materialized view `mv_asset_roi`:** required for asset ROI dashboards; refreshed by scheduled job. Vehicle Module extends with vehicle-specific columns.
-- **Encryption at rest:** AES-256-GCM for CPF, CNH, MFA secrets, integration credentials.
-- **Webhook idempotency:** `webhook_events_raw` with `UNIQUE(provider, external_id)` mandatory before any provider integration.
-- **Real-time:** SSE default; WebSocket only for chat; polling as degraded fallback.
-- **Celery Beat schedule:** monthly FIPE refresh (Vehicle Module), daily score recompute, daily preventive collection, daily recurring-payables generation, daily backup, hourly auto-match reconciliation.
-- **Excel one-shot import:** CLI `python -m app.cli import-excel` with idempotent re-runs and `--dry-run`.
-- **LGPD endpoints:** customer data export and anonymization.
-- **Security headers + Edge controls:** TLS 1.3, HSTS, rate limiting, CSP, etc.
-- **Observability stack:** Prometheus, OpenTelemetry, structlog, Grafana dashboards.
-- **Testing pyramid:** unit 55% / integration 25% / component+contract 15% / E2E 5%.
-- **Branching:** features on `feat/{epic}-{story}-{slug}`; Conventional Commits; `main` protected.
-- **Cost guardrails:** LLM spend metric with daily-budget alert and automatic fallback.
+- **Estrutura greenfield, dois diretórios:** `backend-api/` (FastAPI) e `frontend/` (Angular) sob raiz do projeto com `docker-compose.yml`. Sem nome de produto em pastas ou nomes de pacote. Nome do produto injetado via variável de ambiente `PRODUCT_NAME`.
+- **Arquitetura Hexagonal inegociável:** todo provedor externo atrás de um Protocol em `app/domain/ports/`; domínio nunca importa `infrastructure/`.
+- **Stack tecnológica travada** pelo documento de Arquitetura; nova tecnologia exige ADR aprovado.
+- **Extensões PostgreSQL:** `pgcrypto`, `pg_trgm`, `unaccent`, `pgvector` habilitadas na primeira migration.
+- **Triggers de banco:** trigger append-only de `audit_log`, trigger `enforce_paid_immutability` em `installments` nas primeiras migrations.
+- **Materialized view `mv_asset_roi`:** necessária para dashboards de ROI por ativo; atualizada por job agendado. O Módulo de Veículos estende com colunas específicas de veículo.
+- **Criptografia em repouso:** AES-256-GCM para CPF, CNH, segredos MFA, credenciais de integração.
+- **Idempotência de webhook:** `webhook_events_raw` com `UNIQUE(provider, external_id)` obrigatório antes de qualquer integração de provedor.
+- **Tempo real:** SSE padrão; WebSocket apenas para chat; polling como fallback degradado.
+- **Schedule do Celery Beat:** atualização mensal FIPE (Módulo de Veículos), recálculo diário de score, cobrança preventiva diária, geração diária de títulos a pagar recorrentes, backup diário, conciliação por auto-match horária.
+- **Importação Excel one-shot:** CLI `python -m app.cli import-excel` com reexecução idempotente e `--dry-run`.
+- **Endpoints LGPD:** exportação e anonimização de dados do cliente.
+- **Security headers + controles de Edge:** TLS 1.3, HSTS, rate limiting, CSP, etc.
+- **Stack de observabilidade:** Prometheus, OpenTelemetry, structlog, dashboards Grafana.
+- **Pirâmide de testes:** unit 55% / integração 25% / componente+contrato 15% / E2E 5%.
+- **Branching:** features em `feat/{epic}-{story}-{slug}`; Conventional Commits; `main` protegida.
+- **Guardrails de custo:** métrica de gasto LLM com alerta de budget diário e fallback automático.
 
-### UX Design Requirements
+### Requisitos de Design UX
 
-_No standalone UX Design Specification is present. UI/UX guidance is embedded in PRD Section 3 and Architecture Section 10. When a dedicated UX spec is delivered, this section should be backfilled._
+_Não existe Especificação de Design UX standalone. A orientação de UI/UX está embutida na Seção 3 do PRD e Seção 10 da Arquitetura. Quando uma spec dedicada de UX for entregue, esta seção deve ser preenchida._
 
-### FR Coverage Map
+### Mapa de Cobertura dos FRs
 
-| Requirement | Epic | Notes |
+| Requisito | Épico | Notas |
 |---|---|---|
-| FR-CORE-AST-1 (IAssetModule interface) | Epic 1 | Story 1.8 |
-| FR-CORE-AST-2 (event bus, no direct imports) | Epic 1 | Story 1.8 |
-| FR-CORE-AST-3 (generic assets table) | Epic 1 | Story 1.8 |
-| FR-CORE-AST-4 (enable/disable modules without restart) | Epic 1 | Story 1.8 |
-| FR-CORE-AST-5 (lifecycle hooks for domain events) | Epic 1 | Story 1.8 |
-| FR-CORE-AUTH-1 (login email/password + Argon2id + MFA) | Epic 1 | — |
-| FR-CORE-AUTH-2 (roles Admin/Operator/Validator/Auditor) | Epic 1 | — |
-| FR-CORE-AUTH-3 (granular RBAC per module) | Epic 1 | Permissions populated progressively per epic |
-| FR-CORE-AUTH-4 (JWT 15min + refresh HttpOnly 7d) | Epic 1 | — |
-| FR-CORE-AUTH-5 (audit login + lock after 5 failures) | Epic 1 | — |
-| FR-CORE-CAD-1 (Customer with CPF/attachments + module extensions) | Epic 2A | — |
-| FR-CORE-CAD-2 (generic assets table sync) | Epic 2A | — |
-| FR-CORE-CAD-3 (asset categories) | Epic 2A | — |
-| FR-VH-1 (Vehicle registration synced with core assets) | Epic 2B | — |
-| FR-VH-2 (auto-fetch FIPE + monthly job) | Epic 2B | Depends on FR-VH-12 |
-| FR-VH-3 (vehicle acquisition payment model) | Epic 2B | — |
-| FR-VH-4 (per-vehicle financials: ROI, depreciation) | Epic 2B | Materialized view finalized in Epic 8 |
-| FR-VH-5 (interactive fleet map) | Epic 2B | Depends on FR-VH-13 |
-| FR-VH-6 (CNH schema extension for Customer) | Epic 2B | — |
-| FR-VH-7 (hook on_installment_overdue: GPS block) | Epic 2B | — |
-| FR-VH-8 (collection agent tools: block/unblock/locate) | Epic 2B | Injected at agent startup in Epic 6 |
-| FR-CORE-CTR-1 (Contract linking Customer to Asset) | Epic 3 | — |
-| FR-CORE-CTR-2 (visual installment builder) | Epic 3 | — |
-| FR-CORE-CTR-3 (auto-generate titles on finalization; reissue on change) | Epic 3 | — |
-| FR-CORE-CTR-4 (PDF Jinja2 + WeasyPrint + SHA-256) | Epic 3 | — |
-| FR-CORE-CTR-5 (digital signature extension point) | Epic 3 | — |
-| FR-CORE-CTR-6 (bulk-edit open installments; paid immutable) | Epic 3 | — |
-| FR-CORE-CTR-7 (paid immutability + reverse-write-off) | Epic 3 | PG trigger ships with model |
-| FR-CORE-CTR-8 (contract termination with rescission) | Epic 3 | — |
-| FR-CORE-CTR-9 (contract versioning timeline) | Epic 3 | — |
-| FR-CORE-CTR-10 (contract simulation) | Epic 3 | — |
-| FR-CORE-CR-1 (master receivables list) | Epic 4 | — |
-| FR-CORE-CR-2 (manual write-off with receipt) | Epic 4 | — |
-| FR-CORE-CR-3 (partial payments: write-off + new title for difference) | Epic 4 | — |
-| FR-CORE-CR-4 (bulk write-off) | Epic 4 | — |
-| FR-CORE-CR-5 (interest/fine + manual discount) | Epic 4 | — |
-| FR-CORE-CR-6 (validation queue) | Epic 4 | — |
-| FR-CORE-CR-7 (OCR on Pix receipts) | Epic 4 | Depends on FR-CORE-INT-1 (IOcrProvider) |
-| FR-CORE-CR-8 (state machine: pago_aguardando_verificacao -> pago) | Epic 4 | Final state `pago` achieved in Epic 7 |
-| FR-CORE-CR-9 (Pix QR Code BR Code) | Epic 4 | — |
-| FR-CORE-CR-10 (optional payment gateway adapter) | Epic 4 | Disabled by default |
-| FR-CORE-CR-11 (renegotiation of overdue titles) | Epic 4 | — |
-| FR-CORE-CP-1 (hierarchical expense categories) | Epic 5 | — |
-| FR-CORE-CP-2 (suppliers registry) | Epic 5 | — |
-| FR-CORE-CP-3 (one-off Payable) | Epic 5 | — |
-| FR-CORE-CP-4 (recurring expenses) | Epic 5 | — |
-| FR-CORE-CP-5 ("Quick Pay" shortcut) | Epic 5 | — |
-| FR-CORE-CP-6 (simplified DRE) | Epic 5 | — |
-| FR-CORE-COB-1 (WhatsApp adapter: Evolution/Z-API/etc.) | Epic 6 | — |
-| FR-CORE-COB-2 (AI Agent with LLM + RAG + core tools + module tools) | Epic 6 | Module tools injected via IAssetModule |
-| FR-CORE-COB-3 (no-code agent parameterization + module policies) | Epic 6 | — |
-| FR-CORE-COB-4 (customer score 0-100 with module factors) | Epic 6 | Daily job |
-| FR-CORE-COB-5 (auto-send Pix QR via WhatsApp) | Epic 6 | Reuses FR-CORE-CR-9 |
-| FR-CORE-COB-6 (inbound receipt: classify, OCR, partial/full write-off) | Epic 6 | — |
-| FR-CORE-COB-7 (3-pane WhatsApp inbox) | Epic 6 | WebSocket `/ws/conversations` |
-| FR-CORE-COB-8 (human intercept / pause-resume agent) | Epic 6 | — |
-| FR-CORE-COB-9 (mass dispatch with controls) | Epic 6 | — |
-| FR-CORE-COB-10 (immutable message history) | Epic 6 | — |
-| FR-CORE-CON-1 (OFX importer) | Epic 7 | — |
-| FR-CORE-CON-2 (PDF statement importer) | Epic 7 | LLM fallback configurable |
-| FR-CORE-CON-3 (Open Finance via Pluggy/Belvo/etc.) | Epic 7 | Disabled by default |
-| FR-CORE-CON-4 (split-pane drag-and-drop reconciliation) | Epic 7 | — |
-| FR-CORE-CON-5 (auto-match algorithm) | Epic 7 | — |
-| FR-CORE-CON-6 (1:N, N:1, unmatched-as-payable/revenue) | Epic 7 | — |
-| FR-CORE-CON-7 (divergence panel) | Epic 7 | — |
-| FR-CORE-CON-8 (final reconciliation -> pago immutable) | Epic 7 | — |
-| FR-CORE-DSH-1 (Main Dashboard with generic KPIs + module widgets) | Epic 8 | SSE refresh |
-| FR-CORE-DSH-2 (Customer Dashboard) | Epic 8 | — |
-| FR-CORE-DSH-3 (pre-built reports + module reports) | Epic 8 | — |
-| FR-CORE-DSH-4 (custom report builder) | Epic 8 | — |
-| FR-VH-9 (Vehicle Dashboard: ROI/payback/depreciation) | Epic 8 | Refreshes mv_asset_roi |
-| FR-VH-10 (Vehicle-specific reports) | Epic 8 | — |
-| FR-VH-11 (Main Dashboard injected widgets: fleet KPIs) | Epic 8 | Via get_dashboard_widgets() |
-| FR-CORE-INT-1 (Ports/Protocols for all providers) | Cross-cutting | Each Port created in the epic that first needs it; completeness audit in Epic 9 |
-| FR-CORE-INT-2 (Admin Integrations screen) | Epic 9 | Centralized panel |
-| FR-CORE-INT-3 (webhook ingestion framework) | Cross-cutting | `webhook_events_raw` in Epic 1; each provider adds webhook in its epic |
-| FR-VH-12 (FIPE provider with cache + fallback) | Epic 2B | — |
-| FR-VH-13 (Tracker gateway REST/MQTT + block commands) | Epic 2B | — |
-| FR-CORE-PRM-1 (centralized Settings) | Cross-cutting | Each epic creates its tab; consolidated in Epic 9 |
-| FR-CORE-PRM-2 (versioned configuration) | Epic 9 | — |
-| FR-CORE-AUD-1 (append-only audit log + module events) | Epic 1 (infra) -> all epics (events) | Table + trigger in Epic 1 |
-| FR-CORE-AUD-2 (searchable audit log + export) | Epic 9 | Full UI |
-| FR-CORE-AUD-3 (HMAC-signed entries) | Epic 1 (HMAC) -> Epic 9 (verifier UI) | — |
+| FR-CORE-AST-1 (interface IAssetModule) | Épico 1 | Story 1.8 |
+| FR-CORE-AST-2 (event bus, sem imports diretos) | Épico 1 | Story 1.8 |
+| FR-CORE-AST-3 (tabela genérica assets) | Épico 1 | Story 1.8 |
+| FR-CORE-AST-4 (ativar/desativar módulos sem restart) | Épico 1 | Story 1.8 |
+| FR-CORE-AST-5 (hooks de ciclo de vida para eventos de domínio) | Épico 1 | Story 1.8 |
+| FR-CORE-AUTH-1 (login email/senha + Argon2id + MFA) | Épico 1 | — |
+| FR-CORE-AUTH-2 (papéis Admin/Operador/Validador/Auditor) | Épico 1 | — |
+| FR-CORE-AUTH-3 (RBAC granular por módulo) | Épico 1 | Permissões populadas progressivamente por épico |
+| FR-CORE-AUTH-4 (JWT 15min + refresh HttpOnly 7d) | Épico 1 | — |
+| FR-CORE-AUTH-5 (auditoria de login + bloqueio após 5 falhas) | Épico 1 | — |
+| FR-CORE-CAD-1 (Cliente com CPF/anexos + extensões de módulo) | Épico 2A | — |
+| FR-CORE-CAD-2 (sync da tabela genérica assets) | Épico 2A | — |
+| FR-CORE-CAD-3 (categorias de ativo) | Épico 2A | — |
+| FR-VH-1 (cadastro de Veículo sincronizado com assets do core) | Épico 2B | — |
+| FR-VH-2 (busca automática FIPE + job mensal) | Épico 2B | Depende de FR-VH-12 |
+| FR-VH-3 (modelo de pagamento de aquisição de veículo) | Épico 2B | — |
+| FR-VH-4 (dados financeiros por veículo: ROI, depreciação) | Épico 2B | Materialized view finalizada no Épico 8 |
+| FR-VH-5 (mapa interativo da frota) | Épico 2B | Depende de FR-VH-13 |
+| FR-VH-6 (extensão de schema CNH para Cliente) | Épico 2B | — |
+| FR-VH-7 (hook on_installment_overdue: bloqueio GPS) | Épico 2B | — |
+| FR-VH-8 (ferramentas do agente: bloquear/desbloquear/localizar) | Épico 2B | Injetadas no startup do agente no Épico 6 |
+| FR-CORE-CTR-1 (Contrato vinculando Cliente a Ativo) | Épico 3 | — |
+| FR-CORE-CTR-2 (construtor visual de parcelas) | Épico 3 | — |
+| FR-CORE-CTR-3 (geração automática de títulos na finalização; reemissão na mudança) | Épico 3 | — |
+| FR-CORE-CTR-4 (PDF Jinja2 + WeasyPrint + SHA-256) | Épico 3 | — |
+| FR-CORE-CTR-5 (ponto de extensão para assinatura digital) | Épico 3 | — |
+| FR-CORE-CTR-6 (edição em lote de parcelas em aberto; pagas imutáveis) | Épico 3 | — |
+| FR-CORE-CTR-7 (imutabilidade de pagas + estorno) | Épico 3 | Trigger PG entregue junto com o model |
+| FR-CORE-CTR-8 (encerramento de contrato com rescisão) | Épico 3 | — |
+| FR-CORE-CTR-9 (timeline de versionamento de contrato) | Épico 3 | — |
+| FR-CORE-CTR-10 (simulação de contrato) | Épico 3 | — |
+| FR-CORE-CR-1 (lista mestre de títulos a receber) | Épico 4 | — |
+| FR-CORE-CR-2 (baixa manual com comprovante) | Épico 4 | — |
+| FR-CORE-CR-3 (pagamentos parciais: baixa + novo título para a diferença) | Épico 4 | — |
+| FR-CORE-CR-4 (baixa em lote) | Épico 4 | — |
+| FR-CORE-CR-5 (juros/multa + desconto manual) | Épico 4 | — |
+| FR-CORE-CR-6 (fila de validação) | Épico 4 | — |
+| FR-CORE-CR-7 (OCR em comprovantes Pix) | Épico 4 | Depende de FR-CORE-INT-1 (IOcrProvider) |
+| FR-CORE-CR-8 (máquina de estados: pago_aguardando_verificacao -> pago) | Épico 4 | Estado final `pago` alcançado no Épico 7 |
+| FR-CORE-CR-9 (QR Code Pix BR Code) | Épico 4 | — |
+| FR-CORE-CR-10 (adapter opcional de gateway de pagamento) | Épico 4 | Desabilitado por padrão |
+| FR-CORE-CR-11 (renegociação de títulos vencidos) | Épico 4 | — |
+| FR-CORE-CP-1 (categorias hierárquicas de despesa) | Épico 5 | — |
+| FR-CORE-CP-2 (cadastro de fornecedores) | Épico 5 | — |
+| FR-CORE-CP-3 (Título a Pagar avulso) | Épico 5 | — |
+| FR-CORE-CP-4 (despesas recorrentes) | Épico 5 | — |
+| FR-CORE-CP-5 (atalho "Pagamento Rápido") | Épico 5 | — |
+| FR-CORE-CP-6 (DRE simplificado) | Épico 5 | — |
+| FR-CORE-COB-1 (adapter WhatsApp: Evolution/Z-API/etc.) | Épico 6 | — |
+| FR-CORE-COB-2 (Agente IA com LLM + RAG + ferramentas core + ferramentas de módulo) | Épico 6 | Ferramentas de módulo injetadas via IAssetModule |
+| FR-CORE-COB-3 (parametrização no-code do agente + políticas de módulo) | Épico 6 | — |
+| FR-CORE-COB-4 (score do cliente 0-100 com fatores de módulo) | Épico 6 | Job diário |
+| FR-CORE-COB-5 (envio automático de QR Pix via WhatsApp) | Épico 6 | Reusa FR-CORE-CR-9 |
+| FR-CORE-COB-6 (comprovante recebido: classificar, OCR, baixa parcial/total) | Épico 6 | — |
+| FR-CORE-COB-7 (caixa de entrada WhatsApp em 3 painéis) | Épico 6 | WebSocket `/ws/conversations` |
+| FR-CORE-COB-8 (intervenção humana / pausar-retomar agente) | Épico 6 | — |
+| FR-CORE-COB-9 (disparo em massa com controles) | Épico 6 | — |
+| FR-CORE-COB-10 (histórico de mensagens imutável) | Épico 6 | — |
+| FR-CORE-CON-1 (importador OFX) | Épico 7 | — |
+| FR-CORE-CON-2 (importador de extrato PDF) | Épico 7 | Fallback LLM configurável |
+| FR-CORE-CON-3 (Open Finance via Pluggy/Belvo/etc.) | Épico 7 | Desabilitado por padrão |
+| FR-CORE-CON-4 (conciliação drag-and-drop em painéis lado a lado) | Épico 7 | — |
+| FR-CORE-CON-5 (algoritmo de auto-match) | Épico 7 | — |
+| FR-CORE-CON-6 (1:N, N:1, não casados como pagar/receita) | Épico 7 | — |
+| FR-CORE-CON-7 (painel de divergências) | Épico 7 | — |
+| FR-CORE-CON-8 (conciliação final -> pago imutável) | Épico 7 | — |
+| FR-CORE-DSH-1 (Dashboard principal com KPIs genéricos + widgets de módulo) | Épico 8 | Atualização via SSE |
+| FR-CORE-DSH-2 (Dashboard do Cliente) | Épico 8 | — |
+| FR-CORE-DSH-3 (relatórios prontos + relatórios de módulo) | Épico 8 | — |
+| FR-CORE-DSH-4 (construtor de relatórios customizados) | Épico 8 | — |
+| FR-VH-9 (Dashboard de Veículo: ROI/payback/depreciação) | Épico 8 | Atualiza mv_asset_roi |
+| FR-VH-10 (relatórios específicos de Veículo) | Épico 8 | — |
+| FR-VH-11 (widgets injetados no Dashboard principal: KPIs de frota) | Épico 8 | Via get_dashboard_widgets() |
+| FR-CORE-INT-1 (Ports/Protocols para todos os provedores) | Transversal | Cada Port criada no épico que primeiro precisa dela; auditoria de completude no Épico 9 |
+| FR-CORE-INT-2 (tela de Integrações do Admin) | Épico 9 | Painel centralizado |
+| FR-CORE-INT-3 (framework de ingestão de webhook) | Transversal | `webhook_events_raw` no Épico 1; cada provedor adiciona webhook em seu épico |
+| FR-VH-12 (provedor FIPE com cache + fallback) | Épico 2B | — |
+| FR-VH-13 (gateway de Rastreador REST/MQTT + comandos de bloqueio) | Épico 2B | — |
+| FR-CORE-PRM-1 (Configurações centralizadas) | Transversal | Cada épico cria sua aba; consolidação no Épico 9 |
+| FR-CORE-PRM-2 (configuração versionada) | Épico 9 | — |
+| FR-CORE-AUD-1 (log de auditoria append-only + eventos de módulo) | Épico 1 (infra) -> todos os épicos (eventos) | Tabela + trigger no Épico 1 |
+| FR-CORE-AUD-2 (log de auditoria pesquisável + exportação) | Épico 9 | UI completa |
+| FR-CORE-AUD-3 (entradas assinadas por HMAC) | Épico 1 (HMAC) -> Épico 9 (UI verificadora) | — |
 
-## Epic List
+## Lista de Épicos
 
-| # | Epic | Type | Outcome in 1 line |
+| # | Épico | Tipo | Resultado em 1 linha |
 |---|---|---|---|
-| 1 | **Foundation & Identity** | Core | Team has foundation running (auth, layout, Asset Abstraction Layer, CI/CD green) — admin logs in and navigates. |
-| 2A | **Core Asset Management & Registrations** | Core | Generic client and asset management infrastructure is ready; vertical modules can plug in. |
-| 2B | **Vehicle Module: Registrations & Integrations** | Vehicle Module | Vehicle Module registered as IAssetModule; fleet on a real-time map; FIPE valuations auto-refreshed. |
-| 3 | **Contracts & Flexible Installments** | Core | Manager generates any contract shape with PDF and linked titles; bulk-edits open titles; paid titles immutable; changes reissue open titles. |
-| 4 | **Receivables, Partial Payments & Validation** | Core | Manager runs receivables with partial payment support, receipt validation queue, OCR, free Pix QR — zero-cost default payment flow. |
-| 5 | **Payables & Recurring Expenses** | Core | Manager controls outgoing expenses with recurrences, Quick Pay, and visible DRE. |
-| 6 | **WhatsApp Inbox & AI Collection Agent** | Core + Module Hooks | Agent runs collections with parametrized policy and module-injected tools; humans intervene at will. |
-| 7 | **Sophisticated Bank Reconciliation** | Core | OFX/PDF/Open Finance reconciliation in minutes with drag-and-drop; erroneous write-offs -> zero. |
-| 8 | **Dashboards, Reports & Asset Analytics** | Core + Module Hooks | Manager reads operational pulse in seconds; per-asset ROI drives decisions. Module widgets injected. |
-| 9 | **Hardening & Plug-and-Play Final** | Core | System enters production with operational confidence; switching a provider is trivial; modules documented. |
+| 1 | **Fundação e Identidade** | Core | Time tem fundação rodando (auth, layout, Camada de Abstração de Ativos, CI/CD verde) — admin faz login e navega. |
+| 2A | **Gestão Core de Ativos e Cadastros** | Core | Infraestrutura genérica de gestão de clientes e ativos pronta; módulos verticais podem plugar. |
+| 2B | **Módulo de Veículos: Cadastros e Integrações** | Módulo de Veículos | Módulo de Veículos registrado como IAssetModule; frota num mapa em tempo real; valoração FIPE atualizada automaticamente. |
+| 3 | **Contratos e Parcelas Flexíveis** | Core | Gestor gera qualquer formato de contrato com PDF e títulos vinculados; edita em lote títulos em aberto; títulos pagos imutáveis; mudanças reemitem títulos em aberto. |
+| 4 | **Títulos a Receber, Pagamentos Parciais e Validação** | Core | Gestor opera títulos a receber com suporte a pagamentos parciais, fila de validação de comprovantes, OCR, Pix QR grátis — fluxo de pagamento padrão custo zero. |
+| 5 | **Títulos a Pagar e Despesas Recorrentes** | Core | Gestor controla despesas com recorrências, Pagamento Rápido e DRE visível. |
+| 6 | **Caixa de Entrada WhatsApp e Agente IA de Cobrança** | Core + Module Hooks | Agente conduz cobranças com política parametrizada e ferramentas injetadas por módulo; humanos intervêm quando quiserem. |
+| 7 | **Conciliação Bancária Sofisticada** | Core | Conciliação OFX/PDF/Open Finance em minutos com drag-and-drop; baixas equivocadas -> zero. |
+| 8 | **Dashboards, Relatórios e Analytics de Ativos** | Core + Module Hooks | Gestor lê o pulso operacional em segundos; ROI por ativo dirige decisões. Widgets de módulo injetados. |
+| 9 | **Hardening e Plug-and-Play Final** | Core | Sistema entra em produção com confiança operacional; trocar um provedor é trivial; módulos documentados. |
 
 ---
 
-## Epic 1: Foundation & Identity (Core)
+## Épico 1: Fundação e Identidade (Core)
 
-**Goal:** Bring the technical skeleton up in dev and prod with working login, navigable base layout, dark/light theme, Asset Abstraction Layer (`IAssetModule` + event bus + Module Hook registration), and a green CI/CD pipeline — without any domain features yet. By the end, any developer can clone, boot the environment, and reach the authenticated "Hello, X" screen. The core is ready to accept vertical modules.
+**Objetivo:** Subir o esqueleto técnico em dev e prod com login funcionando, layout base navegável, tema dark/light, Camada de Abstração de Ativos (`IAssetModule` + event bus + registro de Module Hooks) e pipeline CI/CD verde — sem nenhuma feature de domínio ainda. Ao final, qualquer desenvolvedor pode clonar, subir o ambiente e chegar à tela autenticada "Olá, X". O core está pronto para receber módulos verticais.
 
-**Premises:** Directories `backend-api/` and `frontend/` created. Docker Compose with Postgres + Redis + MinIO for local dev. GitHub Actions enabled.
+**Premissas:** Diretórios `backend-api/` e `frontend/` criados. Docker Compose com Postgres + Redis + MinIO para dev local. GitHub Actions habilitado.
 
-### Story 1.1: Bootstrap the FastAPI Backend (Core)
+### Story 1.1: Bootstrap do Backend FastAPI (Core)
 
-As a Developer,
-I want a FastAPI skeleton wired with Postgres, Alembic, Pydantic v2, and a modular layout,
-So that future features have a solid, standardized foundation.
+Como Desenvolvedor,
+quero um esqueleto FastAPI conectado a Postgres, Alembic, Pydantic v2 e com layout modular,
+para que features futuras tenham uma base sólida e padronizada.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Directory `backend-api/` with Python 3.12+, managed by `uv` (fallback `poetry`).
-2. Directory layout: `app/{api,core,domain,infrastructure,modules,workers,tests}` plus `alembic/`. The `modules/` directory will contain vertical modules (initially empty with `__init__.py`).
-3. **Given** the API is running, **When** `GET /health` is called, **Then** the response returns `{"status":"ok","db":"ok","redis":"ok","storage":"ok"}` with a real check on each dependency.
-4. Alembic configured with first empty migration applied via `alembic upgrade head`.
-5. Configuration via Pydantic Settings from `.env` (dev) and environment variables (prod). Secrets never committed. `PRODUCT_NAME` as a configuration variable.
-6. Structured JSON logs (`structlog`) emitted to stdout.
-7. CORS configured for `http://localhost:4200`.
-8. OpenAPI at `/docs` (Swagger) and `/redoc`.
-9. Multi-stage Dockerfile (build -> runtime) producing image <= 250 MB.
-10. `docker-compose.yml` boots API + Postgres + Redis + MinIO in <= 30 s.
-11. `docker-compose.yml` includes `worker` service (Celery worker) and `beat` service (Celery Beat scheduler), both using the same backend-api image with different commands. Worker listens on queues: `default,high,low,events,agent,ocr`.
-12. WeasyPrint system dependencies (libpangocairo, libcairo2, libgdk-pixbuf, tesseract-ocr, tesseract-ocr-por) are included in the Dockerfile runtime stage to support future PDF generation and OCR stories.
+1. Diretório `backend-api/` com Python 3.12+, gerenciado por `uv` (fallback `poetry`).
+2. Layout de diretórios: `app/{api,core,domain,infrastructure,modules,workers,tests}` mais `alembic/`. O diretório `modules/` conterá módulos verticais (inicialmente vazio com `__init__.py`).
+3. **Dado** que a API está rodando, **Quando** `GET /health` é chamado, **Então** a resposta retorna `{"status":"ok","db":"ok","redis":"ok","storage":"ok"}` com checagem real em cada dependência.
+4. Alembic configurado com primeira migration vazia aplicada via `alembic upgrade head`.
+5. Configuração via Pydantic Settings a partir de `.env` (dev) e variáveis de ambiente (prod). Segredos nunca commitados. `PRODUCT_NAME` como variável de configuração.
+6. Logs JSON estruturados (`structlog`) emitidos para stdout.
+7. CORS configurado para `http://localhost:4200`.
+8. OpenAPI em `/docs` (Swagger) e `/redoc`.
+9. Dockerfile multi-stage (build -> runtime) produzindo imagem <= 250 MB.
+10. `docker-compose.yml` sobe API + Postgres + Redis + MinIO em <= 30 s.
+11. `docker-compose.yml` inclui serviço `worker` (Celery worker) e serviço `beat` (Celery Beat scheduler), ambos usando a mesma imagem backend-api com comandos diferentes. Worker escuta filas: `default,high,low,events,agent,ocr`.
+12. Dependências de sistema do WeasyPrint (libpangocairo, libcairo2, libgdk-pixbuf, tesseract-ocr, tesseract-ocr-por) são incluídas no estágio runtime do Dockerfile para suportar futuras histórias de geração de PDF e OCR.
 
-### Story 1.2: Bootstrap the Angular 21 Frontend (Core)
+### Story 1.2: Bootstrap do Frontend Angular 21 (Core)
 
-As a Developer,
-I want an Angular 21 standalone skeleton wired with Tailwind v4, Heroicons, and the manifesto-driven folder structure,
-So that features are built consistently from day one.
+Como Desenvolvedor,
+quero um esqueleto Angular 21 standalone conectado a Tailwind v4, Heroicons e com a estrutura de pastas guiada pelo manifesto,
+para que as features sejam construídas consistentemente desde o dia 1.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Angular 21+ standalone project in `frontend/`; no NgModules.
-2. `src/app/` matches the manifesto: `core`, `shared`, `features`. No `assets/` in `src/` — `public/` at root.
-3. Tailwind CSS v4 with `tailwind.config`, typography + forms plugins.
-4. `styles.css` with import Tailwind and `@theme` block with **all** CSS variables listed in PRD Section 3.5 (light + dark).
-5. `theme.service.ts` in `core/services/` with `theme()` signal and `setTheme('light'|'dark'|'system')`, persisting to localStorage.
-6. `@ng-icons/core` + `@ng-icons/heroicons` installed; `<ui-icon name="HeroXMark" />` in `shared/components/icon/`.
-7. `AppShellComponent` in `shared/components/app-shell/` with collapsible sidebar, header with theme toggle and product name (via `environment.productName`), `<router-outlet>`.
-8. Routes: `/login`, `/dashboard` (placeholder), `/404`.
-9. ESLint + Prettier + stylelint; `npm run lint` passes.
-10. `index.html` with PWA meta tags and `manifest.webmanifest` placeholder (`name` from build config, never hardcoded).
+1. Projeto Angular 21+ standalone em `frontend/`; sem NgModules.
+2. `src/app/` segue o manifesto: `core`, `shared`, `features`. Sem `assets/` em `src/` — `public/` na raiz.
+3. Tailwind CSS v4 com `tailwind.config`, plugins typography + forms.
+4. `styles.css` com import do Tailwind e bloco `@theme` com **todas** as variáveis CSS listadas na Seção 3.5 do PRD (light + dark).
+5. `theme.service.ts` em `core/services/` com signal `theme()` e `setTheme('light'|'dark'|'system')`, persistindo no localStorage.
+6. `@ng-icons/core` + `@ng-icons/heroicons` instalados; `<ui-icon name="HeroXMark" />` em `shared/components/icon/`.
+7. `AppShellComponent` em `shared/components/app-shell/` com sidebar colapsável, header com toggle de tema e nome do produto (via `environment.productName`), `<router-outlet>`.
+8. Rotas: `/login`, `/dashboard` (placeholder), `/404`.
+9. ESLint + Prettier + stylelint; `npm run lint` passa.
+10. `index.html` com meta tags PWA e placeholder `manifest.webmanifest` (`name` vindo da config de build, nunca hardcoded).
 
-### Story 1.3: User Identity Tables and Initial Migration (Core)
+### Story 1.3: Tabelas de Identidade de Usuário e Migration Inicial (Core)
 
-As a Developer,
-I want `users`, `roles`, `permissions`, `user_roles`, `refresh_tokens`, and `audit_log` tables created,
-So that the identity system has persistent storage and audit starts from day one.
+Como Desenvolvedor,
+quero as tabelas `users`, `roles`, `permissions`, `user_roles`, `refresh_tokens` e `audit_log` criadas,
+para que o sistema de identidade tenha persistência e a auditoria comece desde o dia 1.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. SQLAlchemy models in `app/infrastructure/db/models/` with UUID PKs via `gen_random_uuid()`, `TIMESTAMPTZ` timestamps, soft-delete via `deleted_at`.
-2. Migration enables `pgcrypto`, `pg_trgm`, `unaccent`, `pgvector` extensions.
-3. `users` table: `id`, `email` (CITEXT unique), `password_hash`, `full_name`, `is_active`, `is_mfa_enabled`, `mfa_secret_enc` (BYTEA nullable), `last_login_at`, `created_at`, `updated_at`, `deleted_at`.
-4. `audit_log` table: `id`, `user_id`, `action`, `entity`, `entity_id`, `payload_before`, `payload_after`, `ip`, `user_agent`, `correlation_id`, `signature_hmac`, `created_at`. Append-only PG trigger blocking UPDATE/DELETE.
-5. Indexes: `users.email` unique, `audit_log(user_id, created_at DESC)`, `audit_log(entity, entity_id)`.
-6. **Given** a fresh DB, **When** `python -m app.cli seed` runs, **Then** the four roles `Admin`, `Operador`, `Validador`, `Auditor` are inserted, an Admin user `admin@app.local` (password `Admin@123`) is created and linked to the Admin role. Permissions seeded incrementally per epic.
-7. `audit_log` table includes columns `module` (TEXT), `category` (TEXT, default 'info' — values: financial/navigation/error/info/security), `severity` (TEXT, default 'info' — values: debug/info/warning/error/critical). Financial and security categories are always persisted; navigation is configurable OFF by default.
+1. Models SQLAlchemy em `app/infrastructure/db/models/` com PKs UUID via `gen_random_uuid()`, timestamps `TIMESTAMPTZ`, soft-delete via `deleted_at`.
+2. Migration habilita as extensões `pgcrypto`, `pg_trgm`, `unaccent`, `pgvector`.
+3. Tabela `users`: `id`, `email` (CITEXT unique), `password_hash`, `full_name`, `is_active`, `is_mfa_enabled`, `mfa_secret_enc` (BYTEA nullable), `last_login_at`, `created_at`, `updated_at`, `deleted_at`.
+4. Tabela `audit_log`: `id`, `user_id`, `action`, `entity`, `entity_id`, `payload_before`, `payload_after`, `ip`, `user_agent`, `correlation_id`, `signature_hmac`, `created_at`. Trigger PG append-only bloqueando UPDATE/DELETE.
+5. Índices: `users.email` unique, `audit_log(user_id, created_at DESC)`, `audit_log(entity, entity_id)`.
+6. **Dado** um banco zerado, **Quando** `python -m app.cli seed` roda, **Então** os quatro papéis `Admin`, `Operador`, `Validador`, `Auditor` são inseridos, um usuário Admin `admin@app.local` (senha `Admin@123`) é criado e vinculado ao papel Admin. Permissões são populadas incrementalmente por épico.
+7. Tabela `audit_log` inclui colunas `module` (TEXT), `category` (TEXT, default 'info' — valores: financial/navigation/error/info/security), `severity` (TEXT, default 'info' — valores: debug/info/warning/error/critical). Categorias financial e security são sempre persistidas; navigation é configurável OFF por padrão.
 
-### Story 1.4: Login Endpoint with JWT (Core)
+### Story 1.4: Endpoint de Login com JWT (Core)
 
-As an Admin user,
-I want to log in with email and password and receive JWT tokens,
-So that I can access protected resources.
+Como usuário Admin,
+quero fazer login com email e senha e receber tokens JWT,
+para acessar recursos protegidos.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. **Given** valid credentials, **When** `POST /api/v1/auth/login` is called, **Then** response returns `{access_token, refresh_token, user}` with 200.
-2. Passwords verified with Argon2id; failures in <= 200 ms (constant-time); generic `401 Unauthorized`.
-3. JWT RS256 with claims `sub`, `email`, `roles`, `iat`, `exp` (15 min), `iss`, `aud`.
-4. Refresh token in `HttpOnly Secure SameSite=Lax` cookie, 7 days, rotation on every use.
-5. `POST /api/v1/auth/refresh` consumes cookie, invalidates old token, emits new pair.
-6. `POST /api/v1/auth/logout` invalidates refresh token (Redis revocation list).
-7. **Given** 5 failed attempts in 15 min, **When** 6th arrives, **Then** `429 Too Many Requests` for 15 min.
-8. Login events recorded in `audit_log` with HMAC signature.
-9. Unit tests: success, wrong password, inactive user, MFA path, rate limit.
+1. **Dado** credenciais válidas, **Quando** `POST /api/v1/auth/login` é chamado, **Então** a resposta retorna `{access_token, refresh_token, user}` com 200.
+2. Senhas verificadas com Argon2id; falhas em <= 200 ms (constant-time); `401 Unauthorized` genérico.
+3. JWT RS256 com claims `sub`, `email`, `roles`, `iat`, `exp` (15 min), `iss`, `aud`.
+4. Refresh token em cookie `HttpOnly Secure SameSite=Lax`, 7 dias, rotação a cada uso.
+5. `POST /api/v1/auth/refresh` consome cookie, invalida token antigo, emite novo par.
+6. `POST /api/v1/auth/logout` invalida refresh token (lista de revogação no Redis).
+7. **Dado** 5 tentativas falhas em 15 min, **Quando** a 6ª chega, **Então** `429 Too Many Requests` por 15 min.
+8. Eventos de login registrados em `audit_log` com assinatura HMAC.
+9. Testes unitários: sucesso, senha errada, usuário inativo, fluxo MFA, rate limit.
 
-### Story 1.5: Login Screen on the Frontend (Core)
+### Story 1.5: Tela de Login no Frontend (Core)
 
-As a User,
-I want a polished login screen,
-So that I can sign in securely with a great first impression.
+Como Usuário,
+quero uma tela de login polida,
+para entrar com segurança e ter uma boa primeira impressão.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `LoginComponent` in `features/auth/login/` with three files (TS/HTML/CSS).
-2. Reactive Forms (typed) with email (required + email) and password (required, min 8).
-3. **Given** the form is invalid, **When** "Entrar" is clicked, **Then** the button stays disabled.
-4. Spinner while request is in-flight.
-5. **Given** 401, **Then** toast "Credenciais invalidas" and focus returns to email.
-6. **Given** 200, **Then** access token stored in `authState()` signal, navigate to `/dashboard`.
-7. Visual: centered card with glassmorphism, product name (via `environment.productName`) on top, gradient background, illustration at desktop.
-8. `Enter` submits; initial focus on email; visible focus indicators.
-9. "Esqueci minha senha" link to `/auth/forgot-password` (placeholder).
-10. Playwright E2E: success navigates to `/dashboard`; failure stays with toast.
+1. `LoginComponent` em `features/auth/login/` com três arquivos (TS/HTML/CSS).
+2. Reactive Forms (tipados) com email (required + email) e senha (required, min 8).
+3. **Dado** que o formulário está inválido, **Quando** "Entrar" é clicado, **Então** o botão permanece desabilitado.
+4. Spinner enquanto a request está em voo.
+5. **Dado** 401, **Então** toast "Credenciais inválidas" e foco retorna ao email.
+6. **Dado** 200, **Então** access token armazenado no signal `authState()`, navega para `/dashboard`.
+7. Visual: card centralizado com glassmorphism, nome do produto (via `environment.productName`) no topo, background gradiente, ilustração no desktop.
+8. `Enter` submete; foco inicial no email; indicadores visíveis de foco.
+9. Link "Esqueci minha senha" para `/auth/forgot-password` (placeholder).
+10. Playwright E2E: sucesso navega para `/dashboard`; falha permanece com toast.
 
-### Story 1.6: AuthGuard, JWT Interceptor and Silent Refresh (Core)
+### Story 1.6: AuthGuard, Interceptor JWT e Silent Refresh (Core)
 
-As the System,
-I want protected routes to require authentication and tokens refreshed transparently,
-So that the user experience is uninterrupted.
+Como o Sistema,
+quero que rotas protegidas exijam autenticação e que tokens sejam renovados transparentemente,
+para que a experiência do usuário não seja interrompida.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `auth.guard.ts` in `core/guards/` blocks routes when `authState().isAuthenticated()` is false, redirecting to `/login?redirect=...`.
-2. `jwt.interceptor.ts` in `core/interceptors/` injects `Authorization: Bearer <token>`.
-3. **Given** 401, **Then** attempt `POST /auth/refresh` once, replay on success, clear state and redirect on failure.
-4. **Given** multiple concurrent 401s, **Then** only one refresh fires (lock).
-5. On logout: clear state and cookie, navigate to `/login`.
+1. `auth.guard.ts` em `core/guards/` bloqueia rotas quando `authState().isAuthenticated()` é falso, redirecionando para `/login?redirect=...`.
+2. `jwt.interceptor.ts` em `core/interceptors/` injeta `Authorization: Bearer <token>`.
+3. **Dado** 401, **Então** tenta `POST /auth/refresh` uma vez, replay em caso de sucesso, limpa estado e redireciona em caso de falha.
+4. **Dado** múltiplos 401 concorrentes, **Então** apenas um refresh dispara (lock).
+5. Em logout: limpa estado e cookie, navega para `/login`.
 
-### Story 1.7: Initial CI/CD Pipeline (Core)
+### Story 1.7: Pipeline CI/CD Inicial (Core)
 
-As the Team,
-I want CI checks running lint, type-check, tests, and build on every PR,
-So that regressions are caught early.
+Como o Time,
+quero checks de CI rodando lint, type-check, testes e build em todo PR,
+para que regressões sejam pegas cedo.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `.github/workflows/api-ci.yml`: ruff, mypy strict, pytest with coverage, Docker build.
+1. `.github/workflows/api-ci.yml`: ruff, mypy strict, pytest com cobertura, Docker build.
 2. `.github/workflows/web-ci.yml`: eslint, `ng build --configuration=production`, vitest.
-3. `main` branch protected: PR + 1 review + all green checks.
-4. Backend coverage minimum 70%.
-5. Total CI duration <= 10 min.
+3. Branch `main` protegida: PR + 1 review + todos os checks verdes.
+4. Cobertura mínima de backend 70%.
+5. Duração total do CI <= 10 min.
 
-### Story 1.8: Asset Abstraction Layer Bootstrap (Core)
+### Story 1.8: Bootstrap da Camada de Abstração de Ativos (Core)
 
-As a Developer,
-I want the `IAssetModule` interface defined, the event bus implemented, and Module Hook registration working,
-So that vertical modules can plug in without altering the core.
+Como Desenvolvedor,
+quero a interface `IAssetModule` definida, o event bus implementado e o registro de Module Hooks funcionando,
+para que módulos verticais possam plugar sem alterar o core.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `IAssetModule` Protocol defined in `app/core/assets/module_interface.py` per FR-CORE-AST-1, with complete type hints including `handles_event(event_type) -> bool` for capability declaration, all hook methods returning `list[Action]`, and utility methods (`get_asset_schema`, `get_dashboard_widgets`, `get_report_dimensions`, `get_agent_tools`, `get_score_factors`, `get_custom_routes`).
-2. **Asynchronous event bus via Celery** implemented in `app/core/events/event_bus.py`. `publish(event)` enqueues a Celery task `handle_domain_event` on the `events` queue. The Celery worker deserializes the event, checks `active_modules.is_active` + `module_hooks_config.is_active` + module's `handles_event()`, and dispatches to the hook.
-3. Domain Events defined in `app/core/events/domain_events.py` as frozen dataclasses inheriting `DomainEvent(event_id, occurred_at, asset_type)`: `ContractCreatedEvent`, `ContractTerminatedEvent`, `InstallmentOverdueEvent`, `InstallmentPaidEvent`, `ReconciliationCompletedEvent`, `CustomerScoreChangedEvent`, `PaymentPartiallyReceivedEvent`.
-4. Module Hook registration in `app/core/assets/registry.py`: `register_module()`, `get_module()`, `list_modules()`, `is_module_active()`, `get_tools_for_context(caller_permissions, module_id)`. Modules register at **boot time only**; runtime toggling via `active_modules.is_active` in DB.
-5. `assets` table: `id` UUID PK, `module_id`, `external_ref`, `display_name`, `status` (`disponivel`/`em_uso`/`manutencao`/`inativo`), `metadata` (JSONB), timestamps, soft delete.
-6. `active_modules` table: `module_id` PK, `is_active`, `config` (JSONB), `registered_at`.
-7. `module_hooks_config` table: `id` UUID PK, `module_id` FK, `event_type`, `policy` (JSONB), `is_active`.
-8. `event_log` table: `id` BIGSERIAL PK, `event_id` UUID UNIQUE, `event_type`, `asset_type`, `payload` (JSONB), `dispatched_at`, `processed_at`, `processing_status` (`pending`/`processing`/`completed`/`failed`), `error`. Supports replay and debugging.
-9. **Every hook handler MUST be idempotent** — check state before acting; `event_log.event_id` UNIQUE prevents double-processing.
-10. **Core never JOINs module-specific tables.** Module data is accessed via `get_asset_details(asset_id)`.
-11. Unit tests with `task_always_eager=True`: register MockModule, publish event, verify handler called; verify inactive module skipped; verify duplicate `event_id` is ignored.
+1. Protocol `IAssetModule` definido em `app/core/assets/module_interface.py` conforme FR-CORE-AST-1, com type hints completos incluindo `handles_event(event_type) -> bool` para declaração de capacidade, todos os métodos de hook retornando `list[Action]`, e métodos utilitários (`get_asset_schema`, `get_dashboard_widgets`, `get_report_dimensions`, `get_agent_tools`, `get_score_factors`, `get_custom_routes`).
+2. **Event bus assíncrono via Celery** implementado em `app/core/events/event_bus.py`. `publish(event)` enfileira uma task Celery `handle_domain_event` na fila `events`. O worker Celery deserializa o evento, verifica `active_modules.is_active` + `module_hooks_config.is_active` + `handles_event()` do módulo, e dispatcha para o hook.
+3. Eventos de Domínio definidos em `app/core/events/domain_events.py` como frozen dataclasses herdando de `DomainEvent(event_id, occurred_at, asset_type)`: `ContractCreatedEvent`, `ContractTerminatedEvent`, `InstallmentOverdueEvent`, `InstallmentPaidEvent`, `ReconciliationCompletedEvent`, `CustomerScoreChangedEvent`, `PaymentPartiallyReceivedEvent`.
+4. Registro de Module Hooks em `app/core/assets/registry.py`: `register_module()`, `get_module()`, `list_modules()`, `is_module_active()`, `get_tools_for_context(caller_permissions, module_id)`. Módulos registram **apenas no boot time**; toggle em runtime via `active_modules.is_active` no banco.
+5. Tabela `assets`: `id` UUID PK, `module_id`, `external_ref`, `display_name`, `status` (`disponivel`/`em_uso`/`manutencao`/`inativo`), `metadata` (JSONB), timestamps, soft delete.
+6. Tabela `active_modules`: `module_id` PK, `is_active`, `config` (JSONB), `registered_at`.
+7. Tabela `module_hooks_config`: `id` UUID PK, `module_id` FK, `event_type`, `policy` (JSONB), `is_active`.
+8. Tabela `event_log`: `id` BIGSERIAL PK, `event_id` UUID UNIQUE, `event_type`, `asset_type`, `payload` (JSONB), `dispatched_at`, `processed_at`, `processing_status` (`pending`/`processing`/`completed`/`failed`), `error`. Suporta replay e debug.
+9. **Todo hook handler DEVE ser idempotente** — verifica estado antes de agir; `event_log.event_id` UNIQUE previne processamento duplicado.
+10. **O Core nunca faz JOIN com tabelas de módulo.** Dados do módulo são acessados via `get_asset_details(asset_id)`.
+11. Testes unitários com `task_always_eager=True`: registrar MockModule, publicar evento, verificar que o handler foi chamado; verificar que módulo inativo é ignorado; verificar que `event_id` duplicado é ignorado.
 
-### Story 1.9: SSE Infrastructure (Core)
+### Story 1.9: Infraestrutura SSE (Core)
 
-As a Developer,
-I want SSE endpoints with Redis Pub/Sub dispatch and token-based auth,
-So that real-time notifications work across all features.
+Como Desenvolvedor,
+quero endpoints SSE com dispatch via Redis Pub/Sub e auth via token,
+para que notificações em tempo real funcionem em todas as features.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. SSE endpoint `GET /sse/notifications` implemented using `sse-starlette` with Redis Pub/Sub backend.
-2. Auth via query param `?token=<jwt>` (EventSource doesn't support headers).
-3. `SseService` in `backend-api/app/api/sse.py` subscribes to Redis channel `sse:user:{user_id}`.
-4. Reconnection handled natively by EventSource; server sends `retry: 3000` directive.
-5. Frontend `SseService` in `frontend/src/app/core/services/sse.service.ts` wraps EventSource with `connected` signal and `lastEvent` signal.
-6. Unit test: publish to Redis channel, verify SSE client receives the event.
+1. Endpoint SSE `GET /sse/notifications` implementado usando `sse-starlette` com backend Redis Pub/Sub.
+2. Auth via query param `?token=<jwt>` (EventSource não suporta headers).
+3. `SseService` em `backend-api/app/api/sse.py` se inscreve no canal Redis `sse:user:{user_id}`.
+4. Reconexão tratada nativamente pelo EventSource; servidor envia diretiva `retry: 3000`.
+5. `SseService` no frontend em `frontend/src/app/core/services/sse.service.ts` envolve EventSource com signal `connected` e signal `lastEvent`.
+6. Teste unitário: publicar no canal Redis, verificar que o cliente SSE recebe o evento.
 
-### Story 1.10: Password Recovery Flow (Core)
+### Story 1.10: Fluxo de Recuperação de Senha (Core)
 
-As a User,
-I want to reset my password via email,
-So that I can regain access if I forget my credentials.
+Como Usuário,
+quero redefinir minha senha por email,
+para recuperar o acesso se esquecer das credenciais.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `POST /api/v1/auth/password/forgot` accepts `{email}` and sends a reset link via email (configurable SMTP or adapter).
-2. `POST /api/v1/auth/password/reset` accepts `{token, new_password}` and resets the password.
-3. Reset tokens expire in 1 hour, are single-use, and stored hashed in Redis.
-4. `IEmailSender` port defined in `app/domain/ports/email_sender.py` with `SmtpAdapter` default and `ConsoleAdapter` for dev (prints to stdout).
-5. Frontend `ForgotPasswordComponent` and `ResetPasswordComponent` in `features/auth/`.
-6. Audit log records password reset events.
+1. `POST /api/v1/auth/password/forgot` aceita `{email}` e envia link de reset por email (SMTP ou adapter configurável).
+2. `POST /api/v1/auth/password/reset` aceita `{token, new_password}` e redefine a senha.
+3. Tokens de reset expiram em 1 hora, são single-use e armazenados hasheados no Redis.
+4. Port `IEmailSender` definida em `app/domain/ports/email_sender.py` com `SmtpAdapter` padrão e `ConsoleAdapter` para dev (imprime no stdout).
+5. `ForgotPasswordComponent` e `ResetPasswordComponent` no frontend em `features/auth/`.
+6. Log de auditoria registra eventos de reset de senha.
 
 ---
 
-## Epic 2A: Core Asset Management & Registrations (Core)
+## Épico 2A: Gestão Core de Ativos e Cadastros (Core)
 
-**Goal:** The manager can register customers and the generic asset infrastructure is ready. The core manages clients and delegates asset details to vertical modules via `IAssetModule`. Module-aware UI shows only relevant content based on active modules.
+**Objetivo:** O gestor consegue cadastrar clientes e a infraestrutura genérica de ativos está pronta. O core gerencia clientes e delega detalhes de ativo aos módulos verticais via `IAssetModule`. UI ciente de módulos exibe apenas conteúdo relevante baseado nos módulos ativos.
 
-### Story 2A.1: Customer Domain Model and CRUD API (Core)
+### Story 2A.1: Modelo de Domínio de Cliente e API CRUD (Core)
 
-As a Backend developer,
-I want a Customer entity with complete REST endpoints,
-So that the frontend can manage the customer base.
+Como desenvolvedor Backend,
+quero uma entidade Cliente com endpoints REST completos,
+para que o frontend possa gerenciar a base de clientes.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `Customer` model with generic fields: full name, CPF/CNPJ (validated), phone (E.164), email, full address, birth date, photo, notes, `score` (default 100), `status` (`ativo`/`inativo`/`bloqueado`), `tags` (JSONB), `metadata_extensions` (JSONB for module-injected fields), `created_by_user_id`.
-2. CPF/CNPJ validated and unique; email unique; phone normalized to E.164.
+1. Model `Customer` com campos genéricos: nome completo, CPF/CNPJ (validado), telefone (E.164), email, endereço completo, data de nascimento, foto, observações, `score` (default 100), `status` (`ativo`/`inativo`/`bloqueado`), `tags` (JSONB), `metadata_extensions` (JSONB para campos injetados por módulos), `created_by_user_id`.
+2. CPF/CNPJ validado e unique; email unique; telefone normalizado para E.164.
 3. Endpoints: `POST /api/v1/customers`, `GET /api/v1/customers?search=&status=&page=&size=`, `GET /api/v1/customers/{id}`, `PATCH /api/v1/customers/{id}`, `DELETE /api/v1/customers/{id}` (soft delete), `POST /api/v1/customers/{id}/attachments`.
-4. Attachments stored in MinIO at `customers/{id}/{uuid}-{filename}` with record in `customer_attachments`.
-5. Every mutation writes to `audit_log` with HMAC signature.
-6. Integration tests covering CRUD + attachment upload.
+4. Anexos armazenados no MinIO em `customers/{id}/{uuid}-{filename}` com registro em `customer_attachments`.
+5. Toda mutação grava em `audit_log` com assinatura HMAC.
+6. Testes de integração cobrindo CRUD + upload de anexo.
 
-### Story 2A.2: Customers List Screen (Core)
+### Story 2A.2: Tela de Lista de Clientes (Core)
 
-As a Manager,
-I want to browse all customers in a searchable, filterable table,
-So that I find anyone in seconds.
+Como Gestor,
+quero navegar por todos os clientes numa tabela pesquisável e filtrável,
+para encontrar qualquer um em segundos.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `CustomersListComponent` in `features/system/customers/`.
-2. Columns: avatar, name, masked CPF/CNPJ (last 3 visible), phone (WhatsApp shortcut), score (colored badge), status (badge), last update, row actions (view, edit, delete).
-3. Text search debounced 300 ms, signal-driven.
-4. Filters: status (multi-select), tag (multi-select), score (range slider).
-5. URL state: filters in query string.
-6. Server-side pagination via signals, preferably using `resource()` API.
-7. "Novo Cliente" opens drawer with `CustomerFormComponent`.
-8. Skeleton loader during fetch; empty state with illustration and CTA.
-9. Keyboard shortcuts: `/` focuses search, `n` opens new, arrows walk rows, `Enter` opens detail.
+1. `CustomersListComponent` em `features/system/customers/`.
+2. Colunas: avatar, nome, CPF/CNPJ mascarado (últimos 3 visíveis), telefone (atalho WhatsApp), score (badge colorido), status (badge), última atualização, ações da linha (ver, editar, excluir).
+3. Busca textual com debounce 300 ms, dirigida por signal.
+4. Filtros: status (multi-select), tag (multi-select), score (range slider).
+5. Estado da URL: filtros na query string.
+6. Paginação server-side via signals, preferencialmente usando a API `resource()`.
+7. "Novo Cliente" abre drawer com `CustomerFormComponent`.
+8. Skeleton loader durante fetch; empty state com ilustração e CTA.
+9. Atalhos de teclado: `/` foca busca, `n` abre novo, setas percorrem linhas, `Enter` abre detalhe.
 
-### Story 2A.3: Customer Create/Edit Drawer (Core)
+### Story 2A.3: Drawer de Criar/Editar Cliente (Core)
 
-As a Manager,
-I want an ergonomic form to create or edit a customer,
-So that registration is fast.
+Como Gestor,
+quero um formulário ergonômico para criar ou editar um cliente,
+para que o cadastro seja rápido.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Form in 3 collapsible sections: Personal Data, Documents, Contact & Address. Vertical modules can inject additional sections (e.g., Vehicle Module injects "CNH" section).
-2. Inline validation (Reactive Forms typed).
-3. CEP auto-fills via ViaCEP.
-4. Photo: drop-zone with circular crop preview.
-5. Attachments: multi-file drop-zone with previews.
-6. Save closes drawer and refreshes list; error shows toast and preserves form.
-7. Accessible: tab order correct, focus to first invalid on submit, `Esc` closes (confirm if dirty).
+1. Formulário em 3 seções colapsáveis: Dados Pessoais, Documentos, Contato e Endereço. Módulos verticais podem injetar seções adicionais (ex.: Módulo de Veículos injeta seção "CNH").
+2. Validação inline (Reactive Forms tipados).
+3. CEP preenche automaticamente via ViaCEP.
+4. Foto: drop-zone com preview de crop circular.
+5. Anexos: drop-zone multi-arquivo com previews.
+6. Salvar fecha o drawer e atualiza a lista; erro exibe toast e preserva o formulário.
+7. Acessível: ordem de tab correta, foco na primeira inválida ao submeter, `Esc` fecha (confirma se dirty).
 
-### Story 2A.4: Customer Detail Page with Tabs (Core)
+### Story 2A.4: Página de Detalhe do Cliente com Abas (Core)
 
-As a Manager,
-I want to see the full life of a customer on one page,
-So that I have complete context before any decision.
+Como Gestor,
+quero ver a vida completa de um cliente em uma única página,
+para ter contexto completo antes de qualquer decisão.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/customers/:id` renders `CustomerDetailComponent`.
-2. Header: avatar, name, CPF/CNPJ, large score visual, status, primary actions (Edit, WhatsApp Message).
-3. Core tabs: **Overview**, **Contracts**, **Receivables**, **Score**, **Documents**, **Conversations**, **Audit**. Vertical modules can inject additional tabs. Each tab lazy-loaded.
-4. Overview: metric cards (total contracted, received, open balance, upcoming), event timeline.
-5. URL preserves active tab via `?tab=...`.
+1. Rota `/system/customers/:id` renderiza `CustomerDetailComponent`.
+2. Header: avatar, nome, CPF/CNPJ, score em destaque visual, status, ações primárias (Editar, Enviar Mensagem WhatsApp).
+3. Abas core: **Visão Geral**, **Contratos**, **Títulos a Receber**, **Score**, **Documentos**, **Conversas**, **Auditoria**. Módulos verticais podem injetar abas adicionais. Cada aba é lazy-loaded.
+4. Visão Geral: cards de métrica (total contratado, recebido, saldo em aberto, próximos), timeline de eventos.
+5. URL preserva aba ativa via `?tab=...`.
 
-### Story 2A.5: Generic Assets List (Core)
+### Story 2A.5: Lista Genérica de Ativos (Core)
 
-As a Manager,
-I want to see all assets registered in the platform,
-So that I have a consolidated view regardless of module.
+Como Gestor,
+quero ver todos os ativos cadastrados na plataforma,
+para ter visão consolidada independente do módulo.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/assets` lists records from the `assets` table with columns: name, module (badge), status, last update, actions.
-2. Filters: module type (multi-select), status, text search.
-3. Click redirects to the detail page rendered by the corresponding vertical module.
-4. If no vertical module is active, empty state: "Activate a vertical module in Settings > Modules to start registering assets."
+1. Rota `/system/assets` lista registros da tabela `assets` com colunas: nome, módulo (badge), status, última atualização, ações.
+2. Filtros: tipo de módulo (multi-select), status, busca textual.
+3. Clique redireciona para a página de detalhe renderizada pelo módulo vertical correspondente.
+4. Se nenhum módulo vertical está ativo, empty state: "Ative um módulo vertical em Configurações > Módulos para começar a cadastrar ativos."
 
-### Story 2A.6: Excel One-Shot Importer — Customers (Core)
+### Story 2A.6: Importador Excel One-Shot — Clientes (Core)
 
-As a Manager going live,
-I want to import existing customers from a spreadsheet,
-So that I don't re-type dozens of records.
+Como Gestor entrando em produção,
+quero importar clientes existentes de uma planilha,
+para não redigitar dezenas de registros.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. CLI `python -m app.cli import-excel --entity=customers --file=clientes.xlsx --sheet=Clientes` maps columns into `customers` table.
-2. **Given** `--dry-run` flag, **Then** validates and prints diff report without persisting.
-3. **Given** re-run with same input, **When** existing records found by CPF, **Then** updated (not duplicated).
-4. End-of-run report: created, updated, skipped (with reasons).
-5. Import writes a summary `audit_log` entry.
+1. CLI `python -m app.cli import-excel --entity=customers --file=clientes.xlsx --sheet=Clientes` mapeia colunas para a tabela `customers`.
+2. **Dada** a flag `--dry-run`, **Então** valida e imprime relatório de diff sem persistir.
+3. **Dada** reexecução com a mesma entrada, **Quando** registros existentes são encontrados por CPF, **Então** são atualizados (não duplicados).
+4. Relatório ao final: criados, atualizados, ignorados (com motivos).
+5. Importação escreve uma entrada de resumo em `audit_log`.
 
 ---
 
-## Epic 2B: Vehicle Module — Registrations & Integrations (Vehicle Module)
+## Épico 2B: Módulo de Veículos — Cadastros e Integrações (Módulo de Veículos)
 
-**Goal:** The Vehicle Module is implemented and registered as `IAssetModule`. The manager can register vehicles, see the fleet on a real-time map, and FIPE valuations are auto-refreshed. The module reacts to domain events via hooks. By the end, the vehicle registration spreadsheet is replaceable.
+**Objetivo:** O Módulo de Veículos está implementado e registrado como `IAssetModule`. O gestor consegue cadastrar veículos, ver a frota num mapa em tempo real, e valorações FIPE são atualizadas automaticamente. O módulo reage a eventos de domínio via hooks. Ao final, a planilha de cadastro de veículos é substituível.
 
-### Story 2B.1: Vehicle Module Structure and IAssetModule Registration (Vehicle Module)
+### Story 2B.1: Estrutura do Módulo de Veículos e Registro IAssetModule (Módulo de Veículos)
 
-As a Developer,
-I want the Vehicle Module structured and registered in the core,
-So that it receives domain events and injects domain-specific functionality.
+Como Desenvolvedor,
+quero o Módulo de Veículos estruturado e registrado no core,
+para que receba eventos de domínio e injete funcionalidade específica do domínio.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Directory `backend-api/app/modules/vehicles/` with: `__init__.py`, `module.py` (IAssetModule implementation), `models.py`, `routes.py`, `services.py`, `hooks.py`, `ports/`, `adapters/`.
-2. Class `VehicleModule(IAssetModule)` implements all interface methods: `on_contract_created`, `on_contract_terminated`, `on_installment_overdue`, `on_installment_paid`, `on_reconciliation_completed`, `get_asset_details`, `get_asset_financials`, `get_dashboard_widgets`, `get_report_dimensions`, `get_collection_tools`.
-3. Module registered at startup via `register_module(VehicleModule())`.
-4. Entry in `active_modules`: `module_id='vehicles'`, `is_active=True`.
-5. Tests: publish `InstallmentOverdueEvent` -> Vehicle Module hook is called.
+1. Diretório `backend-api/app/modules/vehicles/` com: `__init__.py`, `module.py` (implementação de IAssetModule), `models.py`, `routes.py`, `services.py`, `hooks.py`, `ports/`, `adapters/`.
+2. Classe `VehicleModule(IAssetModule)` implementa todos os métodos da interface: `on_contract_created`, `on_contract_terminated`, `on_installment_overdue`, `on_installment_paid`, `on_reconciliation_completed`, `get_asset_details`, `get_asset_financials`, `get_dashboard_widgets`, `get_report_dimensions`, `get_collection_tools`.
+3. Módulo registrado no startup via `register_module(VehicleModule())`.
+4. Entrada em `active_modules`: `module_id='vehicles'`, `is_active=True`.
+5. Testes: publicar `InstallmentOverdueEvent` -> hook do Módulo de Veículos é chamado.
 
-### Story 2B.2: FIPE Provider Adapter (Vehicle Module)
+### Story 2B.2: Adapter do Provedor FIPE (Módulo de Veículos)
 
-As the System,
-I want an `IFipeProvider` Port with concrete adapters,
-So that the FIPE supplier is swappable.
+Como o Sistema,
+quero uma Port `IFipeProvider` com adapters concretos,
+para que o fornecedor FIPE seja intercambiável.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `IFipeProvider` Protocol in `app/modules/vehicles/ports/fipe.py` with `list_brands`, `list_models`, `list_years`, `get_price`.
-2. `ApiFipeBrAdapter` (default) in `app/modules/vehicles/adapters/fipe/apifipe_br.py`.
-3. `FipeApiBrAdapter` (alternative) in `app/modules/vehicles/adapters/fipe/fipeapi_br.py`.
-4. Fallback adapter: primary -> secondary on error.
-5. Redis cache with 30-day TTL per key `fipe:{type}:{brand}:{model}:{year}`.
+1. Protocol `IFipeProvider` em `app/modules/vehicles/ports/fipe.py` com `list_brands`, `list_models`, `list_years`, `get_price`.
+2. `ApiFipeBrAdapter` (padrão) em `app/modules/vehicles/adapters/fipe/apifipe_br.py`.
+3. `FipeApiBrAdapter` (alternativo) em `app/modules/vehicles/adapters/fipe/fipeapi_br.py`.
+4. Adapter de fallback: primário -> secundário em caso de erro.
+5. Cache Redis com TTL de 30 dias por chave `fipe:{type}:{brand}:{model}:{year}`.
 6. Endpoints: `GET /api/v1/modules/vehicles/fipe/{brands|models|years|price}`.
-7. Active adapter selected via `FIPE_PROVIDER` env var.
+7. Adapter ativo selecionado via variável de ambiente `FIPE_PROVIDER`.
 
-### Story 2B.3: Vehicle Domain Model, FIPE Integration, and Acquisition (Vehicle Module)
+### Story 2B.3: Modelo de Domínio de Veículo, Integração FIPE e Aquisição (Módulo de Veículos)
 
-As a Backend developer,
-I want a Vehicle entity with CRUD, FIPE refresh, and acquisition modeling,
-So that the frontend can manage the fleet financially.
+Como desenvolvedor Backend,
+quero uma entidade Veículo com CRUD, refresh FIPE e modelagem de aquisição,
+para que o frontend possa gerenciar a frota financeiramente.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `Vehicle` model with all fields from FR-VH-1, plus `asset_id` (FK to `assets`), `current_contract_id` (nullable), `current_customer_id` (nullable, derived).
-2. CRUD endpoints under `/api/v1/modules/vehicles/` with permission checks.
-3. On create/update, sync record in core `assets` table (create or update `asset_id`).
-4. `POST /api/v1/modules/vehicles/{id}/refresh-fipe` updates `valor_fipe_atual` via active adapter.
-5. Celery beat job (`0 3 5 * *`) refreshes FIPE for all active vehicles monthly.
-6. `VehicleAcquisition` entity (1:1 with Vehicle) with acquisition form (FR-VH-3): type, down_payment, installments (JSONB), interest_rate, amortization_system.
-7. `GET /api/v1/modules/vehicles/{id}/financials` returns: FIPE value, depreciation, total paid to acquisition, balance, total received, ROI %, payback.
+1. Model `Vehicle` com todos os campos de FR-VH-1, mais `asset_id` (FK para `assets`), `current_contract_id` (nullable), `current_customer_id` (nullable, derivado).
+2. Endpoints CRUD sob `/api/v1/modules/vehicles/` com checks de permissão.
+3. Em create/update, sincroniza registro na tabela `assets` do core (cria ou atualiza `asset_id`).
+4. `POST /api/v1/modules/vehicles/{id}/refresh-fipe` atualiza `valor_fipe_atual` via adapter ativo.
+5. Job do Celery beat (`0 3 5 * *`) atualiza FIPE para todos os veículos ativos mensalmente.
+6. Entidade `VehicleAcquisition` (1:1 com Vehicle) com formulário de aquisição (FR-VH-3): tipo, entrada, parcelas (JSONB), taxa de juros, sistema de amortização.
+7. `GET /api/v1/modules/vehicles/{id}/financials` retorna: valor FIPE, depreciação, total pago na aquisição, saldo, total recebido, ROI %, payback.
 
-### Story 2B.4: Vehicle Registration Wizard (Vehicle Module)
+### Story 2B.4: Wizard de Cadastro de Veículo (Módulo de Veículos)
 
-As a Manager,
-I want a guided wizard to register a vehicle,
-So that the many fields don't overwhelm me.
+Como Gestor,
+quero um wizard guiado para cadastrar um veículo,
+para que os muitos campos não me sobrecarreguem.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. 4 steps: **Identification** (plate, renavam, chassis, color), **FIPE Data** (cascading brand/model/year selectors with auto-filled value), **Acquisition** (date, purchase value, payment form with dynamic sub-form), **Documents & Photos** (insurance, IPVA, photos).
-2. FIPE selectors with typeahead and inline loading.
-3. **Given** "Financiamento" selected, **Then** sub-form: down payment, installment count, rate, amortization (Price/SAC), preview table.
-4. Stepper + Back/Next; form state preserved across steps.
-5. Final step: preview before commit; on confirm, create vehicle + acquisition atomically.
+1. 4 passos: **Identificação** (placa, renavam, chassi, cor), **Dados FIPE** (seletores em cascata marca/modelo/ano com valor auto-preenchido), **Aquisição** (data, valor de compra, forma de pagamento com sub-formulário dinâmico), **Documentos e Fotos** (seguro, IPVA, fotos).
+2. Seletores FIPE com typeahead e loading inline.
+3. **Dado** "Financiamento" selecionado, **Então** sub-formulário: entrada, quantidade de parcelas, taxa, amortização (Price/SAC), tabela de preview.
+4. Stepper + Voltar/Próximo; estado do formulário preservado entre passos.
+5. Passo final: preview antes do commit; ao confirmar, cria veículo + aquisição atomicamente.
 
-### Story 2B.5: Vehicles List and Card Grid (Vehicle Module)
+### Story 2B.5: Lista de Veículos e Grid de Cards (Módulo de Veículos)
 
-As a Manager,
-I want to see the fleet as a table or cards,
-So that I can scan its state quickly.
+Como Gestor,
+quero ver a frota como tabela ou cards,
+para examinar seu estado rapidamente.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Toggle Table <-> Cards; preference persisted to localStorage.
-2. Cards: photo, model, plate, status badge, current driver, ROI %, next due date, mini-map with position.
-3. Filters: status, brand, year, current driver, tag.
-4. KPI strip: Fleet Total (R$ FIPE sum), Active Vehicles, Parked Vehicles.
+1. Toggle Tabela <-> Cards; preferência persistida no localStorage.
+2. Cards: foto, modelo, placa, badge de status, motorista atual, ROI %, próxima data de vencimento, mini-mapa com posição.
+3. Filtros: status, marca, ano, motorista atual, tag.
+4. Barra de KPI: Total da Frota (soma R$ FIPE), Veículos Ativos, Veículos Parados.
 
-### Story 2B.6: GPS Tracker Adapter (Vehicle Module)
+### Story 2B.6: Adapter de Rastreador GPS (Módulo de Veículos)
 
-As the System,
-I want an `ITrackerGateway` Port with a generic implementation,
-So that GPS tracking is plug-and-play.
+Como o Sistema,
+quero uma Port `ITrackerGateway` com uma implementação genérica,
+para que o rastreamento GPS seja plug-and-play.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `ITrackerGateway` Protocol with `get_position`, `get_positions`, `block_vehicle`, `unblock_vehicle`, `get_history`.
-2. `GenericRestTrackerAdapter` parameterizable by base URL, auth, JSONPath mapping — works for most REST trackers without code changes.
-3. `MqttRestTrackerAdapter` for MQTT-command / REST-position trackers.
-4. Block/unblock requires Admin profile + password re-confirmation (double approval) and writes signed `audit_log` event with reason.
+1. Protocol `ITrackerGateway` com `get_position`, `get_positions`, `block_vehicle`, `unblock_vehicle`, `get_history`.
+2. `GenericRestTrackerAdapter` parametrizável por URL base, auth, mapeamento JSONPath — funciona para a maioria dos rastreadores REST sem mudança de código.
+3. `MqttRestTrackerAdapter` para rastreadores com comandos MQTT / posição REST.
+4. Bloqueio/desbloqueio exige perfil Admin + reconfirmação de senha (dupla aprovação) e grava evento assinado em `audit_log` com motivo.
 
-### Story 2B.7: Interactive Fleet Map (Vehicle Module)
+### Story 2B.7: Mapa Interativo da Frota (Módulo de Veículos)
 
-As a Manager,
-I want to see all vehicles on an interactive map,
-So that I can monitor the operation geographically.
+Como Gestor,
+quero ver todos os veículos num mapa interativo,
+para monitorar a operação geograficamente.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `FleetMapComponent` in `features/modules/vehicles/fleet-map/`.
-2. Leaflet with OSM tiles, custom markers (vehicle-type icon + status color).
-3. Auto-cluster on zoom-out.
-4. **Given** marker click, **Then** popup: photo, model, plate, driver, status, "View Details" + "Block" (with double confirmation).
-5. Positions refresh every 30 s via SSE (`/sse/module/vehicles`).
-6. Side filters: status, driver, tag.
-7. Optional "operating region" polygon highlighting out-of-zone vehicles.
+1. `FleetMapComponent` em `features/modules/vehicles/fleet-map/`.
+2. Leaflet com tiles OSM, marcadores customizados (ícone do tipo de veículo + cor do status).
+3. Auto-cluster no zoom-out.
+4. **Dado** clique no marcador, **Então** popup: foto, modelo, placa, motorista, status, "Ver Detalhes" + "Bloquear" (com dupla confirmação).
+5. Posições atualizam a cada 30 s via SSE (`/sse/module/vehicles`).
+6. Filtros laterais: status, motorista, tag.
+7. Polígono opcional de "região de operação" destacando veículos fora da zona.
 
-### Story 2B.8: Overdue Hook — GPS Block Policy (Vehicle Module)
+### Story 2B.8: Hook de Vencimento — Política de Bloqueio GPS (Módulo de Veículos)
 
-As the Vehicle Module,
-I want to react to `InstallmentOverdueEvent` by checking the block policy,
-So that vehicles are blocked automatically when configured.
+Como o Módulo de Veículos,
+quero reagir ao `InstallmentOverdueEvent` verificando a política de bloqueio,
+para que veículos sejam bloqueados automaticamente quando configurado.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Hook `on_installment_overdue` in `VehicleModule` checks parametrized policy: `dias_atraso >= X` AND `score < Y`.
-2. If conditions met AND policy requires human approval -> create notification for Admin with "Approve Block" / "Reject".
-3. If conditions met AND auto-approval enabled -> dispatch `block_vehicle` via `ITrackerGateway`.
-4. `vehicle_blocked` event written to `audit_log` with reason, associated title, customer score.
-5. On `InstallmentPaidEvent`, hook checks if vehicle is blocked and all overdue titles are cleared -> auto-dispatch `unblock_vehicle`.
+1. Hook `on_installment_overdue` em `VehicleModule` verifica política parametrizada: `dias_atraso >= X` E `score < Y`.
+2. Se condições atendidas E política exige aprovação humana -> cria notificação para o Admin com "Aprovar Bloqueio" / "Rejeitar".
+3. Se condições atendidas E aprovação automática habilitada -> dispatcha `block_vehicle` via `ITrackerGateway`.
+4. Evento `vehicle_blocked` gravado em `audit_log` com motivo, título associado, score do cliente.
+5. Em `InstallmentPaidEvent`, hook verifica se veículo está bloqueado e todos os títulos vencidos foram quitados -> dispatcha automaticamente `unblock_vehicle`.
 
-### Story 2B.9: CNH Schema Extension for Customer (Vehicle Module)
+### Story 2B.9: Extensão de Schema CNH para Cliente (Módulo de Veículos)
 
-As the Vehicle Module,
-I want to register CNH fields on the Customer entity,
-So that driver documentation is part of the customer profile.
+Como o Módulo de Veículos,
+quero cadastrar campos de CNH na entidade Cliente,
+para que a documentação do motorista faça parte do perfil do cliente.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Vehicle Module registers schema extension for Customer via `metadata_extensions`: CNH number, category, expiry date, photo URL.
-2. Customer form (Story 2A.3) renders the "CNH" section when Vehicle Module is active.
-3. CNH validation: number format, category (A/B/AB/C/D/E), expiry not in the past.
-4. CNH photo uploaded to MinIO as a customer attachment with kind `cnh`.
+1. Módulo de Veículos registra extensão de schema para Cliente via `metadata_extensions`: número de CNH, categoria, data de validade, URL da foto.
+2. Formulário de Cliente (Story 2A.3) renderiza a seção "CNH" quando o Módulo de Veículos está ativo.
+3. Validação de CNH: formato do número, categoria (A/B/AB/C/D/E), validade não no passado.
+4. Foto da CNH enviada para o MinIO como anexo do cliente com tipo `cnh`.
 
-### Story 2B.10: Excel One-Shot Importer — Vehicles (Vehicle Module)
+### Story 2B.10: Importador Excel One-Shot — Veículos (Módulo de Veículos)
 
-As a Manager going live,
-I want to import existing vehicles from a spreadsheet,
-So that I don't re-type fleet data.
+Como Gestor entrando em produção,
+quero importar veículos existentes de uma planilha,
+para não redigitar dados da frota.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. CLI `python -m app.cli import-excel --entity=vehicles --file=veiculos.xlsx` maps columns into vehicles table and syncs with core `assets`.
-2. `--dry-run` validates and prints report without persisting.
-3. Re-run with same input: existing records matched by plate are updated (idempotent).
-4. End-of-run report: created, updated, skipped (with reasons).
-5. Import writes a summary `audit_log` entry.
+1. CLI `python -m app.cli import-excel --entity=vehicles --file=veiculos.xlsx` mapeia colunas para a tabela de veículos e sincroniza com `assets` do core.
+2. `--dry-run` valida e imprime relatório sem persistir.
+3. Reexecução com mesma entrada: registros existentes casados pela placa são atualizados (idempotente).
+4. Relatório ao final: criados, atualizados, ignorados (com motivos).
+5. Importação escreve uma entrada de resumo em `audit_log`.
 
 ---
 
-## Epic 3: Contracts & Flexible Installments (Core)
+## Épico 3: Contratos e Parcelas Flexíveis (Core)
 
-**Goal:** The manager can produce any contract shape imaginable (down payment + N installments + extras + grace + custom), linked to a generic asset (`asset_id`), with PDF and linked titles generated automatically. Supports bulk edits on open installments without touching paid ones. Contract changes reissue open titles. Title lifecycle: titles generated on finalization; contract changes cancel open titles and generate new ones; paid titles immutable.
+**Objetivo:** O gestor consegue produzir qualquer formato de contrato imaginável (entrada + N parcelas + extras + carência + customizado), vinculado a um ativo genérico (`asset_id`), com PDF e títulos vinculados gerados automaticamente. Suporta edições em lote em parcelas em aberto sem tocar nas pagas. Mudanças no contrato reemitem títulos em aberto. Ciclo de vida do título: títulos gerados na finalização; mudanças no contrato cancelam títulos em aberto e geram novos; títulos pagos imutáveis.
 
-### Story 3.1: Contract, Installment, ContractEvent Domain Model (Core)
+### Story 3.1: Modelo de Domínio Contract, Installment, ContractEvent (Core)
 
-As a Backend developer,
-I want the contracts domain modeled in the database,
-So that financial rules have a correct foundation.
+Como desenvolvedor Backend,
+quero o domínio de contratos modelado no banco,
+para que regras financeiras tenham uma base correta.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `contracts` table: id, customer_id, asset_id (FK to `assets`), status (`rascunho`/`vigente`/`encerrado`/`rescindido`), start_date, end_date, total_amount, periodicity, due_day, late_interest_pct_per_day, late_fine_pct, grace_days, has_purchase_option, residual_value, terms_md, pdf_url, version, created_by, signed_at, terminated_at, termination_reason, soft delete.
-2. `installments` table: id, contract_id, sequence, due_date, amount, status (`em_aberto`/`vencido`/`pago_aguardando_verificacao`/`pago`/`pago_parcial`/`renegociado`/`cancelado`), kind (`regular`/`down_payment`/`extra_semestral`/`extra_anual`/`custom`), paid_at, paid_amount, payment_method, receipt_url, notes, parent_installment_id (nullable — reference to original title in partial payment), `UNIQUE(contract_id, sequence)`.
-3. `contract_events` table (append-only): id, contract_id, event_type, payload (JSONB), pdf_hash, created_by, created_at. Types: `created`, `signed`, `installments_generated`, `installments_reissued`, `bulk_edit`, `cancellation_requested`, `terminated`, `pdf_generated`.
-4. `installment_adjustments` table (append-only): id, installment_id, kind (`discount`/`fine`/`interest`/`renegotiation`/`bulk_edit`/`partial_payment`/`reverse_write_off`), amount_delta, snapshot_before, snapshot_after, reason, applied_by, applied_at.
-5. PG trigger `enforce_paid_immutability`: **Given** installment status is `pago`, **When** UPDATE attempts to change `amount`, `due_date`, `paid_at`, `paid_amount`, or revert status, **Then** exception raised. Exception: status -> `cancelado` only when session var `app.reverse_write_off=true`.
-6. Indexes: `installments(contract_id)`, `installments(due_date, status)`, `installments(status)`.
-7. On contract finalization (status -> `vigente`), publish `ContractCreatedEvent` on event bus.
-8. `installment_generations` table created with: id, contract_id, batch_label, installment_count, total_amount, has_financial_activity (bool, default false), created_by_user_id, created_at, rolled_back_at, rolled_back_by. Every installment carries a `generation_id` FK linking it to the generation that created it.
+1. Tabela `contracts`: id, customer_id, asset_id (FK para `assets`), status (`rascunho`/`vigente`/`encerrado`/`rescindido`), start_date, end_date, total_amount, periodicity, due_day, late_interest_pct_per_day, late_fine_pct, grace_days, has_purchase_option, residual_value, terms_md, pdf_url, version, created_by, signed_at, terminated_at, termination_reason, soft delete.
+2. Tabela `installments`: id, contract_id, sequence, due_date, amount, status (`em_aberto`/`vencido`/`pago_aguardando_verificacao`/`pago`/`pago_parcial`/`renegociado`/`cancelado`), kind (`regular`/`down_payment`/`extra_semestral`/`extra_anual`/`custom`), paid_at, paid_amount, payment_method, receipt_url, notes, parent_installment_id (nullable — referência ao título original em pagamento parcial), `UNIQUE(contract_id, sequence)`.
+3. Tabela `contract_events` (append-only): id, contract_id, event_type, payload (JSONB), pdf_hash, created_by, created_at. Tipos: `created`, `signed`, `installments_generated`, `installments_reissued`, `bulk_edit`, `cancellation_requested`, `terminated`, `pdf_generated`.
+4. Tabela `installment_adjustments` (append-only): id, installment_id, kind (`discount`/`fine`/`interest`/`renegotiation`/`bulk_edit`/`partial_payment`/`reverse_write_off`), amount_delta, snapshot_before, snapshot_after, reason, applied_by, applied_at.
+5. Trigger PG `enforce_paid_immutability`: **Dado** que o status da parcela é `pago`, **Quando** um UPDATE tenta mudar `amount`, `due_date`, `paid_at`, `paid_amount`, ou reverter o status, **Então** exceção é lançada. Exceção: status -> `cancelado` somente quando a session var `app.reverse_write_off=true`.
+6. Índices: `installments(contract_id)`, `installments(due_date, status)`, `installments(status)`.
+7. Na finalização do contrato (status -> `vigente`), publica `ContractCreatedEvent` no event bus.
+8. Tabela `installment_generations` criada com: id, contract_id, batch_label, installment_count, total_amount, has_financial_activity (bool, default false), created_by_user_id, created_at, rolled_back_at, rolled_back_by. Cada parcela carrega FK `generation_id` ligando-a à geração que a criou.
 
-### Story 3.2: Installment Builder Backend — Preview + Persist (Core)
+### Story 3.2: Backend do Construtor de Parcelas — Preview + Persist (Core)
 
-As a Backend developer,
-I want an endpoint that computes a schedule from an installment definition,
-So that the frontend can preview before persisting.
+Como desenvolvedor Backend,
+quero um endpoint que calcule um cronograma a partir de uma definição de parcelamento,
+para que o frontend possa fazer preview antes de persistir.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. **Given** payload with `start_date`, optional `down_payment`, optional `regular`, optional `extras[]`, optional `grace_days`, optional `custom_overrides[]`, **When** `POST /api/v1/contracts/preview-schedule` is called, **Then** response returns ordered list with `sequence`, `due_date`, `amount`, `kind`.
-2. Total of computed installments matches expected total (coherence check).
-3. Supports `custom_only` mode for fully hand-edited schedules.
-4. `POST /api/v1/contracts/` persists contract + all installments + `contract_events.created` atomically.
-5. Schedule calculation in `app/domain/contracts/schedule_calculator.py` with 100% unit test coverage (no I/O).
-6. Supports `custom_days` periodicity where `next_due = prev_due + timedelta(days=N)` with N configurable per contract via `custom_days_interval` field.
+1. **Dado** payload com `start_date`, `down_payment` opcional, `regular` opcional, `extras[]` opcional, `grace_days` opcional, `custom_overrides[]` opcional, **Quando** `POST /api/v1/contracts/preview-schedule` é chamado, **Então** a resposta retorna lista ordenada com `sequence`, `due_date`, `amount`, `kind`.
+2. Total das parcelas calculadas confere com o total esperado (check de coerência).
+3. Suporta modo `custom_only` para cronogramas totalmente editados à mão.
+4. `POST /api/v1/contracts/` persiste contrato + todas as parcelas + `contract_events.created` atomicamente.
+5. Cálculo do cronograma em `app/domain/contracts/schedule_calculator.py` com 100% de cobertura de teste unitário (sem I/O).
+6. Suporta periodicidade `custom_days` onde `next_due = prev_due + timedelta(days=N)` com N configurável por contrato via campo `custom_days_interval`.
 
-### Story 3.3: Visual Installment Builder Frontend (Core)
+### Story 3.3: Frontend do Construtor Visual de Parcelas (Core)
 
-As a Manager,
-I want a visual UI to compose installments,
-So that I see the schedule before committing.
+Como Gestor,
+quero uma UI visual para compor parcelas,
+para ver o cronograma antes de confirmar.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `ScheduleBuilderComponent` in `features/system/contracts/components/schedule-builder/`.
-2. Left pane: configurator (down payment toggle, regular installments, extras, grace days).
-3. Right pane: preview table updated reactively via `resource()` calling preview endpoint with debounce.
-4. **Given** "Custom Schedule" toggle, **Then** configurator hidden, manual editing only.
-5. Preview table supports drag-and-drop (CDK) reorder, inline editing for value and date.
-6. "Add installment" and "Remove" buttons.
-7. Footer: total parceled, total overall, count, last date, total period.
+1. `ScheduleBuilderComponent` em `features/system/contracts/components/schedule-builder/`.
+2. Painel esquerdo: configurador (toggle de entrada, parcelas regulares, extras, dias de carência).
+3. Painel direito: tabela de preview atualizada reativamente via `resource()` chamando o endpoint de preview com debounce.
+4. **Dado** toggle "Cronograma Customizado", **Então** configurador escondido, edição manual apenas.
+5. Tabela de preview suporta reordenação drag-and-drop (CDK), edição inline de valor e data.
+6. Botões "Adicionar parcela" e "Remover".
+7. Rodapé: total parcelado, total geral, contagem, última data, período total.
 
-### Story 3.4: Contract Creation Wizard (Core)
+### Story 3.4: Wizard de Criação de Contrato (Core)
 
-As a Manager,
-I want a guided wizard to create a contract,
-So that data comes in cleanly and consistently.
+Como Gestor,
+quero um wizard guiado para criar um contrato,
+para que os dados entrem de forma limpa e consistente.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. 4 steps: **Customer & Asset** (search-typeahead selectors for customer and asset from `assets` table), **Terms** (dates, interest/fine, purchase option), **Schedule** (Story 3.3 component), **Clauses & Review** (Tiptap rich text + PDF preview).
-2. Cross-validations: customer is `ativo`, asset is `disponivel`, end_date >= start_date.
-3. **Given** any step, **When** "Salvar Rascunho", **Then** persisted as `rascunho`, resumable.
-4. **Given** confirm, **Then** contract -> `vigente`, PDF rendering enqueued, installments generated atomically. `ContractCreatedEvent` published.
-5. Success toast with "View Contract" deep link.
+1. 4 passos: **Cliente e Ativo** (seletores com typeahead para cliente e ativo da tabela `assets`), **Termos** (datas, juros/multa, opção de compra), **Cronograma** (componente da Story 3.3), **Cláusulas e Revisão** (Tiptap rich text + preview do PDF).
+2. Validações cruzadas: cliente é `ativo`, ativo é `disponivel`, end_date >= start_date.
+3. **Dado** qualquer passo, **Quando** "Salvar Rascunho", **Então** persiste como `rascunho`, retomável.
+4. **Dado** confirmar, **Então** contrato -> `vigente`, renderização de PDF enfileirada, parcelas geradas atomicamente. `ContractCreatedEvent` publicado.
+5. Toast de sucesso com deep link "Ver Contrato".
 
-### Story 3.5: Contract PDF Generation (Core)
+### Story 3.5: Geração de PDF do Contrato (Core)
 
-As the System,
-I want to render a professional PDF from each contract,
-So that the manager can print or send it.
+Como o Sistema,
+quero renderizar um PDF profissional de cada contrato,
+para que o gestor possa imprimi-lo ou enviá-lo.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Celery task `render_contract_pdf(contract_id)` loads contract + customer + asset details (via `IAssetModule.get_asset_details()`) + installments, renders Jinja2 -> HTML -> WeasyPrint -> PDF.
-2. Template in `app/infrastructure/pdf/templates/contract.html.j2` with configurable clauses, data, installment table, signature space.
-3. PDFs stored in MinIO at `contracts/{contract_id}/v{version}.pdf`; URL saved in `contract.pdf_url`.
-4. SHA-256 hash recorded in `contract_events.pdf_generated`.
-5. On contract edit, version increments; prior versions remain accessible.
-6. `GET /api/v1/contracts/{id}/pdf?version=` returns presigned MinIO URL (5-min TTL).
+1. Task Celery `render_contract_pdf(contract_id)` carrega contrato + cliente + detalhes do ativo (via `IAssetModule.get_asset_details()`) + parcelas, renderiza Jinja2 -> HTML -> WeasyPrint -> PDF.
+2. Template em `app/infrastructure/pdf/templates/contract.html.j2` com cláusulas configuráveis, dados, tabela de parcelas, espaço para assinatura.
+3. PDFs armazenados no MinIO em `contracts/{contract_id}/v{version}.pdf`; URL salva em `contract.pdf_url`.
+4. Hash SHA-256 registrado em `contract_events.pdf_generated`.
+5. Em edição de contrato, version incrementa; versões anteriores continuam acessíveis.
+6. `GET /api/v1/contracts/{id}/pdf?version=` retorna URL pré-assinada do MinIO (TTL 5 min).
 
-### Story 3.6: Bulk Edit on Open Installments (Core)
+### Story 3.6: Edição em Lote de Parcelas em Aberto (Core)
 
-As a Manager,
-I want to update many open installments at once,
-So that ad-hoc adjustments are quick.
+Como Gestor,
+quero atualizar muitas parcelas em aberto de uma vez,
+para que ajustes ad-hoc sejam rápidos.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Contract installment table supports multi-row selection (checkbox + Shift-click range).
-2. Floating "Bulk Actions" bar: Postpone X days, Apply discount X% or X R$, Set value, Cancel, Recreate.
-3. **Given** bulk action, **Then** applied **only** to installments with status in (`em_aberto`, `vencido`). Paid titles are immutable — skipped with notification.
-4. Before/after diff preview in confirmation modal.
-5. Backend applies in single transaction with `contract_events.bulk_edit` event.
-6. After bulk edit, if installments were changed, old open titles are cancelled and new ones generated (reissue). `contract_events.installments_reissued` event recorded.
+1. Tabela de parcelas do contrato suporta seleção multi-linha (checkbox + Shift-click range).
+2. Barra flutuante "Ações em Lote": Adiar X dias, Aplicar desconto X% ou X R$, Definir valor, Cancelar, Recriar.
+3. **Dada** ação em lote, **Então** aplicada **somente** a parcelas com status em (`em_aberto`, `vencido`). Títulos pagos são imutáveis — pulados com notificação.
+4. Preview de diff antes/depois em modal de confirmação.
+5. Backend aplica em transação única com evento `contract_events.bulk_edit`.
+6. Após edição em lote, se parcelas foram alteradas, títulos abertos antigos são cancelados e novos gerados (reemissão). Evento `contract_events.installments_reissued` registrado.
 
-### Story 3.7: Contract Versioning and Event Timeline (Core)
+### Story 3.7: Versionamento de Contrato e Timeline de Eventos (Core)
 
-As a Manager,
-I want to see the history of changes to a contract,
-So that I can trace any modification.
+Como Gestor,
+quero ver o histórico de mudanças de um contrato,
+para rastrear qualquer modificação.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Contract detail page "History" tab.
-2. Vertical timeline with icon + description + author + date per event.
-3. **Given** event click, **Then** payload shown (visual diff when applicable).
-4. Each `pdf_generated` event has "View this version's PDF" button.
+1. Aba "Histórico" na página de detalhe do contrato.
+2. Timeline vertical com ícone + descrição + autor + data por evento.
+3. **Dado** clique no evento, **Então** payload mostrado (diff visual quando aplicável).
+4. Cada evento `pdf_generated` tem botão "Ver PDF desta versão".
 
-### Story 3.8: Contract Termination (Core)
+### Story 3.8: Encerramento de Contrato (Core)
 
-As a Manager,
-I want to terminate a contract with settlement calculation,
-So that asset return is documented.
+Como Gestor,
+quero encerrar um contrato com cálculo de quitação,
+para que a devolução do ativo seja documentada.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. "Terminate" modal: reason, effective date, rescission fine policy (toggle "Apply X% fine", default from Settings).
-2. Backend computes: `sum(open_installments) * pct_fine + manual_adjustment`.
-3. **Given** confirm, **Then** final receivable (or credit) created, open installments -> `cancelado`, contract -> `rescindido`, `ContractTerminated` event published (vertical module reacts — e.g., Vehicle Module sets vehicle to `disponivel`).
-4. `contract_events.terminated` entry written.
+1. Modal "Encerrar": motivo, data efetiva, política de multa de rescisão (toggle "Aplicar X% de multa", default das Configurações).
+2. Backend calcula: `soma(parcelas_em_aberto) * pct_multa + ajuste_manual`.
+3. **Dado** confirmar, **Então** título a receber final (ou crédito) criado, parcelas em aberto -> `cancelado`, contrato -> `rescindido`, evento `ContractTerminated` publicado (módulo vertical reage — ex.: Módulo de Veículos seta veículo como `disponivel`).
+4. Entrada `contract_events.terminated` gravada.
 
-### Story 3.9: Contract Simulation (Core)
+### Story 3.9: Simulação de Contrato (Core)
 
-As a Manager,
-I want to simulate a contract without persisting,
-So that I can explore scenarios before committing.
+Como Gestor,
+quero simular um contrato sem persistir,
+para explorar cenários antes de confirmar.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `POST /api/v1/contracts/simulate` accepts full contract + schedule definition, returns computed installments and totals.
-2. No database writes; uses the same `schedule_calculator.py` pure function.
-3. Frontend preview modal shows all installments with totals.
+1. `POST /api/v1/contracts/simulate` aceita definição completa de contrato + cronograma, retorna parcelas e totais calculados.
+2. Sem escritas no banco; usa a mesma função pura `schedule_calculator.py`.
+3. Modal de preview no frontend mostra todas as parcelas com totais.
 
-### Story 3.10: Installment Generation Management & Rollback (Core)
+### Story 3.10: Gestão de Gerações de Parcelas e Rollback (Core)
 
-As a Manager,
-I want to view all installment generations of a contract and rollback mistake generations instantly,
-So that I don't pollute the system with hundreds of canceled titles from a typo.
+Como Gestor,
+quero ver todas as gerações de parcelas de um contrato e fazer rollback de gerações errôneas instantaneamente,
+para não poluir o sistema com centenas de títulos cancelados de um erro de digitação.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Contract detail page gains a "Gerações" tab listing all `installment_generations` with batch_label, installment count, total amount, status (active/rolled_back), `has_financial_activity` badge.
-2. **Given** a generation with `has_financial_activity = FALSE`, **When** the user clicks "Rollback", **Then** all installments of that generation are **hard deleted** (not canceled), the generation is marked `rolled_back_at = now()`, and an audit_log entry records all deleted installment IDs.
-3. **Given** a generation with `has_financial_activity = TRUE`, **When** the user views it, **Then** the "Rollback" button is hidden and a "Cancelar em massa" button is shown instead. Clicking it sets all open installments of that generation to `cancelado`.
-4. `has_financial_activity` flips to TRUE when ANY installment in the generation: receives a write-off (full/partial), is sent for collection (Pix card sent via WhatsApp), receives a payment-gateway charge, or has any `installment_adjustment`.
-5. The rollback action requires Admin role confirmation.
-6. After rollback, the contract's installment list updates immediately.
+1. Página de detalhe do contrato ganha aba "Gerações" listando todas as `installment_generations` com batch_label, contagem de parcelas, valor total, status (active/rolled_back), badge `has_financial_activity`.
+2. **Dada** uma geração com `has_financial_activity = FALSE`, **Quando** o usuário clica em "Rollback", **Então** todas as parcelas dessa geração são **hard deletadas** (não canceladas), a geração é marcada com `rolled_back_at = now()`, e uma entrada de audit_log registra todos os IDs de parcelas deletadas.
+3. **Dada** uma geração com `has_financial_activity = TRUE`, **Quando** o usuário a visualiza, **Então** o botão "Rollback" fica escondido e um botão "Cancelar em massa" aparece no lugar. Clicar nele seta todas as parcelas em aberto dessa geração para `cancelado`.
+4. `has_financial_activity` vira TRUE quando QUALQUER parcela na geração: recebe baixa (total/parcial), é enviada para cobrança (card Pix enviado via WhatsApp), recebe cobrança por gateway de pagamento, ou tem qualquer `installment_adjustment`.
+5. A ação de rollback exige confirmação de papel Admin.
+6. Após rollback, a lista de parcelas do contrato atualiza imediatamente.
 
 ---
 
-## Epic 4: Receivables, Partial Payments & Validation (Core)
+## Épico 4: Títulos a Receber, Pagamentos Parciais e Validação (Core)
 
-**Goal:** The manager runs the full receivables operation with partial payment support, manual write-off, receipt-validation queue, automatic OCR, and free Pix QR code generation. Default payment flow: Pix via WhatsApp (zero cost).
+**Objetivo:** O gestor conduz a operação completa de títulos a receber com suporte a pagamento parcial, baixa manual, fila de validação de comprovantes, OCR automático e geração gratuita de QR Code Pix. Fluxo padrão de pagamento: Pix via WhatsApp (custo zero).
 
-### Story 4.1: Master Receivables List (Core)
+### Story 4.1: Lista Mestre de Títulos a Receber (Core)
 
-As a Manager,
-I want to see every receivable in one powerful table,
-So that I can operate financials at scale.
+Como Gestor,
+quero ver cada título a receber em uma tabela poderosa,
+para operar finanças em escala.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/finance/receivables` renders `ReceivablesListComponent`.
-2. Filters: status (multi-select), customer, asset, contract, due-date range, value range.
-3. Columns: due date, customer (avatar), asset, contract (link), original value, updated value (interest/fine), status (badge), method, row actions.
-4. Row actions: Write-off, Partial Write-off, View, Edit (if open), Cancel (if open).
-5. Footer totals: "Selected: R$ X | Filter total: R$ Y | Delinquency: R$ Z".
-6. Keyboard shortcuts: `b` writes off selected, `Space` selects, `f` focuses filters.
+1. Rota `/system/finance/receivables` renderiza `ReceivablesListComponent`.
+2. Filtros: status (multi-select), cliente, ativo, contrato, faixa de vencimento, faixa de valor.
+3. Colunas: data de vencimento, cliente (avatar), ativo, contrato (link), valor original, valor atualizado (juros/multa), status (badge), forma, ações da linha.
+4. Ações da linha: Baixar, Baixa Parcial, Ver, Editar (se em aberto), Cancelar (se em aberto).
+5. Totais no rodapé: "Selecionados: R$ X | Total do filtro: R$ Y | Inadimplência: R$ Z".
+6. Atalhos de teclado: `b` baixa selecionados, `Espaço` seleciona, `f` foca filtros.
 
-### Story 4.2: Updated Value Calculation — Interest, Fine, Discount (Core)
+### Story 4.2: Cálculo de Valor Atualizado — Juros, Multa, Desconto (Core)
 
-As the System,
-I want a pure function that computes the updated value of an overdue installment,
-So that write-offs use the correct amount.
+Como o Sistema,
+quero uma função pura que calcule o valor atualizado de uma parcela vencida,
+para que baixas usem o valor correto.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `compute_updated_value(installment, on_date, contract_terms)` is a pure function in `domain/finance/calculations.py`.
-2. Formula: `dias_atraso = max(0, on_date - due_date - grace_days)`; `multa = amount * fine_pct if dias_atraso > 0 else 0`; `juros = amount * interest_pct_per_day * dias_atraso`; `total = amount + multa + juros`.
-3. `GET /api/v1/receivables/{id}/updated-value?on_date=` returns full breakdown (base, interest, fine, discount, total).
-4. Manual discount requires mandatory `reason`, persisted to `installment_adjustments`.
-5. Unit tests: on-time, short delay, long delay, within grace, with discount.
+1. `compute_updated_value(installment, on_date, contract_terms)` é função pura em `domain/finance/calculations.py`.
+2. Fórmula: `dias_atraso = max(0, on_date - due_date - grace_days)`; `multa = amount * fine_pct if dias_atraso > 0 else 0`; `juros = amount * interest_pct_per_day * dias_atraso`; `total = amount + multa + juros`.
+3. `GET /api/v1/receivables/{id}/updated-value?on_date=` retorna breakdown completo (base, juros, multa, desconto, total).
+4. Desconto manual exige `reason` obrigatório, persistido em `installment_adjustments`.
+5. Testes unitários: em dia, atraso curto, atraso longo, dentro da carência, com desconto.
 
-### Story 4.3: Manual Write-Off Modal (Core)
+### Story 4.3: Modal de Baixa Manual (Core)
 
-As a Manager,
-I want to write off an installment by entering payment data,
-So that the title leaves "open" status.
+Como Gestor,
+quero baixar uma parcela informando os dados do pagamento,
+para que o título saia do status "em aberto".
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Modal: effective date (default today), paid amount (default `updated_value`), method (Pix/cash/transfer/card/other), notes, attachment drop-zone (required for Pix).
-2. **Given** Pix and receipt uploaded, **Then** OCR runs in background, auto-populates value and date if confidence >= 70%.
-3. **Given** Pix write-off confirmed, **Then** status -> `pago_aguardando_verificacao`.
-4. **Given** cash or in-person card, **Then** status -> `pago_aguardando_verificacao`.
-5. List refreshes; success toast shown.
+1. Modal: data efetiva (default hoje), valor pago (default `updated_value`), forma (Pix/dinheiro/transferência/cartão/outro), observações, drop-zone de anexo (obrigatório para Pix).
+2. **Dado** Pix e comprovante enviado, **Então** OCR roda em background, auto-popula valor e data se confiança >= 70%.
+3. **Dado** baixa Pix confirmada, **Então** status -> `pago_aguardando_verificacao`.
+4. **Dado** dinheiro ou cartão presencial, **Então** status -> `pago_aguardando_verificacao`.
+5. Lista atualiza; toast de sucesso exibido.
 
-### Story 4.4: Partial Payment Support (Core)
+### Story 4.4: Suporte a Pagamento Parcial (Core)
 
-As the System,
-I want to handle partial payments correctly,
-So that the difference is tracked as a new receivable.
+Como o Sistema,
+quero tratar pagamentos parciais corretamente,
+para que a diferença seja rastreada como um novo título a receber.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `compute_partial_payment(title_amount, paid_amount, original_due_date, grace_days)` pure function in `domain/finance/calculations.py` returns: `original_new_status='pago_parcial'`, `remainder_amount`, `remainder_due_date`, `adjustment_delta`.
-2. **Given** paid_amount < title amount, **When** `POST /api/v1/receivables/{id}/partial-write-off` is called with payment data, **Then**:
-   - Original title receives `paid_amount` and status `pago_parcial`.
-   - `InstallmentAdjustment` with `kind='partial_payment'` created, recording `amount_delta` and reference to new title in `reason` (JSON).
-   - A NEW title is generated for the difference (`title.amount - paid_amount`) with `kind='regular'`, `due_date` = next vencimento or same day + `grace_days`, linked to same contract, with `parent_installment_id` pointing to original.
-   - Contract sequence incremented.
-3. `PaymentPartiallyReceivedEvent` published on event bus (modules can react).
-4. Unit tests: various partial amounts, edge cases (paid = 0, paid = full).
-5. Concurrent partial payments on the same installment are prevented via pessimistic locking (`SELECT ... FOR UPDATE`). Second concurrent request receives 409 Conflict.
+1. Função pura `compute_partial_payment(title_amount, paid_amount, original_due_date, grace_days)` em `domain/finance/calculations.py` retorna: `original_new_status='pago_parcial'`, `remainder_amount`, `remainder_due_date`, `adjustment_delta`.
+2. **Dado** paid_amount < valor do título, **Quando** `POST /api/v1/receivables/{id}/partial-write-off` é chamado com dados de pagamento, **Então**:
+   - Título original recebe `paid_amount` e status `pago_parcial`.
+   - `InstallmentAdjustment` com `kind='partial_payment'` criado, registrando `amount_delta` e referência ao novo título em `reason` (JSON).
+   - Um NOVO título é gerado para a diferença (`title.amount - paid_amount`) com `kind='regular'`, `due_date` = próximo vencimento ou mesmo dia + `grace_days`, vinculado ao mesmo contrato, com `parent_installment_id` apontando para o original.
+   - Sequence do contrato incrementada.
+3. `PaymentPartiallyReceivedEvent` publicado no event bus (módulos podem reagir).
+4. Testes unitários: vários valores parciais, casos de borda (pago = 0, pago = total).
+5. Pagamentos parciais concorrentes na mesma parcela são prevenidos via pessimistic locking (`SELECT ... FOR UPDATE`). Segunda request concorrente recebe 409 Conflict.
 
-### Story 4.5: OCR Provider Adapter (Core)
+### Story 4.5: Adapter de Provedor OCR (Core)
 
-As the System,
-I want an `IOcrProvider` Port with a default Tesseract implementation,
-So that OCR works at zero external cost.
+Como o Sistema,
+quero uma Port `IOcrProvider` com implementação Tesseract padrão,
+para que o OCR funcione com custo externo zero.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `IOcrProvider` Protocol: `extract_text(file_bytes, mime)`, `extract_pix_receipt(file_bytes, mime)`.
-2. `TesseractOcrAdapter` with OpenCV preprocessing (deskew, denoise, threshold), language `por+eng`.
-3. `LlmVisionOcrAdapter` (optional fallback) calling GPT-4o Vision or Claude when confidence is low.
-4. Pix receipt regexes: value (`R\$\s*[\d.,]+`), date (`\d{2}/\d{2}/\d{4}`), transaction ID, beneficiary, bank.
-5. Results cached in Redis by SHA-256 of file bytes (TTL 7 days).
+1. Protocol `IOcrProvider`: `extract_text(file_bytes, mime)`, `extract_pix_receipt(file_bytes, mime)`.
+2. `TesseractOcrAdapter` com pré-processamento OpenCV (deskew, denoise, threshold), idioma `por+eng`.
+3. `LlmVisionOcrAdapter` (fallback opcional) chamando GPT-4o Vision ou Claude quando a confiança for baixa.
+4. Regex de comprovante Pix: valor (`R\$\s*[\d.,]+`), data (`\d{2}/\d{2}/\d{4}`), ID de transação, beneficiário, banco.
+5. Resultados cacheados no Redis por SHA-256 dos bytes do arquivo (TTL 7 dias).
 
-### Story 4.6: Receipt Validation Queue (Core)
+### Story 4.6: Fila de Validação de Comprovantes (Core)
 
-As a Validator,
-I want a queue of pending receipts,
-So that I can validate quickly in batch.
+Como Validador,
+quero uma fila de comprovantes pendentes,
+para validar rapidamente em lote.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/finance/validation-queue` lists installments in `pago_aguardando_verificacao` ordered by date ascending.
-2. Split layout: list left, file viewer center (image/PDF with zoom), right pane with title data and Approve/Reject/Request Resubmission.
-3. Keyboard: `A` approve, `R` reject, arrow next/previous.
-4. **Given** approve, **Then** status -> `pago_aguardando_verificacao`, `audit_log` event with `validated_by_user_id`.
-5. **Given** reject, **Then** reason required (predefined + free text).
-6. **Given** "Request Resubmission", **Then** WhatsApp message dispatched (uses Epic 6), status unchanged.
-7. Top KPIs: pending, validated today, rejected today.
+1. Rota `/system/finance/validation-queue` lista parcelas em `pago_aguardando_verificacao` ordenadas por data ascendente.
+2. Layout dividido: lista à esquerda, visualizador de arquivo ao centro (imagem/PDF com zoom), painel direito com dados do título e Aprovar/Rejeitar/Solicitar Reenvio.
+3. Teclado: `A` aprova, `R` rejeita, seta próximo/anterior.
+4. **Dado** aprovar, **Então** status -> `pago_aguardando_verificacao`, evento `audit_log` com `validated_by_user_id`.
+5. **Dado** rejeitar, **Então** motivo obrigatório (pré-definido + texto livre).
+6. **Dado** "Solicitar Reenvio", **Então** mensagem WhatsApp dispatchada (usa Épico 6), status inalterado.
+7. KPIs no topo: pendentes, validados hoje, rejeitados hoje.
 
-### Story 4.7: Static Pix QR Code Generation (Core)
+### Story 4.7: Geração de QR Code Pix Estático (Core)
 
-As the System,
-I want to generate a Pix BR Code per installment,
-So that collections are immediately payable at zero cost.
+Como o Sistema,
+quero gerar um BR Code Pix por parcela,
+para que cobranças sejam imediatamente pagáveis com custo zero.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Company Pix key configured in Settings > Company (key + beneficiary name).
-2. `GET /api/v1/receivables/{id}/pix-qr` returns SVG/PNG QR + "Copy and Paste" BR Code text.
-3. Uses `pix-utils` following BCB MN-002 spec.
-4. TXID embeds installment ID for reconciliation.
-5. Receivable detail: "Generate Pix QR" button opens modal with QR + "Send via WhatsApp" CTA.
+1. Chave Pix da empresa configurada em Configurações > Empresa (chave + nome do beneficiário).
+2. `GET /api/v1/receivables/{id}/pix-qr` retorna QR SVG/PNG + texto BR Code "Copia e Cola".
+3. Usa `pix-utils` seguindo spec BCB MN-002.
+4. TXID embute ID da parcela para conciliação.
+5. Detalhe do título a receber: botão "Gerar QR Pix" abre modal com QR + CTA "Enviar via WhatsApp".
 
-### Story 4.8: Renegotiation of Overdue Installments (Core)
+### Story 4.8: Renegociação de Parcelas Vencidas (Core)
 
-As a Manager,
-I want to renegotiate overdue receivables,
-So that struggling customers can be brought back on track.
+Como Gestor,
+quero renegociar títulos a receber vencidos,
+para que clientes em dificuldade possam voltar aos eixos.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. **Given** multiple overdue installments of same customer selected, **When** "Renegotiate" triggered, **Then** modal shows sum with updated interest/fine.
-2. Modal uses Epic 3 schedule builder for new schedule.
-3. **Given** confirmed, **Then** original installments -> `renegociado` (immutable), new installments created.
-4. `renegotiated` event with `{old_ids, new_ids, total_old, total_new}` in `audit_log`.
+1. **Dadas** múltiplas parcelas vencidas do mesmo cliente selecionadas, **Quando** "Renegociar" é acionado, **Então** modal mostra soma com juros/multa atualizados.
+2. Modal usa o construtor de cronograma do Épico 3 para o novo cronograma.
+3. **Dado** confirmado, **Então** parcelas originais -> `renegociado` (imutáveis), novas parcelas criadas.
+4. Evento `renegotiated` com `{old_ids, new_ids, total_old, total_new}` em `audit_log`.
 
-### Story 4.9: Optional Pix Payment Gateway Adapter (Core)
+### Story 4.9: Adapter Opcional de Gateway de Pagamento Pix (Core)
 
-As an Admin,
-I want to optionally connect Asaas/Efi,
-So that auto-confirmed Pix collections become available when ROI justifies the per-transaction cost.
+Como Admin,
+quero conectar opcionalmente Asaas/Efi,
+para que cobranças Pix auto-confirmadas fiquem disponíveis quando o ROI justificar o custo por transação.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `IPaymentGateway` Port: `create_charge(installment) -> Charge`, `webhook_handler(payload, signature) -> Event`.
-2. `AsaasAdapter`, `EfiAdapter` implemented; `NoOpPaymentGateway` is default (off).
-3. Settings > Integrations: Admin can enable, store encrypted credentials, define scope.
-4. **Given** webhook at `POST /api/v1/webhooks/payment-gateway/{provider}`, **When** signature validates, **Then** idempotent processing moves installment straight to `pago` (skips manual validation).
-5. Default: **disabled**, per zero-cost Pix preference.
+1. Port `IPaymentGateway`: `create_charge(installment) -> Charge`, `webhook_handler(payload, signature) -> Event`.
+2. `AsaasAdapter`, `EfiAdapter` implementados; `NoOpPaymentGateway` é padrão (desligado).
+3. Configurações > Integrações: Admin pode ativar, armazenar credenciais criptografadas, definir escopo.
+4. **Dado** webhook em `POST /api/v1/webhooks/payment-gateway/{provider}`, **Quando** assinatura valida, **Então** processamento idempotente move parcela direto para `pago` (pula validação manual).
+5. Padrão: **desabilitado**, conforme preferência por Pix custo-zero.
 
-### Story 4.10: Installment Reversal — Full & Partial (Core)
+### Story 4.10: Estorno de Parcela — Total e Parcial (Core)
 
-As an Admin,
-I want to reverse a paid installment fully or partially,
-So that overpayments are corrected with full audit trail and the cash flow reflects reality.
+Como Admin,
+quero estornar uma parcela paga total ou parcialmente,
+para que pagamentos a maior sejam corrigidos com trilha de auditoria completa e o fluxo de caixa reflita a realidade.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. **Given** a `pago` or `pago_parcial` installment, **When** Admin clicks "Estornar", **Then** a modal asks: full or partial reversal, amount (if partial), reason, and Admin password re-auth.
-2. Full reversal creates `InstallmentAdjustment` with `kind='full_reversal'` and generates a `Payable` with `linked_installment_id` pointing to the original title. The payable amount equals the original `paid_amount`.
-3. Partial reversal creates `InstallmentAdjustment` with `kind='partial_reversal'` and generates a `Payable` for the delta amount with `linked_installment_id`.
-4. The original installment status does NOT change — it stays `pago` or `pago_parcial` (immutable). The reversal lives entirely in the adjustment + payable.
-5. `payables` table includes `linked_installment_id UUID REFERENCES installments(id)` for tracing reversals.
-6. DRE and dashboards compute net revenue = gross received - sum of reversal payables.
-7. Audit log records the reversal with module='core', category='financial', before/after payload, and Admin user ID.
-8. The generated Payable is reconcilable against the bank statement's outgoing transaction in the reconciliation screen.
+1. **Dada** uma parcela `pago` ou `pago_parcial`, **Quando** Admin clica em "Estornar", **Então** um modal pergunta: estorno total ou parcial, valor (se parcial), motivo, e reautenticação de senha do Admin.
+2. Estorno total cria `InstallmentAdjustment` com `kind='full_reversal'` e gera um `Payable` (título a pagar) com `linked_installment_id` apontando para o título original. O valor do título a pagar é igual ao `paid_amount` original.
+3. Estorno parcial cria `InstallmentAdjustment` com `kind='partial_reversal'` e gera um `Payable` para o valor delta com `linked_installment_id`.
+4. O status da parcela original NÃO muda — permanece `pago` ou `pago_parcial` (imutável). O estorno vive inteiramente no adjustment + título a pagar.
+5. Tabela `payables` inclui `linked_installment_id UUID REFERENCES installments(id)` para rastrear estornos.
+6. DRE e dashboards calculam receita líquida = bruto recebido - soma dos títulos a pagar de estorno.
+7. Log de auditoria registra o estorno com module='core', category='financial', payload antes/depois, e ID do usuário Admin.
+8. O Payable gerado é conciliável contra a transação bancária de saída na tela de conciliação.
 
-### Story 4.11: Bulk Write-Off (Core)
+### Story 4.11: Baixa em Lote (Core)
 
-As a Manager,
-I want to write off multiple installments of the same customer with a single payment,
-So that batch payments are fast.
+Como Gestor,
+quero baixar múltiplas parcelas do mesmo cliente com um único pagamento,
+para que pagamentos em batch sejam rápidos.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. User selects multiple open/overdue installments of the same customer in the receivables list.
-2. "Baixa em Lote" action opens a modal showing selected titles, sum total (with interest/fines), and a single payment form.
-3. Payment distributes across titles in due-date order (oldest first).
-4. Each title gets its own `InstallmentAdjustment` and status change.
-5. If paid amount < total selected, the last title gets a partial write-off with remainder title generated.
-6. Audit log records the bulk operation with all affected installment IDs.
+1. Usuário seleciona múltiplas parcelas em aberto/vencidas do mesmo cliente na lista de títulos a receber.
+2. Ação "Baixa em Lote" abre um modal mostrando títulos selecionados, soma total (com juros/multas) e um formulário único de pagamento.
+3. Pagamento é distribuído entre os títulos por ordem de vencimento (mais antigo primeiro).
+4. Cada título recebe seu próprio `InstallmentAdjustment` e mudança de status.
+5. Se valor pago < total selecionado, o último título recebe baixa parcial com título remanescente gerado.
+6. Log de auditoria registra a operação em lote com todos os IDs de parcela afetados.
 
 ---
 
-## Epic 5: Payables & Recurring Expenses (Core)
+## Épico 5: Títulos a Pagar e Despesas Recorrentes (Core)
 
-**Goal:** The manager controls every operating expense with one-off entries, auto-generated recurrences, a "Quick Pay" shortcut, and simplified DRE — monthly result visible at a glance.
+**Objetivo:** O gestor controla cada despesa operacional com lançamentos avulsos, recorrências auto-geradas, atalho "Pagamento Rápido" e DRE simplificado — resultado mensal visível de relance.
 
-### Story 5.1: Categories & Suppliers Domain and CRUD API (Core)
+### Story 5.1: Domínio e API CRUD de Categorias e Fornecedores (Core)
 
-As a Backend developer,
-I want entities to categorize expenses and suppliers,
-So that downstream reports are rich.
+Como desenvolvedor Backend,
+quero entidades para categorizar despesas e fornecedores,
+para que relatórios subsequentes sejam ricos.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `expense_categories` table: id, parent_id (self-referential hierarchy), name, color, icon, is_active, sort_order. Core defaults seeded; modules can register additional categories.
-2. `suppliers` table: id, name, document (CPF/CNPJ), contact, bank_data (JSONB), is_active.
-3. CRUD endpoints `/api/v1/expense-categories` and `/api/v1/suppliers` with permissions.
-4. Default categories seeded: Maintenance, Fuel, Taxes, Insurance, Salaries, Rent, Utilities, Other.
+1. Tabela `expense_categories`: id, parent_id (hierarquia auto-referencial), name, color, icon, is_active, sort_order. Padrões do core populados; módulos podem registrar categorias adicionais.
+2. Tabela `suppliers`: id, name, document (CPF/CNPJ), contact, bank_data (JSONB), is_active.
+3. Endpoints CRUD `/api/v1/expense-categories` e `/api/v1/suppliers` com permissões.
+4. Categorias default populadas: Manutenção, Combustível, Impostos, Seguro, Salários, Aluguel, Utilidades, Outros.
 
-### Story 5.2: Payables Domain and API (Core)
+### Story 5.2: Domínio e API de Títulos a Pagar (Core)
 
-As a Backend developer,
-I want a Payable entity with REST endpoints,
-So that the frontend can manage expenses.
+Como desenvolvedor Backend,
+quero uma entidade Payable com endpoints REST,
+para que o frontend possa gerenciar despesas.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `payables` table: id, description, supplier_id (nullable), category_id, asset_id (nullable, FK to `assets` for per-asset costing), amount, due_date, status (`em_aberto`/`pago`/`cancelado`), paid_at, paid_amount, payment_method, attachment_url, notes, created_by, recurring_template_id (nullable).
-2. CRUD endpoints under `/api/v1/payables`.
-3. **Given** payable `em_aberto`, **When** `POST /api/v1/payables/{id}/pay`, **Then** status -> `pago`, audit entry.
-4. **Given** "Quick Pay" intent, **When** `POST /api/v1/payables/quick-pay`, **Then** create + pay atomically.
+1. Tabela `payables`: id, description, supplier_id (nullable), category_id, asset_id (nullable, FK para `assets` para custeio por ativo), amount, due_date, status (`em_aberto`/`pago`/`cancelado`), paid_at, paid_amount, payment_method, attachment_url, notes, created_by, recurring_template_id (nullable).
+2. Endpoints CRUD sob `/api/v1/payables`.
+3. **Dado** título a pagar `em_aberto`, **Quando** `POST /api/v1/payables/{id}/pay`, **Então** status -> `pago`, entrada de auditoria.
+4. **Dada** intenção "Pagamento Rápido", **Quando** `POST /api/v1/payables/quick-pay`, **Então** cria + paga atomicamente.
 
-### Story 5.3: Recurring Expenses (Core)
+### Story 5.3: Despesas Recorrentes (Core)
 
-As the System,
-I want auto-generated recurring payables,
-So that the manager doesn't forget fixed obligations.
+Como o Sistema,
+quero títulos a pagar recorrentes gerados automaticamente,
+para que o gestor não esqueça obrigações fixas.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `recurring_payable_templates` table: id, description, supplier_id, category_id, asset_id, amount, periodicity (`mensal`/`bimestral`/`anual`), day_of_month, start_date, end_date (nullable), is_active.
-2. CRUD endpoints under `/api/v1/recurring-payables`.
-3. **Given** daily Celery beat job (`0 4 * * *`), **When** template active and today matches day_of_month and no payable exists for current period, **Then** new payable created.
-4. "Recurring Expenses" screen: templates with active toggle, next dates, "Generate now" button.
+1. Tabela `recurring_payable_templates`: id, description, supplier_id, category_id, asset_id, amount, periodicity (`mensal`/`bimestral`/`anual`), day_of_month, start_date, end_date (nullable), is_active.
+2. Endpoints CRUD sob `/api/v1/recurring-payables`.
+3. **Dado** job diário do Celery beat (`0 4 * * *`), **Quando** template ativo e hoje confere com day_of_month e nenhum título a pagar existe para o período atual, **Então** novo título a pagar criado.
+4. Tela "Despesas Recorrentes": templates com toggle de ativo, próximas datas, botão "Gerar agora".
 
-### Story 5.4: "Quick Pay" Modal (Core)
+### Story 5.4: Modal "Pagamento Rápido" (Core)
 
-As a Manager,
-I want a fast shortcut to record an expense already paid,
-So that instant logging is trivial.
+Como Gestor,
+quero um atalho rápido para registrar uma despesa já paga,
+para que o lançamento instantâneo seja trivial.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Floating "Lancar e Pagar" button (FAB) available on every screen + command palette.
-2. Compact modal: description, supplier (autocomplete + create-inline), category, amount, date (default today), method, attachment, asset (optional).
-3. **Given** confirm, **Then** payable created with `status='pago'` in single atomic transaction.
+1. Botão flutuante "Lançar e Pagar" (FAB) disponível em todas as telas + command palette.
+2. Modal compacto: descrição, fornecedor (autocomplete + criar-inline), categoria, valor, data (default hoje), forma, anexo, ativo (opcional).
+3. **Dado** confirmar, **Então** título a pagar criado com `status='pago'` em transação atômica única.
 
-### Story 5.5: Simplified DRE (Core)
+### Story 5.5: DRE Simplificado (Core)
 
-As a Manager,
-I want to see Income - Expenses by period,
-So that I can read the operation's result.
+Como Gestor,
+quero ver Receitas - Despesas por período,
+para ler o resultado da operação.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/finance/dre` with filters: period (month/quarter/custom), asset, category.
-2. Structure: Revenues (by source), Expenses (by category), Gross Margin, Margin %.
-3. Bar chart comparing months with drilldown on click.
-4. Export to Excel and PDF with formatting preserved.
+1. Rota `/system/finance/dre` com filtros: período (mês/trimestre/customizado), ativo, categoria.
+2. Estrutura: Receitas (por fonte), Despesas (por categoria), Margem Bruta, Margem %.
+3. Gráfico de barras comparando meses com drilldown no clique.
+4. Exportação para Excel e PDF com formatação preservada.
 
 ---
 
-## Epic 6: WhatsApp Inbox & AI Collection Agent (Core + Module Hooks)
+## Épico 6: Caixa de Entrada WhatsApp e Agente IA de Cobrança (Core + Module Hooks)
 
-**Goal:** The manager stops collecting manually. A polite, parametrizable conversational agent runs collections following pre-defined policies; humans can intervene at any time. Module-injected tools (e.g., Vehicle Module's `bloquear_veiculo`) are available to the agent. Full conversation history in a familiar WhatsApp-style UI. Default payment flow: Pix via WhatsApp (zero cost).
+**Objetivo:** O gestor para de cobrar manualmente. Um agente conversacional educado e parametrizável conduz cobranças seguindo políticas pré-definidas; humanos podem intervir a qualquer momento. Ferramentas injetadas por módulo (ex.: `bloquear_veiculo` do Módulo de Veículos) ficam disponíveis para o agente. Histórico completo de conversa em UI familiar estilo WhatsApp. Fluxo padrão de pagamento: Pix via WhatsApp (custo zero).
 
-### Story 6.1: WhatsApp Gateway Adapter (Core)
+### Story 6.1: Adapter de Gateway WhatsApp (Core)
 
-As the System,
-I want an `IWhatsAppGateway` Port with Evolution API as default,
-So that switching providers does not affect the domain.
+Como o Sistema,
+quero uma Port `IWhatsAppGateway` com Evolution API como padrão,
+para que trocar de provedor não afete o domínio.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-> **MVP scope:** Only EvolutionApiAdapter is required for MVP. ZapiAdapter, UazapiAdapter, WppConnectAdapter, and WhatsAppCloudApiAdapter are V2.
+> **Escopo MVP:** Apenas EvolutionApiAdapter é exigido para o MVP. ZapiAdapter, UazapiAdapter, WppConnectAdapter e WhatsAppCloudApiAdapter são V2.
 
-1. `IWhatsAppGateway` Protocol: `send_text`, `send_image`, `send_document`, `send_pix_card`, `mark_as_read`, `webhook_parse`.
-2. Adapters: `EvolutionApiAdapter` (default), `ZapiAdapter`, `UazapiAdapter`, `WppConnectAdapter`, `WhatsAppCloudApiAdapter`.
-3. Configuration via env + Settings > Integrations: provider, API key, instance ID, webhook secret.
+1. Protocol `IWhatsAppGateway`: `send_text`, `send_image`, `send_document`, `send_pix_card`, `mark_as_read`, `webhook_parse`.
+2. Adapters: `EvolutionApiAdapter` (padrão), `ZapiAdapter`, `UazapiAdapter`, `WppConnectAdapter`, `WhatsAppCloudApiAdapter`.
+3. Configuração via env + Configurações > Integrações: provider, API key, instance ID, webhook secret.
 
-### Story 6.2: Conversations & Messages Domain (Core)
+### Story 6.2: Domínio de Conversas e Mensagens (Core)
 
-As a Backend developer,
-I want persisted conversations and messages,
-So that history is always retrievable.
+Como desenvolvedor Backend,
+quero conversas e mensagens persistidas,
+para que o histórico seja sempre recuperável.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `whatsapp_conversations` table: id, customer_id, phone_e164, last_message_at, unread_count, is_archived, agent_active, agent_paused_until.
-2. `whatsapp_messages` table: id, conversation_id, external_id (UNIQUE), direction, kind, content_text, media_url, media_mime, sent_at, delivered_at, read_at, sent_by (`agent` or `human:{user_id}`), status, context (JSONB), embedding (vector(1536) nullable).
-3. `GET /api/v1/conversations?search=&unread=&page=` returns paginated list.
-4. `GET /api/v1/conversations/{id}/messages?before=&limit=` returns reverse-chronological cursor pagination.
-5. WebSocket `/ws/conversations` pushes new messages to subscribers in real time.
+1. Tabela `whatsapp_conversations`: id, customer_id, phone_e164, last_message_at, unread_count, is_archived, agent_active, agent_paused_until.
+2. Tabela `whatsapp_messages`: id, conversation_id, external_id (UNIQUE), direction, kind, content_text, media_url, media_mime, sent_at, delivered_at, read_at, sent_by (`agent` ou `human:{user_id}`), status, context (JSONB), embedding (vector(1536) nullable).
+3. `GET /api/v1/conversations?search=&unread=&page=` retorna lista paginada.
+4. `GET /api/v1/conversations/{id}/messages?before=&limit=` retorna paginação por cursor cronológica reversa.
+5. WebSocket `/ws/conversations` empurra novas mensagens para subscribers em tempo real.
 
-### Story 6.3: Webhook Receiver and Inbound Pipeline (Core)
+### Story 6.3: Receiver de Webhook e Pipeline de Inbound (Core)
 
-As the System,
-I want to receive and process inbound WhatsApp messages with idempotency,
-So that no message is ever lost.
+Como o Sistema,
+quero receber e processar mensagens WhatsApp recebidas com idempotência,
+para que nenhuma mensagem se perca.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `POST /api/v1/webhooks/whatsapp/{provider}` validates signature; raw payload persisted to `webhook_events_raw` (idempotent on `(provider, external_id)`).
-2. Handler enqueues Celery task on `whatsapp_inbound` queue.
-3. Worker normalizes to `ReceivedMessage`, finds/creates conversation by phone, persists `WhatsAppMessage`, enqueues agent-turn task.
-4. Media downloaded to MinIO before OCR/classification.
-5. Duplicate external_id -> `{"status":"duplicate"}`, no side effects.
+1. `POST /api/v1/webhooks/whatsapp/{provider}` valida assinatura; payload bruto persistido em `webhook_events_raw` (idempotente em `(provider, external_id)`).
+2. Handler enfileira task Celery na fila `whatsapp_inbound`.
+3. Worker normaliza para `ReceivedMessage`, encontra/cria conversa por telefone, persiste `WhatsAppMessage`, enfileira task de turno do agente.
+4. Mídia baixada para o MinIO antes de OCR/classificação.
+5. `external_id` duplicado -> `{"status":"duplicate"}`, sem efeitos colaterais.
 
-### Story 6.4: AI Agent Engine with RAG (Core + Module Hooks)
+### Story 6.4: Engine do Agente IA com RAG (Core + Module Hooks)
 
-As a Backend developer,
-I want a conversational agent with rich customer context and module-injected tools,
-So that responses are personalized, policy-aware, and domain-capable.
+Como desenvolvedor Backend,
+quero um agente conversacional com contexto rico do cliente e ferramentas injetadas por módulo,
+para que respostas sejam personalizadas, conscientes da política e capazes no domínio.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `ILLMProvider` Port: `chat`/`tool_call` semantics. Adapters: `OpenAiAdapter` (default), `AnthropicAdapter`, `GeminiAdapter`, `OllamaAdapter`, `LiteLlmAdapter`.
-2. Configuration in Settings > Agent: provider, model, temperature, max tokens.
-3. **Given** inbound message, **When** agent turn runs, **Then** prompt composed from: customer record, open/overdue installments with updated values, score, last N messages, active collection policy, manager notes.
-4. Old messages vectorized async into pgvector; top-K similar chunks retrieved for prompt enrichment.
-5. System prompt parametrized by tone, persona, rules, tool list.
-6. **Core function-calling tools**: `consultar_titulos_em_aberto`, `enviar_qr_pix`, `registrar_baixa_primaria`, `solicitar_validacao_humana`, `agendar_cobranca`, `gerar_acordo`, `escalar_para_gestor`.
-7. **Module-injected tools**: loaded dynamically via `IAssetModule.get_collection_tools()` at agent startup. E.g., Vehicle Module injects `bloquear_veiculo` (gated: score < threshold AND dias_atraso >= X AND human approval per policy), `desbloquear_veiculo`, `verificar_localizacao_veiculo`.
-8. Each turn writes to `agent_runs` (provider, model, tokens, latency, tools_called, final_action, error, cost_usd).
-9. Feature flag `AGENT_DRY_RUN`: generates but does not send — queued for human review (calibration mode).
+1. Port `ILLMProvider`: semântica `chat`/`tool_call`. Adapters: `OpenAiAdapter` (padrão), `AnthropicAdapter`, `GeminiAdapter`, `OllamaAdapter`, `LiteLlmAdapter`.
+2. Configuração em Configurações > Agente: provider, model, temperature, max tokens.
+3. **Dada** mensagem recebida, **Quando** turno do agente roda, **Então** prompt composto a partir de: registro do cliente, parcelas em aberto/vencidas com valores atualizados, score, últimas N mensagens, política de cobrança ativa, notas do gestor.
+4. Mensagens antigas são vetorizadas assincronamente no pgvector; top-K chunks similares são recuperados para enriquecer o prompt.
+5. System prompt parametrizado por tom, persona, regras, lista de ferramentas.
+6. **Ferramentas core de function-calling**: `consultar_titulos_em_aberto`, `enviar_qr_pix`, `registrar_baixa_primaria`, `solicitar_validacao_humana`, `agendar_cobranca`, `gerar_acordo`, `escalar_para_gestor`.
+7. **Ferramentas injetadas por módulo**: carregadas dinamicamente via `IAssetModule.get_collection_tools()` no startup do agente. Ex.: Módulo de Veículos injeta `bloquear_veiculo` (gated: score < threshold E dias_atraso >= X E aprovação humana conforme política), `desbloquear_veiculo`, `verificar_localizacao_veiculo`.
+8. Cada turno escreve em `agent_runs` (provider, model, tokens, latency, tools_called, final_action, error, cost_usd).
+9. Feature flag `AGENT_DRY_RUN`: gera mas não envia — enfileirado para revisão humana (modo calibração).
 
-### Story 6.5: Agent Parameterization UI (Core + Module Hooks)
+### Story 6.5: UI de Parametrização do Agente (Core + Module Hooks)
 
-As an Admin,
-I want to configure the agent's tone, rules, and templates,
-So that it represents my business voice.
+Como Admin,
+quero configurar tom, regras e modelos de mensagem do agente,
+para que ele represente a voz do meu negócio.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/config/agent` with sections: **Persona** (name, tone slider with live example, time-of-day greetings), **Service Window** (hours, days), **Preventive Collection** (lead days + template), **Post-Due** (D+1/D+3/D+7 templates with toggles), **Score Concession Policy** (editable table: score_min, score_max, days_tolerance, requires_human_approval), **Interest & Fine** defaults, **Templates** (Tiptap editor with placeholders + preview).
-2. **Module-specific policies**: each active module can register additional policy sections. E.g., Vehicle Module adds "Remote Block" (active toggle + conditions: `dias_atraso >= X` AND `score < Y` + requires-human-approval).
-3. Every change writes versioned record with diff to audit log.
-4. "Test Message" button generates a sample reply against a fictional customer.
+1. Rota `/system/config/agent` com seções: **Persona** (nome, slider de tom com exemplo ao vivo, saudações por horário do dia), **Janela de Atendimento** (horários, dias), **Cobrança Preventiva** (dias de antecedência + template), **Pós-Vencimento** (templates D+1/D+3/D+7 com toggles), **Política de Concessão por Score** (tabela editável: score_min, score_max, days_tolerance, requires_human_approval), defaults de **Juros e Multa**, **Templates** (editor Tiptap com placeholders + preview).
+2. **Políticas específicas de módulo**: cada módulo ativo pode registrar seções de política adicionais. Ex.: Módulo de Veículos adiciona "Bloqueio Remoto" (toggle ativo + condições: `dias_atraso >= X` E `score < Y` + exige-aprovação-humana).
+3. Toda mudança grava registro versionado com diff no log de auditoria.
+4. Botão "Mensagem de Teste" gera uma resposta-exemplo contra um cliente fictício.
 
-### Story 6.6: Customer Score Calculation (Core + Module Hooks)
+### Story 6.6: Cálculo do Score do Cliente (Core + Module Hooks)
 
-As a Backend developer,
-I want a periodically recomputed score per customer,
-So that agent decisions are data-driven.
+Como desenvolvedor Backend,
+quero um score por cliente recalculado periodicamente,
+para que decisões do agente sejam orientadas por dados.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Daily Celery beat job (`0 2 * * *`) recomputes 0-100 score using: punctuality 12m (60%), avg overdue days (20% inverted), relationship tenure (10% bonus), historical paid amount (10%).
-2. **Module contribution**: active modules can add score factors via `IAssetModule`. E.g., Vehicle Module adds "prior blocks count" as penalty factor.
-3. Formula configurable in Settings > Score (weights editable).
-4. `customer_score_history` records daily snapshot with factor breakdown.
-5. Customer "Score" tab plots evolution chart.
+1. Job diário do Celery beat (`0 2 * * *`) recalcula score 0-100 usando: pontualidade 12m (60%), média de dias em atraso (20% invertido), tempo de relacionamento (10% bônus), valor histórico pago (10%).
+2. **Contribuição de módulo**: módulos ativos podem adicionar fatores de score via `IAssetModule`. Ex.: Módulo de Veículos adiciona "quantidade de bloqueios prévios" como fator de penalidade.
+3. Fórmula configurável em Configurações > Score (pesos editáveis).
+4. `customer_score_history` registra snapshot diário com breakdown de fatores.
+5. Aba "Score" do cliente plota gráfico de evolução.
 
-### Story 6.7: WhatsApp-style In-App Inbox (Core)
+### Story 6.7: Caixa de Entrada In-App Estilo WhatsApp (Core)
 
-As a Manager,
-I want to see and reply to conversations in a familiar interface,
-So that human handoff is seamless.
+Como Gestor,
+quero ver e responder conversas em uma interface familiar,
+para que a passagem para o humano seja fluida.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/inbox` with 3-pane layout:
-   - **Left (320 px)**: conversations with avatar, name, last message, timestamp, unread badge, agent status icon.
-   - **Center (flex)**: message thread with bubbles (green-out / white-in), day separators, timestamps, ticks, image lightbox, audio player, PDF preview.
-   - **Right (340 px, collapsible)**: customer context (avatar, name, score, status, open titles with updated values, quick actions: Generate Pix, Mark as Paid, Escalate).
-2. Chat input: attachments, emojis, audio recording.
-3. Header toggle: pause/resume agent on active conversation.
-4. WebSocket real-time message delivery.
-5. Keyboard: arrows walk conversations, `Ctrl+Enter` sends, `/` focuses search.
-6. In-conversation search (text-based).
-7. "Agent is typing..." indicator while processing.
+1. Rota `/system/inbox` com layout em 3 painéis:
+   - **Esquerdo (320 px)**: conversas com avatar, nome, última mensagem, timestamp, badge de não lidas, ícone de status do agente.
+   - **Central (flex)**: thread de mensagens com balões (verde-saída / branco-entrada), separadores de dia, timestamps, ticks, lightbox de imagem, player de áudio, preview de PDF.
+   - **Direito (340 px, colapsável)**: contexto do cliente (avatar, nome, score, status, títulos em aberto com valores atualizados, ações rápidas: Gerar Pix, Marcar como Pago, Escalar).
+2. Input de chat: anexos, emojis, gravação de áudio.
+3. Toggle no header: pausar/retomar agente na conversa ativa.
+4. Entrega de mensagens em tempo real via WebSocket.
+5. Teclado: setas navegam conversas, `Ctrl+Enter` envia, `/` foca busca.
+6. Busca dentro da conversa (textual).
+7. Indicador "Agente está digitando..." enquanto processa.
 
-### Story 6.8: Controlled Mass Broadcast (Core)
+### Story 6.8: Disparo em Massa Controlado (Core)
 
-As a Manager,
-I want to dispatch preventive collections to all customers due tomorrow,
-So that I save time at scale.
+Como Gestor,
+quero disparar cobranças preventivas a todos os clientes que vencem amanhã,
+para economizar tempo em escala.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/inbox/broadcast` with audience filters and live recipient preview.
-2. Message editor with placeholders.
-3. Double-confirmation modal (with password) + 3 sample renderings.
-4. Time window + staggered sends (1 per X seconds) to avoid bans.
-5. Post-broadcast report: sent/delivered/read/failed/replied (updated via webhooks).
-6. Hard cap 200 recipients per broadcast (anti-spam).
+1. Rota `/system/inbox/broadcast` com filtros de audiência e preview ao vivo de destinatários.
+2. Editor de mensagem com placeholders.
+3. Modal de dupla confirmação (com senha) + 3 renderizações de amostra.
+4. Janela de tempo + envios escalonados (1 a cada X segundos) para evitar banimentos.
+5. Relatório pós-disparo: enviadas/entregues/lidas/falhas/respondidas (atualizado via webhooks).
+6. Limite duro de 200 destinatários por disparo (anti-spam).
 
-### Story 6.9: Receipt Detection and Primary Write-Off via Agent (Core)
+### Story 6.9: Detecção de Comprovante e Baixa Primária via Agente (Core)
 
-As a Customer,
-I want my title considered paid as soon as I send a receipt over WhatsApp,
-So that I get instant confirmation.
+Como Cliente,
+quero meu título considerado pago assim que enviar um comprovante pelo WhatsApp,
+para receber confirmação instantânea.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Inbound media classified via heuristic (image/PDF + OCR detects Pix patterns).
-2. **Given** receipt detected, **Then** agent extracts amount + date + transaction ID, finds most likely title (customer + value + date window), calls `registrar_baixa_primaria`.
-3. **Given** paid amount < title amount, **Then** agent executes partial write-off (Story 4.4 logic): partial payment recorded, new title for difference generated. Agent informs customer of partial payment and remaining balance.
-4. **Given** full write-off succeeds, **Then** agent replies with confirmation template. Installment added to validation queue (Story 4.6).
-5. **Given** ambiguous match, **Then** agent asks customer in natural language or escalates to manager.
+1. Mídia recebida classificada via heurística (imagem/PDF + OCR detecta padrões Pix).
+2. **Dado** comprovante detectado, **Então** agente extrai valor + data + ID da transação, encontra título mais provável (cliente + valor + janela de data), chama `registrar_baixa_primaria`.
+3. **Dado** valor pago < valor do título, **Então** agente executa baixa parcial (lógica da Story 4.4): pagamento parcial registrado, novo título para a diferença gerado. Agente informa cliente do pagamento parcial e saldo restante.
+4. **Dada** baixa total bem-sucedida, **Então** agente responde com template de confirmação. Parcela adicionada à fila de validação (Story 4.6).
+5. **Dado** match ambíguo, **Então** agente pergunta ao cliente em linguagem natural ou escala para o gestor.
 
-### Story 6.10: In-App Chat Channel for Agent Orchestrator (Core)
+### Story 6.10: Canal de Chat In-App para Orquestrador de Agentes (Core)
 
-As a Manager,
-I want to chat with the Agent Orchestrator directly in the web UI,
-So that I can issue commands without opening WhatsApp.
+Como Gestor,
+quero conversar com o Orquestrador de Agentes diretamente na UI web,
+para emitir comandos sem abrir o WhatsApp.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. A "Chat com Agente" button in the app header opens a chat drawer/panel.
-2. The chat uses the same Agent Orchestrator pipeline — same tools, same RBAC, same LLM.
-3. The channel is identified as `in_app` (vs `whatsapp`) in `AgentInput`.
-4. Messages are persisted in a separate conversation with `channel='in_app'`.
-5. The Manager's JWT provides the RBAC context (no phone number lookup needed).
-6. Supports text input; image/file upload for receipt submission.
+1. Botão "Chat com Agente" no header do app abre um drawer/painel de chat.
+2. O chat usa o mesmo pipeline do Orquestrador de Agentes — mesmas ferramentas, mesmo RBAC, mesma LLM.
+3. O canal é identificado como `in_app` (vs `whatsapp`) em `AgentInput`.
+4. Mensagens são persistidas em uma conversa separada com `channel='in_app'`.
+5. O JWT do gestor fornece o contexto RBAC (sem necessidade de lookup de número de telefone).
+6. Suporta entrada de texto; upload de imagem/arquivo para envio de comprovante.
 
-### Story 6.11: Audio Transcription for Agent Orchestrator (Core)
+### Story 6.11: Transcrição de Áudio para o Orquestrador de Agentes (Core)
 
-As a User,
-I want to send audio messages that the agent understands,
-So that I can interact hands-free.
+Como Usuário,
+quero enviar mensagens de áudio que o agente entenda,
+para interagir hands-free.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `IAudioTranscriber` port defined in `app/domain/ports/audio_transcriber.py`.
-2. `WhisperApiAdapter` (default) calls OpenAI Whisper API with language='pt-BR'.
-3. `ConsoleTranscriberAdapter` for dev (returns placeholder text).
-4. Inbound pipeline: when a WhatsApp message has audio, transcribe BEFORE passing to the Agent Orchestrator.
-5. In-app chat: audio recording via browser MediaRecorder API, sent as blob, transcribed server-side.
-6. Transcription result is stored alongside the message in `whatsapp_messages.transcription` (nullable TEXT field).
+1. Port `IAudioTranscriber` definida em `app/domain/ports/audio_transcriber.py`.
+2. `WhisperApiAdapter` (padrão) chama OpenAI Whisper API com language='pt-BR'.
+3. `ConsoleTranscriberAdapter` para dev (retorna texto placeholder).
+4. Pipeline de inbound: quando uma mensagem WhatsApp tem áudio, transcrever ANTES de passar ao Orquestrador de Agentes.
+5. Chat in-app: gravação de áudio via API MediaRecorder do browser, enviado como blob, transcrito no servidor.
+6. Resultado da transcrição é armazenado junto à mensagem em `whatsapp_messages.transcription` (campo TEXT nullable).
 
 ---
 
-## Epic 7: Sophisticated Bank Reconciliation (Core)
+## Épico 7: Conciliação Bancária Sofisticada (Core)
 
-**Goal:** At month-end (or daily), the manager reconciles the bank statement with system titles in a dual-pane drag-and-drop screen with auto-match, supporting OFX, PDF, and Open Finance.
+**Objetivo:** No fim do mês (ou diariamente), o gestor concilia o extrato bancário com os títulos do sistema em uma tela com painéis lado a lado e drag-and-drop com auto-match, suportando OFX, PDF e Open Finance.
 
-### Story 7.0: Bank Account Setup (Core)
+### Story 7.0: Cadastro de Conta Bancária (Core)
 
-As a Manager,
-I want to register my bank accounts in the system,
-So that imported transactions can be linked to the correct account.
+Como Gestor,
+quero cadastrar minhas contas bancárias no sistema,
+para que transações importadas sejam vinculadas à conta correta.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `bank_accounts` table: id UUID PK, name TEXT, bank_code VARCHAR(5), agency VARCHAR(10), account_number VARCHAR(20), type TEXT, is_active BOOLEAN DEFAULT TRUE, created_at TIMESTAMPTZ.
-2. CRUD API under `/api/v1/bank-accounts` with Admin permission.
-3. Settings > Company > "Contas Bancárias" UI with list + create/edit form.
-4. At least one bank account must exist before OFX/PDF import is allowed.
+1. Tabela `bank_accounts`: id UUID PK, name TEXT, bank_code VARCHAR(5), agency VARCHAR(10), account_number VARCHAR(20), type TEXT, is_active BOOLEAN DEFAULT TRUE, created_at TIMESTAMPTZ.
+2. API CRUD sob `/api/v1/bank-accounts` com permissão de Admin.
+3. UI em Configurações > Empresa > "Contas Bancárias" com lista + formulário criar/editar.
+4. Pelo menos uma conta bancária deve existir antes de a importação OFX/PDF ser permitida.
 
-### Story 7.1: OFX Importer (Core)
+### Story 7.1: Importador OFX (Core)
 
-As a Manager,
-I want to upload an OFX file from my bank,
-So that transactions enter the system automatically.
+Como Gestor,
+quero subir um arquivo OFX do meu banco,
+para que transações entrem no sistema automaticamente.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/finance/reconciliation` exposes "Import OFX" button.
-2. Drop-zone accepts `.ofx`; parsing via `ofxparse`.
-3. **Given** overlapping FITIDs, **Then** existing transactions skipped (deduplication).
-4. `bank_transactions` table: id, account_id, fitid, posted_at, amount (signed), description_raw, description_clean, type, status (`pendente`/`conciliada`/`ignorada`), reconciled_to_kind, reconciled_to_id, imported_from (`ofx`/`pdf`/`open_finance`/`manual`), imported_at; `UNIQUE(account_id, fitid)`.
-5. Pre-classification: regex/heuristics extract sender name from Pix descriptions.
+1. Rota `/system/finance/reconciliation` expõe botão "Importar OFX".
+2. Drop-zone aceita `.ofx`; parsing via `ofxparse`.
+3. **Dados** FITIDs sobrepostos, **Então** transações existentes são puladas (deduplicação).
+4. Tabela `bank_transactions`: id, account_id, fitid, posted_at, amount (signed), description_raw, description_clean, type, status (`pendente`/`conciliada`/`ignorada`), reconciled_to_kind, reconciled_to_id, imported_from (`ofx`/`pdf`/`open_finance`/`manual`), imported_at; `UNIQUE(account_id, fitid)`.
+5. Pré-classificação: regex/heurísticas extraem nome do remetente de descrições Pix.
 
-### Story 7.2: Smart PDF Importer (Core)
+### Story 7.2: Importador Inteligente de PDF (Core)
 
-As a Manager,
-I want to upload a PDF statement,
-So that even banks without OFX support work.
+Como Gestor,
+quero subir um extrato em PDF,
+para que mesmo bancos sem suporte a OFX funcionem.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Drop-zone accepts `.pdf`. Backend: `pdfplumber` + per-bank heuristics (BB, Itau, Bradesco, Santander, Caixa, Nubank, Inter, C6).
-2. **Given** heuristics < 80% confidence, **When** LLM fallback enabled, **Then** LLM called with structured-JSON prompt; otherwise manual review screen.
-3. LLM call gated by feature flag with cost-tracking metric.
-4. Review screen: mark/unmark suspicious rows before persisting.
-5. Rows persisted to `bank_transactions` with `imported_from='pdf'`.
+1. Drop-zone aceita `.pdf`. Backend: `pdfplumber` + heurísticas por banco (BB, Itaú, Bradesco, Santander, Caixa, Nubank, Inter, C6).
+2. **Dada** confiança das heurísticas < 80%, **Quando** fallback LLM habilitado, **Então** LLM é chamada com prompt JSON estruturado; caso contrário tela de revisão manual.
+3. Chamada LLM controlada por feature flag com métrica de tracking de custo.
+4. Tela de revisão: marcar/desmarcar linhas suspeitas antes de persistir.
+5. Linhas persistidas em `bank_transactions` com `imported_from='pdf'`.
 
-### Story 7.3: Open Finance Adapter — Pluggy Default (Core)
+### Story 7.3: Adapter Open Finance — Pluggy Padrão (Core)
 
-> **MVP scope:** Only PluggyAdapter is required if enabled. BelvoAdapter and TecnoSpeedAdapter are V2.
+> **Escopo MVP:** Apenas PluggyAdapter é exigido se habilitado. BelvoAdapter e TecnoSpeedAdapter são V2.
 
-As an Admin,
-I want to optionally connect Open Finance,
-So that statements arrive automatically.
+Como Admin,
+quero conectar opcionalmente o Open Finance,
+para que extratos cheguem automaticamente.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `IBankReconciliationProvider` Port: `connect_account`, `list_accounts`, `fetch_transactions`, `disconnect`.
-2. `PluggyAdapter` (default); `BelvoAdapter`, `TecnoSpeedAdapter` alternatives.
-3. Settings > Integrations: "Connect account" flow with Pluggy Connect widget.
-4. Celery beat: incremental sync every 6 hours.
-5. Default: **disabled** (cost concern).
+1. Port `IBankReconciliationProvider`: `connect_account`, `list_accounts`, `fetch_transactions`, `disconnect`.
+2. `PluggyAdapter` (padrão); `BelvoAdapter`, `TecnoSpeedAdapter` alternativos.
+3. Configurações > Integrações: fluxo "Conectar conta" com widget Pluggy Connect.
+4. Celery beat: sync incremental a cada 6 horas.
+5. Padrão: **desabilitado** (preocupação com custo).
 
-### Story 7.4: Drag-and-Drop Reconciliation Screen (Core)
+### Story 7.4: Tela de Conciliação Drag-and-Drop (Core)
 
-As a Manager,
-I want to reconcile transactions with titles by dragging them,
-So that the work is fast and visual.
+Como Gestor,
+quero conciliar transações com títulos arrastando-os,
+para que o trabalho seja rápido e visual.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/finance/reconciliation` with 50/50 split:
-   - **Left**: bank transactions (status=pendente, filterable by date/value/type).
-   - **Right**: system titles (installments + payables in `pago_aguardando_verificacao`).
-2. Drag row from one side onto other -> confirmation modal with diff.
-3. Auto-match: `score = exact_value(60%) + date_window(30%) + description_match(10%)`; score >= 0.85 highlighted with "match suggested" badge.
-4. "Accept all suggestions" button for bulk match.
-5. N:1 and 1:N reconciliation supported (multi-select + drop).
-6. Unmatched transaction -> convert to payable or free-form revenue.
-7. On confirmation: title -> `pago` (immutable), transaction -> `conciliada` (locked).
-8. Top indicators: pending transactions, pending titles, conciliated today.
+1. Rota `/system/finance/reconciliation` com split 50/50:
+   - **Esquerda**: transações bancárias (status=pendente, filtrável por data/valor/tipo).
+   - **Direita**: títulos do sistema (parcelas + títulos a pagar em `pago_aguardando_verificacao`).
+2. Arrastar linha de um lado para o outro -> modal de confirmação com diff.
+3. Auto-match: `score = valor_exato(60%) + janela_data(30%) + match_descricao(10%)`; score >= 0,85 destacado com badge "match sugerido".
+4. Botão "Aceitar todas as sugestões" para match em lote.
+5. Conciliação N:1 e 1:N suportadas (multi-select + drop).
+6. Transação não casada -> converter em título a pagar ou receita livre.
+7. Na confirmação: título -> `pago` (imutável), transação -> `conciliada` (travada).
+8. Indicadores no topo: transações pendentes, títulos pendentes, conciliados hoje.
 
-### Story 7.5: Divergence Detection (Core)
+### Story 7.5: Detecção de Divergências (Core)
 
-As the System,
-I want to flag inconsistencies,
-So that the manager can investigate.
+Como o Sistema,
+quero sinalizar inconsistências,
+para que o gestor possa investigar.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Top-of-screen "Alerts" panel with three categories:
-   - Transactions with no compatible title (orphan revenue or bank error).
-   - Titles flagged `pago` without matching transaction (suspect).
-   - Value mismatches between transaction and candidate title.
-2. Click alert -> contextual investigation pane.
-
----
-
-## Epic 8: Dashboards, Reports & Asset Analytics (Core + Module Hooks)
-
-**Goal:** The manager has consolidated executive sight and drilldown at any level, with pre-built reports and a custom builder. Vertical modules inject domain-specific widgets and reports via `IAssetModule.get_dashboard_widgets()` and `IAssetModule.get_report_dimensions()`.
-
-### Story 8.0: Materialized Views and Dashboard Data Layer (Core)
-
-As a Developer,
-I want materialized views for heavy dashboard queries,
-So that dashboards load in under 1.5s.
-
-**Acceptance Criteria:**
-
-1. Alembic migration creates `mv_asset_roi` materialized view (as defined in Architecture Section 9.9).
-2. Celery Beat job refreshes `mv_asset_roi` daily at 05:00 via `REFRESH MATERIALIZED VIEW CONCURRENTLY`.
-3. Endpoint `POST /api/v1/admin/refresh-views` allows Admin to force-refresh manually.
-4. Index on materialized view for fast lookups.
-
-### Story 8.1: Main Dashboard (Core + Module Hooks)
-
-As a Manager,
-I want to see business KPIs on a single screen,
-So that I can read the operational pulse instantly.
-
-**Acceptance Criteria:**
-
-1. Route `/system/dashboard` with responsive card grid:
-   - **Core KPIs**: Monthly Revenue (current vs previous, % delta), Monthly Expenses, Net Profit, Delinquency (R$ + %), Assets in Use, Assets Idle, Total Assets (R$), Next 7 Days Receivables, Pending Receipts, Portfolio Average Score.
-   - **Module-injected widgets**: rendered via `IAssetModule.get_dashboard_widgets()`. E.g., Vehicle Module injects: Fleet Total (R$ FIPE consolidated), Active Vehicles, Parked, In Maintenance.
-2. Cards reactive via Signals + `resource()`; refresh every 60 s or push via SSE.
-3. Card click deep-links to filtered entity list.
-4. Timeframe toggle: Today | This Week | This Month | This Quarter | This Year.
-5. Charts: 12-month revenue line, expenses-by-category donut, delinquency-by-aging bars.
-
-### Story 8.2: Customer Dashboard (Core)
-
-As a Manager,
-I want a financial dashboard per customer,
-So that I can negotiate with data.
-
-**Acceptance Criteria:**
-
-1. "Dashboard" tab on customer detail page.
-2. Cards: Total Contracted, Total Paid, Total Open, Total Overdue, Current Score (gauge), Punctuality % (12m).
-3. Timeline chart: each payment colored by status.
-4. Table: active contracts with balances and per-contract ROI.
-5. "Export customer history" -> PDF.
-
-### Story 8.3: Vehicle Dashboard (Vehicle Module)
-
-As a Manager,
-I want to analyze each vehicle's viability,
-So that I can decide on sale/replacement.
-
-**Acceptance Criteria:**
-
-1. "Analysis" tab on vehicle detail page (injected by Vehicle Module).
-2. Cards: Investment, Current FIPE, Depreciation, Total Received, ROI %, Accumulated Profit, Payback months.
-3. Reads from materialized view `mv_asset_roi`; Celery job refreshes on schedule.
-4. Line chart: accumulated investment vs accumulated revenue.
-5. **Given** tracker provides KM, **Then** R$/day and R$/km productivity shown.
-6. Timeline of drivers who used the vehicle.
-
-### Story 8.4: Pre-built Reports (Core + Module Hooks)
-
-As a Manager,
-I want pre-built reports,
-So that routine analyses are one click away.
-
-**Acceptance Criteria:**
-
-1. Route `/system/reports` with cards for:
-   - **Core reports**: Top Customers by Revenue (12m), Aging of Delinquency, DRE Consolidated and per Asset, Customer ABC Curve.
-   - **Module reports** (via `IAssetModule.get_report_dimensions()`): E.g., Vehicle Module adds: Top Vehicles by ROI (12m), Remote Block History, Fleet Position snapshot (date X).
-2. Each report opens in viewer with filters, charts, table.
-3. Export to Excel (formatted) and PDF (header/footer).
-4. Heavy reports: Celery worker generation + SSE notification when ready.
-
-### Story 8.5: Custom Report Builder (Core)
-
-> **V2 — Deferred post-launch.** Pre-built reports (Story 8.4) cover MVP needs.
-
-As an advanced Manager,
-I want to compose my own reports,
-So that I don't depend on engineering for new analyses.
-
-**Acceptance Criteria:**
-
-1. Route `/system/reports/builder` with three drag-and-drop zones:
-   - **Available Dimensions**: customer, asset, contract, category, month, status, etc. + module-registered dimensions.
-   - **Rows** and **Columns** targets.
-   - **Measures** (count, sum, avg, min, max of numeric fields).
-2. Filters: date range, status, customer.
-3. Preview table updates live.
-4. "Save as" persists to `saved_reports`.
+1. Painel de "Alertas" no topo da tela com três categorias:
+   - Transações sem título compatível (receita órfã ou erro do banco).
+   - Títulos marcados como `pago` sem transação correspondente (suspeitos).
+   - Mismatches de valor entre transação e título candidato.
+2. Clique no alerta -> painel de investigação contextual.
 
 ---
 
-## Epic 9: Hardening, Plug-and-Play & Final Documentation (Core)
+## Épico 8: Dashboards, Relatórios e Analytics de Ativos (Core + Module Hooks)
 
-**Goal:** The last 20% that separates demo from production: full audit with integrity verification, working integrations panel, observability, load tests, UX polish, module documentation, and adapter guide.
+**Objetivo:** O gestor tem visão executiva consolidada e drilldown em qualquer nível, com relatórios prontos e um construtor customizado. Módulos verticais injetam widgets e relatórios específicos de domínio via `IAssetModule.get_dashboard_widgets()` e `IAssetModule.get_report_dimensions()`.
 
-### Story 9.1: Centralized Integrations Panel (Core)
+### Story 8.0: Materialized Views e Camada de Dados do Dashboard (Core)
 
-As an Admin,
-I want a single screen to manage every integration,
-So that plug-and-play is operationally real.
+Como Desenvolvedor,
+quero materialized views para queries pesadas de dashboard,
+para que dashboards carreguem em menos de 1,5s.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/config/integrations` with cards per category: WhatsApp Gateway, Open Finance / Banks, Payment Gateway, LLM Provider, OCR Provider, Storage, PDF Renderer. Module-specific integrations: e.g., Vehicle Module adds FIPE, Tracker.
-2. Each card: active provider, status (healthy/degraded/error), actions: "Test connection", "Switch provider", "Configure".
-3. "Switch provider": dialog lists available adapters with required credentials.
-4. Credentials encrypted at rest (AES-256-GCM with master key).
-5. Every change writes audit-log diff with secrets masked.
-6. `GET /api/v1/integrations/health` returns status of every provider.
+1. Migration Alembic cria materialized view `mv_asset_roi` (como definido na Seção 9.9 da Arquitetura).
+2. Job do Celery Beat atualiza `mv_asset_roi` diariamente às 05:00 via `REFRESH MATERIALIZED VIEW CONCURRENTLY`.
+3. Endpoint `POST /api/v1/admin/refresh-views` permite ao Admin forçar atualização manualmente.
+4. Índice na materialized view para lookups rápidos.
 
-### Story 9.2: Audit Log Search and Viewer (Core)
+### Story 8.1: Dashboard Principal (Core + Module Hooks)
 
-As an Auditor,
-I want to query the entire action history,
-So that I can trace any event.
+Como Gestor,
+quero ver KPIs do negócio em uma única tela,
+para ler o pulso operacional instantaneamente.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/audit` with searchable table: user, action, entity, date, IP, payload.
-2. Filters: user, entity, action (multi-select), date range.
-3. Row expand: payload diff before/after in collapsible JSON pretty-print.
-4. Integrity indicator: "OK" if HMAC verifies, "ALERT: tampered" if not.
-5. CSV export respects active filter.
+1. Rota `/system/dashboard` com grid de cards responsivo:
+   - **KPIs Core**: Receita Mensal (atual vs anterior, % delta), Despesas Mensais, Lucro Líquido, Inadimplência (R$ + %), Ativos em Uso, Ativos Ociosos, Total de Ativos (R$), Títulos a Receber dos Próximos 7 Dias, Comprovantes Pendentes, Score Médio da Carteira.
+   - **Widgets injetados por módulo**: renderizados via `IAssetModule.get_dashboard_widgets()`. Ex.: Módulo de Veículos injeta: Total da Frota (R$ FIPE consolidado), Veículos Ativos, Parados, Em Manutenção.
+2. Cards reativos via Signals + `resource()`; atualizam a cada 60 s ou push via SSE.
+3. Clique no card faz deep-link para lista de entidades filtrada.
+4. Toggle de período: Hoje | Esta Semana | Este Mês | Este Trimestre | Este Ano.
+5. Gráficos: linha de receita de 12 meses, donut de despesas por categoria, barras de inadimplência por aging.
 
-### Story 9.3: Module Management UI (Core)
+### Story 8.2: Dashboard do Cliente (Core)
 
-As an Admin,
-I want to enable/disable vertical modules and configure their hooks,
-So that the platform adapts to my business needs.
+Como Gestor,
+quero um dashboard financeiro por cliente,
+para negociar com dados.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Route `/system/config/modules` lists registered modules with: name, status (active/inactive), toggle, "Configure" button.
-2. **Given** toggle off, **Then** module stops receiving events, its hooks are deactivated, its UI sections/tabs/widgets disappear, menus hide module-specific items.
-3. **Given** toggle on, **Then** module registers, receives events, UI sections appear.
-4. "Configure" opens module-specific settings (e.g., Vehicle Module: block policy thresholds, FIPE refresh schedule).
-5. Hooks configuration: list of events the module subscribes to, with policy editor per event.
+1. Aba "Dashboard" na página de detalhe do cliente.
+2. Cards: Total Contratado, Total Pago, Total em Aberto, Total Vencido, Score Atual (gauge), Pontualidade % (12m).
+3. Gráfico de timeline: cada pagamento colorido por status.
+4. Tabela: contratos vigentes com saldos e ROI por contrato.
+5. "Exportar histórico do cliente" -> PDF.
 
-### Story 9.4: Backup, Restore, and DR (Core)
+### Story 8.3: Dashboard de Veículo (Módulo de Veículos)
 
-As an Operator,
-I want verified automatic backups,
-So that disasters are recoverable within SLA.
+Como Gestor,
+quero analisar a viabilidade de cada veículo,
+para decidir sobre venda/substituição.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Daily Celery beat at 03:00: `pg_dump`, compress, ship to off-site (S3/B2/Wasabi, configurable), 30-day retention.
-2. Continuous WAL archiving via wal-g or pgBackRest.
-3. Weekly restore test in isolated environment with smoke tests; failures alert admins.
-4. `RUNBOOK_DR.md` committed with step-by-step restore playbook (RTO < 4h).
+1. Aba "Análise" na página de detalhe do veículo (injetada pelo Módulo de Veículos).
+2. Cards: Investimento, FIPE Atual, Depreciação, Total Recebido, ROI %, Lucro Acumulado, Payback em meses.
+3. Lê da materialized view `mv_asset_roi`; job do Celery atualiza no schedule.
+4. Gráfico de linha: investimento acumulado vs receita acumulada.
+5. **Dado** que o rastreador fornece KM, **Então** produtividade R$/dia e R$/km exibida.
+6. Timeline de motoristas que usaram o veículo.
 
-### Story 9.5: Full Observability (Core)
+### Story 8.4: Relatórios Pré-Prontos (Core + Module Hooks)
 
-As an Operator,
-I want Grafana dashboards and alerts,
-So that I run the system with confidence.
+Como Gestor,
+quero relatórios prontos,
+para que análises de rotina sejam a um clique de distância.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Prometheus metrics at `/metrics`: per-route request counts, latency histograms, queue depth, errors, DB connections.
-2. OpenTelemetry tracing; traces in Jaeger or Tempo.
-3. Structured JSON logs with `correlation_id` propagation.
-4. Grafana dashboards (API Overview, DB, Workers, Business, Agent IA) in `infra/observability/grafana/`.
-5. Alertmanager rules: API 5xx > 1% (5m), P95 > 1s (10m), Celery queue > 1000 (5m), DB conn pool > 90% (5m), disk > 85%, webhook failures > 5% (10m), agent daily LLM spend over threshold.
+1. Rota `/system/reports` com cards para:
+   - **Relatórios core**: Top Clientes por Receita (12m), Aging de Inadimplência, DRE Consolidado e por Ativo, Curva ABC de Clientes.
+   - **Relatórios de módulo** (via `IAssetModule.get_report_dimensions()`): Ex.: Módulo de Veículos adiciona: Top Veículos por ROI (12m), Histórico de Bloqueios Remotos, snapshot de Posição da Frota (data X).
+2. Cada relatório abre em visualizador com filtros, gráficos, tabela.
+3. Exportação para Excel (formatado) e PDF (header/footer).
+4. Relatórios pesados: geração por Celery worker + notificação SSE quando pronto.
 
-### Story 9.6: Load Tests and Performance Tuning (Core)
+### Story 8.5: Construtor de Relatórios Customizados (Core)
 
-As the Team,
-I want to validate the system handles forecast load,
-So that launch is safe.
+> **V2 — Adiada para pós-lançamento.** Relatórios prontos (Story 8.4) cobrem as necessidades do MVP.
 
-**Acceptance Criteria:**
+Como Gestor avançado,
+quero compor meus próprios relatórios,
+para não depender de engenharia para novas análises.
 
-1. k6 suite in `tests/load/` covering: dashboard, receivables list, write-off, reconciliation.
-2. Validated targets: 100 RPS sustained, P95 <= 300 ms (read), 500 ms (write).
-3. Optimization changes documented: indexes, query rewrites, caching, cursor pagination.
+**Critérios de Aceite:**
 
-### Story 9.7: Final Documentation (Core)
+1. Rota `/system/reports/builder` com três zonas drag-and-drop:
+   - **Dimensões Disponíveis**: cliente, ativo, contrato, categoria, mês, status, etc. + dimensões registradas por módulos.
+   - Targets de **Linhas** e **Colunas**.
+   - **Medidas** (count, sum, avg, min, max de campos numéricos).
+2. Filtros: faixa de data, status, cliente.
+3. Tabela de preview atualiza ao vivo.
+4. "Salvar como" persiste em `saved_reports`.
 
-As the Next Developer,
-I want complete documentation,
-So that I can maintain the product without the original author.
+---
 
-**Acceptance Criteria:**
+## Épico 9: Hardening, Plug-and-Play e Documentação Final (Core)
 
-1. `README.md` enables local setup in < 10 minutes.
-2. `ARCHITECTURE.md` reviewed and versioned.
-3. `ADAPTERS.md`: "how to add a new adapter" guide for each Port.
-4. `MODULES.md`: "how to create a new vertical module" guide, covering `IAssetModule` implementation, hook registration, schema extensions, UI injection points.
-5. OpenAPI at `/docs` with snapshot in `API.md`.
-6. `DEPLOYMENT.md` deploy playbook.
-7. `RUNBOOK.md` troubleshooting guide.
-8. ADRs `0001`-`0010` under `docs/adrs/` (Hexagonal, SSE+WS split, pgvector, Celery, Evolution, Tesseract OCR, No-gateway Pix default, Paid-installment immutability PG trigger, Single-tenant first, Asset Abstraction Layer).
+**Objetivo:** Os últimos 20% que separam demo de produção: auditoria completa com verificação de integridade, painel de integrações funcional, observabilidade, testes de carga, polimento de UX, documentação de módulos e guia de adapter.
 
-> **MVP scope:** Only ADRs 0008 (paid installment immutability) and 0010 (two parallel repos) are required pre-launch. Others can be written retroactively.
+### Story 9.1: Painel Centralizado de Integrações (Core)
 
-### Story 9.8: UX Polish and Microinteractions (Core)
+Como Admin,
+quero uma única tela para gerenciar todas as integrações,
+para que o plug-and-play seja operacionalmente real.
 
-> **MVP scope:** axe-core CI, skeleton loaders, and empty states are MVP. FLIP animations, View Transitions, and optimistic UI rollback are V2.
+**Critérios de Aceite:**
 
-As a User,
-I want the app polished,
-So that the experience is pleasant under daily use.
+1. Rota `/system/config/integrations` com cards por categoria: WhatsApp Gateway, Open Finance / Bancos, Payment Gateway, Provedor LLM, Provedor OCR, Storage, Renderizador PDF. Integrações específicas de módulo: ex.: Módulo de Veículos adiciona FIPE, Rastreador.
+2. Cada card: provider ativo, status (saudável/degradado/erro), ações: "Testar conexão", "Trocar provider", "Configurar".
+3. "Trocar provider": dialog lista adapters disponíveis com credenciais exigidas.
+4. Credenciais criptografadas em repouso (AES-256-GCM com master key).
+5. Toda mudança grava diff no log de auditoria com segredos mascarados.
+6. `GET /api/v1/integrations/health` retorna status de cada provider.
 
-**Acceptance Criteria:**
+### Story 9.2: Busca e Visualizador de Log de Auditoria (Core)
 
-1. Page-transition animations (FLIP / View Transitions API where supported).
-2. Skeleton loaders on every list and card.
-3. Toasts: unified queue with auto-dismiss.
-4. Empty states (illustration + CTA) on every list.
-5. Modals respect `prefers-reduced-motion`.
-6. Optimistic updates with rollback on error.
-7. axe-core in CI with zero critical violations.
-8. Mobile review at 375 px and 768 px screen-by-screen.
+Como Auditor,
+quero consultar todo o histórico de ações,
+para rastrear qualquer evento.
 
-### Story 9.9: Versioned Configuration and Settings Consolidation (Core)
+**Critérios de Aceite:**
 
-As an Admin,
-I want all configurations versioned with change history,
-So that I can audit who changed what and when.
+1. Rota `/system/audit` com tabela pesquisável: usuário, ação, entidade, data, IP, payload.
+2. Filtros: usuário, entidade, ação (multi-select), faixa de data.
+3. Expandir linha: diff de payload antes/depois em JSON pretty-print colapsável.
+4. Indicador de integridade: "OK" se HMAC verifica, "ALERTA: adulterado" se não.
+5. Exportação CSV respeita filtro ativo.
 
-**Acceptance Criteria:**
+### Story 9.3: UI de Gerenciamento de Módulos (Core)
 
-1. Every configuration section (Company, Billing, Agent, Integrations, Modules, Permissions, Templates) maintains a versioned history with who, when, and prior value.
-2. Route `/system/config/history` shows configuration change log with diff viewer.
-3. Consolidated Settings screen at `/system/config` with all sections.
+Como Admin,
+quero ativar/desativar módulos verticais e configurar seus hooks,
+para que a plataforma se adapte às necessidades do meu negócio.
 
-### Story 9.10: LGPD "My Data" Self-Service (Core)
+**Critérios de Aceite:**
 
-As a Customer (external),
-I want to export or request deletion of my personal data,
-So that the system complies with LGPD.
+1. Rota `/system/config/modules` lista módulos registrados com: nome, status (ativo/inativo), toggle, botão "Configurar".
+2. **Dado** toggle desligado, **Então** módulo para de receber eventos, seus hooks são desativados, suas seções/abas/widgets de UI desaparecem, menus escondem itens específicos do módulo.
+3. **Dado** toggle ligado, **Então** módulo registra, recebe eventos, seções de UI aparecem.
+4. "Configurar" abre configurações específicas do módulo (ex.: Módulo de Veículos: thresholds da política de bloqueio, schedule de refresh FIPE).
+5. Configuração de hooks: lista de eventos aos quais o módulo se inscreve, com editor de política por evento.
 
-**Acceptance Criteria:**
+### Story 9.4: Backup, Restore e DR (Core)
 
-1. Endpoint `GET /api/v1/customers/{id}/data-export` generates a ZIP with all personal data (profile, contracts, titles, messages, attachments).
-2. Endpoint `POST /api/v1/customers/{id}/anonymize` replaces personal fields with "[redigido]", masks CPF, removes photos — preserving financial history for audit.
-3. Anonymization requires Admin role + reason + audit log entry with category='security'.
-4. A simple "Meus Dados" page accessible via a unique link sent to the customer (no full app login required — token-based access).
-5. The page shows: personal data summary, "Exportar Dados" button, "Solicitar Exclusão" button (sends request to Admin for review).
+Como Operador,
+quero backups automáticos verificados,
+para que desastres sejam recuperáveis dentro do SLA.
+
+**Critérios de Aceite:**
+
+1. Celery beat diário às 03:00: `pg_dump`, comprime, envia para off-site (S3/B2/Wasabi, configurável), retenção de 30 dias.
+2. Arquivamento contínuo de WAL via wal-g ou pgBackRest.
+3. Teste de restore semanal em ambiente isolado com smoke tests; falhas alertam admins.
+4. `RUNBOOK_DR.md` commitado com playbook de restore passo a passo (RTO < 4h).
+
+### Story 9.5: Observabilidade Completa (Core)
+
+Como Operador,
+quero dashboards Grafana e alertas,
+para operar o sistema com confiança.
+
+**Critérios de Aceite:**
+
+1. Métricas Prometheus em `/metrics`: contagem de requests por rota, histogramas de latência, profundidade de fila, erros, conexões DB.
+2. Tracing OpenTelemetry; traces em Jaeger ou Tempo.
+3. Logs JSON estruturados com propagação de `correlation_id`.
+4. Dashboards Grafana (API Overview, DB, Workers, Business, Agente IA) em `infra/observability/grafana/`.
+5. Regras do Alertmanager: API 5xx > 1% (5m), P95 > 1s (10m), fila Celery > 1000 (5m), pool de conn DB > 90% (5m), disco > 85%, falhas de webhook > 5% (10m), gasto diário do LLM do agente acima do threshold.
+
+### Story 9.6: Testes de Carga e Tuning de Performance (Core)
+
+Como o Time,
+quero validar que o sistema aguenta a carga prevista,
+para que o lançamento seja seguro.
+
+**Critérios de Aceite:**
+
+1. Suite k6 em `tests/load/` cobrindo: dashboard, lista de títulos a receber, baixa, conciliação.
+2. Targets validados: 100 RPS sustentados, P95 <= 300 ms (leitura), 500 ms (escrita).
+3. Mudanças de otimização documentadas: índices, reescritas de query, caching, paginação por cursor.
+
+### Story 9.7: Documentação Final (Core)
+
+Como o Próximo Desenvolvedor,
+quero documentação completa,
+para manter o produto sem o autor original.
+
+**Critérios de Aceite:**
+
+1. `README.md` permite setup local em < 10 minutos.
+2. `ARCHITECTURE.md` revisado e versionado.
+3. `ADAPTERS.md`: guia "como adicionar um novo adapter" para cada Port.
+4. `MODULES.md`: guia "como criar um novo módulo vertical", cobrindo implementação de `IAssetModule`, registro de hook, extensões de schema, pontos de injeção de UI.
+5. OpenAPI em `/docs` com snapshot em `API.md`.
+6. `DEPLOYMENT.md` playbook de deploy.
+7. `RUNBOOK.md` guia de troubleshooting.
+8. ADRs `0001`-`0010` sob `docs/adrs/` (Hexagonal, split SSE+WS, pgvector, Celery, Evolution, Tesseract OCR, Pix sem gateway por padrão, trigger PG de imutabilidade de parcela paga, Single-tenant first, Camada de Abstração de Ativos).
+
+> **Escopo MVP:** Apenas ADRs 0008 (imutabilidade de parcela paga) e 0010 (dois repos paralelos) são exigidos pré-lançamento. Outras podem ser escritas retroativamente.
+
+### Story 9.8: Polimento UX e Microinterações (Core)
+
+> **Escopo MVP:** axe-core no CI, skeleton loaders e empty states são MVP. Animações FLIP, View Transitions e rollback de UI otimista são V2.
+
+Como Usuário,
+quero o app polido,
+para que a experiência seja agradável no uso diário.
+
+**Critérios de Aceite:**
+
+1. Animações de transição de página (FLIP / View Transitions API onde suportado).
+2. Skeleton loaders em toda lista e card.
+3. Toasts: fila unificada com auto-dismiss.
+4. Empty states (ilustração + CTA) em toda lista.
+5. Modais respeitam `prefers-reduced-motion`.
+6. Atualizações otimistas com rollback no erro.
+7. axe-core no CI com zero violações críticas.
+8. Revisão mobile em 375 px e 768 px tela a tela.
+
+### Story 9.9: Configuração Versionada e Consolidação de Configurações (Core)
+
+Como Admin,
+quero todas as configurações versionadas com histórico de mudanças,
+para auditar quem mudou o quê e quando.
+
+**Critérios de Aceite:**
+
+1. Toda seção de configuração (Empresa, Cobrança, Agente, Integrações, Módulos, Permissões, Templates) mantém histórico versionado com quem, quando e valor anterior.
+2. Rota `/system/config/history` mostra log de mudanças de configuração com visualizador de diff.
+3. Tela de Configurações consolidada em `/system/config` com todas as seções.
+
+### Story 9.10: Self-Service LGPD "Meus Dados" (Core)
+
+Como Cliente (externo),
+quero exportar ou solicitar exclusão dos meus dados pessoais,
+para que o sistema esteja em conformidade com a LGPD.
+
+**Critérios de Aceite:**
+
+1. Endpoint `GET /api/v1/customers/{id}/data-export` gera um ZIP com todos os dados pessoais (perfil, contratos, títulos, mensagens, anexos).
+2. Endpoint `POST /api/v1/customers/{id}/anonymize` substitui campos pessoais por "[redigido]", mascara CPF, remove fotos — preservando histórico financeiro para auditoria.
+3. Anonimização exige papel Admin + motivo + entrada no log de auditoria com category='security'.
+4. Uma página simples "Meus Dados" acessível via um link único enviado ao cliente (sem login completo no app — acesso baseado em token).
+5. A página mostra: resumo de dados pessoais, botão "Exportar Dados", botão "Solicitar Exclusão" (envia request ao Admin para revisão).
 
 ### Story 9.11: Command Palette (Ctrl+K) (Core)
 
-As a Manager,
-I want a global command palette for instant navigation and actions,
-So that I never need to hunt for a screen or action.
+Como Gestor,
+quero um command palette global para navegação e ações instantâneas,
+para nunca precisar caçar uma tela ou ação.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `Ctrl+K` (or `Cmd+K` on Mac) opens `<ui-command-palette>` overlay anywhere in the app.
-2. Search modes: default (fuzzy search across customers, vehicles, contracts, titles by name/CPF/plate/number), `>` prefix for actions ("baixar título 1234"), `#` for titles by number, `@` for customers.
-3. Results update live with debounce 200ms; keyboard navigation (↑/↓/Enter/Esc).
-4. Recent searches persisted in localStorage (last 10).
-5. Component lives in `frontend/src/app/shared/components/command-palette/`.
-6. Backend endpoint `GET /api/v1/search?q=&type=` returns unified search results across entities.
-
----
-
-## Epic 10: Recurrence Engine, Automated Collection & Channel Health (Core)
-
-This epic implements the automated operational backbone: recurring title generation (with monetary correction), payable draft lifecycle, the full collection engine (pre-due reminders → overdue escalation → GPS block), message template management, channel health monitoring, worker scheduler consolidation, user self-registration, and a reusable modal component.
-
-### Story 10.1: Monthly Installment Generation with Correction Index (Core)
-
-As a System,
-I want to generate installments monthly applying the current correction index,
-So that contracts with monetary correction have accurate values each month.
-
-**Acceptance Criteria:**
-
-1. Contract model extended with `generation_mode` (upfront | monthly), `correction_index` (igpm | ipca | inpc | null), `generation_day` (1-28), `next_generation_date`.
-2. `ICorrectionIndexProvider` port with `get_current_rate(index, reference_date) -> Decimal`.
-3. `BcbCorrectionAdapter` fetching rates from BCB API (Banco Central do Brasil) — public, no auth. Series: IGPM=189, IPCA=433, INPC=188. Cache in Redis TTL 30 days.
-4. Celery Beat task `generate_monthly_installments` runs daily at 06:00.
-5. Task is idempotent — checks if installment for that period already exists.
-6. Fallback: if BCB unavailable, uses last cached rate + logs warning.
-
-### Story 10.2: Payable Draft Lifecycle (Core)
-
-As a Manager,
-I want recurring payables generated as drafts that I can fill in and save,
-So that the system reminds me of fixed expenses without requiring exact values upfront.
-
-**Acceptance Criteria:**
-
-1. Payable status lifecycle enforced: `rascunho` → `pendente` → `pago` | `cancelado`.
-2. `rascunho`: can edit all fields, can DELETE (hard delete allowed).
-3. `pendente`: can edit, pay, or cancel (soft — never hard delete, preserves audit trail).
-4. `pago` and `cancelado`: immutable.
-5. Recurring template generates payables with `status=rascunho`.
-6. SSE notification to manager when draft is generated.
-
-### Story 10.3: Automated Collection Engine (Core)
-
-As a System,
-I want to automatically send payment reminders before due date and escalate overdue installments,
-So that collection happens without manual intervention.
-
-**Acceptance Criteria:**
-
-1. `collection_policy` in system_settings: `reminder_days_before`, `overdue_escalation` (array of {days, action, template_id}), `agent_can_negotiate`, `agent_max_grace_days`, interest/fine rates.
-2. Celery task `check_upcoming_due_dates` (daily 08:00): sends reminder via WhatsApp N days before due date.
-3. Celery task `check_overdue_installments` (daily 09:00): updates status to `vencido`, executes escalation per policy (reminder → warn_block → block → notify_manager).
-4. Celery task `check_paid_installments` (every 30 min): detects payments, sends confirmation, triggers unblock.
-5. All messages sent via `IMessageChannel` (channel registry), not direct adapter.
-6. Agent orchestrator handles customer replies with negotiation autonomy (configurable max grace days).
-7. Frontend: collection policy config page at `/system/settings/collection`.
-
-### Story 10.4: Message Template Management (Core)
-
-As a Manager,
-I want to create and manage message templates for each collection stage,
-So that I can customize the tone and content of automated messages.
-
-**Acceptance Criteria:**
-
-1. `message_templates` table: name, channel, trigger (upcoming_due | overdue_d1 | warn_block | payment_confirmed | custom), body, variables.
-2. CRUD endpoints for templates.
-3. Default templates seeded in Portuguese.
-4. Template preview with sample data.
-5. Variables: {nome}, {valor}, {valor_atualizado}, {data_vencimento}, {dias_atraso}, {placa}, {contrato}, {link_pagamento}.
-
-### Story 10.5: Channel Health Monitoring (Core)
-
-As a Manager,
-I want to see which messaging channels are configured and healthy,
-So that I know if my automated collection will work.
-
-**Acceptance Criteria:**
-
-1. Celery task `check_channel_health` runs every 5 minutes — calls `health_check()` on all registered channels via `ChannelRegistry`.
-2. Dashboard widget showing channel status with green/yellow/red badges.
-3. SSE notification when a channel goes unhealthy.
-4. Settings > Integrações shows real-time health per channel with latency.
-
-### Story 10.6: Worker Scheduler Consolidation (Core)
-
-As a System Administrator,
-I want all scheduled tasks consolidated with proper crontab timing and a monitoring dashboard,
-So that I can verify all automations are running correctly.
-
-**Acceptance Criteria:**
-
-1. All Celery Beat tasks use `crontab()` with exact times (03:00 backup, 04:00 recurring payables, 05:00 scores, 06:00 monthly installments, 08:00 upcoming due, 09:00 overdue, */30 paid check, */5 channel health, */60 views refresh).
-2. Admin endpoint lists all scheduled tasks with last run, next run, status.
-3. Frontend: "Tarefas Agendadas" page showing each task schedule and execution status.
-
-### Story 10.7: User Registration and Email Verification (Core)
-
-As a new User,
-I want to register an account and verify my email,
-So that I can access the system securely.
-
-**Acceptance Criteria:**
-
-1. `POST /auth/register` — creates user with `is_active=false`, sends verification email.
-2. `POST /auth/verify-email` — activates user account (single-use token, 1h TTL).
-3. `POST /auth/resend-verification` — rate limited (3/hour), always returns 200.
-4. Login with unverified email returns 403.
-5. Frontend: 3-step register wizard (glassmorphism), verify-email page, resend-verification page.
-
-### Story 10.8: Reusable Modal Component (Core)
-
-As a Developer,
-I want a single reusable modal component that handles ESC, backdrop click, z-index, and animation,
-So that I never repeat modal boilerplate in every component.
-
-**Acceptance Criteria:**
-
-1. `ModalComponent` in `shared/components/modal/` with inputs: `[open]`, `[size]`, `[title]`.
-2. Output: `(closed)` on ESC, backdrop click, or X button.
-3. Built-in: z-index, backdrop, fade+scale animation, auto-focus for ESC capture.
-4. Content projection via `<ng-content>` + `<ng-content select="[modal-footer]">`.
-5. ALL existing 13 inline modals replaced with `<app-modal>`.
+1. `Ctrl+K` (ou `Cmd+K` no Mac) abre overlay `<ui-command-palette>` em qualquer lugar do app.
+2. Modos de busca: padrão (busca fuzzy em clientes, veículos, contratos, títulos por nome/CPF/placa/número), prefixo `>` para ações ("baixar título 1234"), `#` para títulos por número, `@` para clientes.
+3. Resultados atualizam ao vivo com debounce 200ms; navegação por teclado (↑/↓/Enter/Esc).
+4. Buscas recentes persistidas no localStorage (últimas 10).
+5. Componente vive em `frontend/src/app/shared/components/command-palette/`.
+6. Endpoint backend `GET /api/v1/search?q=&type=` retorna resultados de busca unificada entre entidades.
 
 ---
 
-## Epic 11: WhatsApp Token Economy & Operational Modes (Core)
+## Épico 10: Motor de Recorrência, Cobrança Automatizada e Saúde de Canais (Core)
 
-This epic implements the token-economy layer over Epic 6: three operation modes (`ia-full` / `ia-eco` / `ia-zero`) with automatic downgrade on budget exhaustion, deterministic intent routing without LLM, interactive WhatsApp menus, receipt deduplication with manual validation queue, audio handling per mode, manager-driven rule learning, and plan tiers. **Critical operational principle: the system never stops, even when IA is fully exhausted (ia-zero).**
+Este épico implementa a espinha dorsal operacional automatizada: geração de títulos recorrentes (com correção monetária), ciclo de vida de rascunho de título a pagar, motor completo de cobrança (lembretes pré-vencimento → escalonamento de vencidos → bloqueio GPS), gestão de modelos de mensagem, monitoramento de saúde de canais, consolidação do scheduler de workers, auto-cadastro de usuário e componente de modal reutilizável.
 
-### Story 11.1: Token Budget, Tracking & Throttle Engine (Core)
+### Story 10.1: Geração Mensal de Parcelas com Índice de Correção (Core)
 
-As a Tenant Manager,
-I want a monthly LLM token budget with live tracking, alerts, and automatic mode downgrade,
-So that I never get a surprise bill and the WhatsApp operation never stops when IA runs out.
+Como Sistema,
+quero gerar parcelas mensalmente aplicando o índice de correção atual,
+para que contratos com correção monetária tenham valores precisos a cada mês.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. `system_settings.token_budget` JSONB with `monthly_limit_tokens`, `auto_throttle_enabled`, `thresholds`, `reset_day_of_month`.
-2. Table `token_usage_monthly` upserted from `agent_runs` (Story 6.4).
-3. Celery task `evaluate_token_throttle` (every 5 min) downgrades mode when threshold crossed.
-4. Monthly reset restores `configured_mode` on day 1 at 00:05.
-5. SSE alerts at 50%/75%/95% of budget.
+1. Model de contrato estendido com `generation_mode` (upfront | monthly), `correction_index` (igpm | ipca | inpc | null), `generation_day` (1-28), `next_generation_date`.
+2. Port `ICorrectionIndexProvider` com `get_current_rate(index, reference_date) -> Decimal`.
+3. `BcbCorrectionAdapter` busca taxas da API do BCB (Banco Central do Brasil) — pública, sem auth. Séries: IGPM=189, IPCA=433, INPC=188. Cache no Redis TTL 30 dias.
+4. Task do Celery Beat `generate_monthly_installments` roda diariamente às 06:00.
+5. Task é idempotente — verifica se parcela para aquele período já existe.
+6. Fallback: se BCB indisponível, usa última taxa cacheada + loga warning.
+
+### Story 10.2: Ciclo de Vida de Rascunho de Título a Pagar (Core)
+
+Como Gestor,
+quero títulos a pagar recorrentes gerados como rascunhos que eu posso preencher e salvar,
+para que o sistema me lembre de despesas fixas sem exigir valores exatos antecipadamente.
+
+**Critérios de Aceite:**
+
+1. Ciclo de vida de status do título a pagar imposto: `rascunho` → `pendente` → `pago` | `cancelado`.
+2. `rascunho`: pode editar todos os campos, pode DELETE (hard delete permitido).
+3. `pendente`: pode editar, pagar ou cancelar (soft — nunca hard delete, preserva trilha de auditoria).
+4. `pago` e `cancelado`: imutáveis.
+5. Template recorrente gera títulos a pagar com `status=rascunho`.
+6. Notificação SSE para o gestor quando um rascunho é gerado.
+
+### Story 10.3: Motor de Cobrança Automatizada (Core)
+
+Como Sistema,
+quero enviar lembretes de pagamento automaticamente antes do vencimento e escalonar parcelas vencidas,
+para que a cobrança aconteça sem intervenção manual.
+
+**Critérios de Aceite:**
+
+1. `collection_policy` em system_settings: `reminder_days_before`, `overdue_escalation` (array de {days, action, template_id}), `agent_can_negotiate`, `agent_max_grace_days`, taxas de juros/multa.
+2. Task Celery `check_upcoming_due_dates` (diária 08:00): envia lembrete via WhatsApp N dias antes do vencimento.
+3. Task Celery `check_overdue_installments` (diária 09:00): atualiza status para `vencido`, executa escalonamento conforme política (lembrete → avisar_bloqueio → bloquear → notificar_gestor).
+4. Task Celery `check_paid_installments` (a cada 30 min): detecta pagamentos, envia confirmação, dispara desbloqueio.
+5. Todas as mensagens enviadas via `IMessageChannel` (channel registry), não adapter direto.
+6. Orquestrador de agentes trata respostas do cliente com autonomia de negociação (max grace days configurável).
+7. Frontend: página de config de política de cobrança em `/system/settings/collection`.
+
+### Story 10.4: Gestão de Modelos de Mensagem (Core)
+
+Como Gestor,
+quero criar e gerenciar modelos de mensagem para cada estágio de cobrança,
+para customizar o tom e conteúdo de mensagens automatizadas.
+
+**Critérios de Aceite:**
+
+1. Tabela `message_templates`: name, channel, trigger (upcoming_due | overdue_d1 | warn_block | payment_confirmed | custom), body, variables.
+2. Endpoints CRUD para templates.
+3. Templates padrão populados em português.
+4. Preview de template com dados-exemplo.
+5. Variáveis: {nome}, {valor}, {valor_atualizado}, {data_vencimento}, {dias_atraso}, {placa}, {contrato}, {link_pagamento}.
+
+### Story 10.5: Monitoramento de Saúde de Canais (Core)
+
+Como Gestor,
+quero ver quais canais de mensagem estão configurados e saudáveis,
+para saber se minha cobrança automatizada vai funcionar.
+
+**Critérios de Aceite:**
+
+1. Task Celery `check_channel_health` roda a cada 5 minutos — chama `health_check()` em todos os canais registrados via `ChannelRegistry`.
+2. Widget de dashboard mostrando status dos canais com badges verde/amarelo/vermelho.
+3. Notificação SSE quando um canal fica não-saudável.
+4. Configurações > Integrações mostra saúde em tempo real por canal com latência.
+
+### Story 10.6: Consolidação do Scheduler de Workers (Core)
+
+Como Administrador de Sistema,
+quero todas as tasks agendadas consolidadas com timing crontab apropriado e um dashboard de monitoramento,
+para verificar que todas as automações estão rodando corretamente.
+
+**Critérios de Aceite:**
+
+1. Todas as tasks do Celery Beat usam `crontab()` com horários exatos (03:00 backup, 04:00 títulos a pagar recorrentes, 05:00 scores, 06:00 parcelas mensais, 08:00 vencimentos próximos, 09:00 vencidos, */30 check de pagos, */5 saúde de canais, */60 refresh de views).
+2. Endpoint Admin lista todas as tasks agendadas com última execução, próxima execução, status.
+3. Frontend: página "Tarefas Agendadas" mostrando schedule e status de execução de cada task.
+
+### Story 10.7: Cadastro de Usuário e Verificação por Email (Core)
+
+Como novo Usuário,
+quero cadastrar uma conta e verificar meu email,
+para acessar o sistema com segurança.
+
+**Critérios de Aceite:**
+
+1. `POST /auth/register` — cria usuário com `is_active=false`, envia email de verificação.
+2. `POST /auth/verify-email` — ativa conta de usuário (token de uso único, TTL 1h).
+3. `POST /auth/resend-verification` — rate limited (3/hora), sempre retorna 200.
+4. Login com email não verificado retorna 403.
+5. Frontend: wizard de cadastro em 3 passos (glassmorphism), página verify-email, página resend-verification.
+
+### Story 10.8: Componente de Modal Reutilizável (Core)
+
+Como Desenvolvedor,
+quero um único componente de modal reutilizável que trate ESC, clique no backdrop, z-index e animação,
+para nunca repetir boilerplate de modal em cada componente.
+
+**Critérios de Aceite:**
+
+1. `ModalComponent` em `shared/components/modal/` com inputs: `[open]`, `[size]`, `[title]`.
+2. Output: `(closed)` em ESC, clique no backdrop ou botão X.
+3. Built-in: z-index, backdrop, animação fade+scale, auto-foco para captura de ESC.
+4. Projeção de conteúdo via `<ng-content>` + `<ng-content select="[modal-footer]">`.
+5. TODOS os 13 modais inline existentes substituídos por `<app-modal>`.
+
+---
+
+## Épico 11: Economia de Tokens do WhatsApp e Modos Operacionais (Core)
+
+Este épico implementa a camada de economia de tokens sobre o Épico 6: três modos de operação (`ia-full` / `ia-eco` / `ia-zero`) com downgrade automático na exaustão do budget, roteamento determinístico de intenção sem LLM, menus interativos de WhatsApp, deduplicação de comprovantes com fila de validação manual, tratamento de áudio por modo, aprendizado de regras dirigido pelo gestor e tiers de plano. **Princípio operacional crítico: o sistema nunca para, mesmo quando a IA está totalmente esgotada (ia-zero).**
+
+### Story 11.1: Budget de Tokens, Tracking e Motor de Throttle (Core)
+
+Como Gestor do Tenant,
+quero um budget mensal de tokens LLM com tracking ao vivo, alertas e downgrade automático de modo,
+para nunca receber uma conta surpresa e para que a operação WhatsApp nunca pare quando a IA acabar.
+
+**Critérios de Aceite:**
+
+1. `system_settings.token_budget` JSONB com `monthly_limit_tokens`, `auto_throttle_enabled`, `thresholds`, `reset_day_of_month`.
+2. Tabela `token_usage_monthly` faz upsert a partir de `agent_runs` (Story 6.4).
+3. Task Celery `evaluate_token_throttle` (a cada 5 min) faz downgrade do modo quando o threshold é cruzado.
+4. Reset mensal restaura `configured_mode` no dia 1 às 00:05.
+5. Alertas SSE em 50%/75%/95% do budget.
 6. Endpoints: `GET/PUT /api/v1/system/token-usage`, `/token-budget`.
-7. Dashboard widget + Settings page + persistent banner when throttled.
-8. Anti-flap: manual override blocks auto-throttle for current period.
+7. Widget de dashboard + página de Configurações + banner persistente quando em throttle.
+8. Anti-flap: override manual bloqueia auto-throttle pelo período atual.
 
-### Story 11.2: Operation Modes (ia-full / ia-eco / ia-zero) (Core)
+### Story 11.2: Modos de Operação (ia-full / ia-eco / ia-zero) (Core)
 
-As a Tenant Manager,
-I want to choose how aggressively the IA participates in WhatsApp operations,
-So that I can balance customer experience against token cost.
+Como Gestor do Tenant,
+quero escolher quão agressivamente a IA participa das operações no WhatsApp,
+para balancear experiência do cliente contra custo de tokens.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Postgres enum `operation_mode`: `ia_full`, `ia_eco`, `ia_zero`.
-2. Capability matrix gates every LLM/transcription/vision call.
-3. `OperationModeService.is_allowed(capability)` consulted by agent orchestrator (Story 6.4).
-4. In `ia-zero`, inbound bypasses LLM and goes 100% to intent rules (Story 11.4).
-5. UI shows current vs configured mode with auto-restore on monthly reset.
-6. Mode change emits SSE + audit_log entry (category=security).
-7. Header badge with mode color (green/yellow/grey).
+1. Enum Postgres `operation_mode`: `ia_full`, `ia_eco`, `ia_zero`.
+2. Matriz de capabilities controla cada chamada LLM/transcrição/visão.
+3. `OperationModeService.is_allowed(capability)` consultado pelo orquestrador de agentes (Story 6.4).
+4. Em `ia-zero`, inbound bypassa LLM e vai 100% para regras de intenção (Story 11.4).
+5. UI mostra modo atual vs configurado com auto-restore no reset mensal.
+6. Mudança de modo emite SSE + entrada em audit_log (category=security).
+7. Badge no header com cor do modo (verde/amarelo/cinza).
 
-### Story 11.3: Interactive WhatsApp Menu (List Messages & Reply Buttons) (Core)
+### Story 11.3: Menu Interativo WhatsApp (List Messages e Reply Buttons) (Core)
 
-As a Customer,
-I want to choose actions from a menu of buttons/options instead of typing,
-So that I get faster responses and the company spends less on IA.
+Como Cliente,
+quero escolher ações em um menu de botões/opções em vez de digitar,
+para receber respostas mais rápidas e a empresa gastar menos em IA.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Table `interactive_menus` with items (action_type: send_template | show_submenu | call_function | handover_human).
-2. `MenuRenderer` generates per-adapter payload (Z-API / Uazapi / Evolution).
-3. WhatsApp limits enforced (List ≤10 items, Buttons ≤3, auto-fallback).
-4. Default PT-BR menus seeded (main, payment, overdue).
-5. Inbound `interactive_response` mapped to action via dispatcher.
-6. Drag-drop editor + side-by-side preview + "Testar" sends to manager's number.
-7. In `ia-zero`, unmatched messages auto-respond with main_menu.
-8. WhatsApp 24h window detection (templates outside window).
+1. Tabela `interactive_menus` com itens (action_type: send_template | show_submenu | call_function | handover_human).
+2. `MenuRenderer` gera payload por adapter (Z-API / Uazapi / Evolution).
+3. Limites do WhatsApp aplicados (Lista ≤10 itens, Botões ≤3, auto-fallback).
+4. Menus padrão PT-BR populados (principal, pagamento, vencidos).
+5. `interactive_response` recebido mapeado para ação via dispatcher.
+6. Editor drag-drop + preview side-by-side + "Testar" envia para o número do gestor.
+7. Em `ia-zero`, mensagens não casadas auto-respondem com main_menu.
+8. Detecção da janela de 24h do WhatsApp (templates fora da janela).
 
-### Story 11.4: Intent Rules Engine (flashtext + rapidfuzz + regex) (Core)
+### Story 11.4: Motor de Regras de Intenção (flashtext + rapidfuzz + regex) (Core)
 
-As a System,
-I want to classify customer messages deterministically without LLM,
-So that we can route to templates/menus/functions in ia-eco and ia-zero modes with zero token cost.
+Como Sistema,
+quero classificar mensagens do cliente deterministicamente sem LLM,
+para que possamos rotear para templates/menus/funções nos modos ia-eco e ia-zero com custo zero de tokens.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Table `intent_rules` with match_type (keyword/regex/fuzzy), priority, action_type.
-2. `IntentMatcher` service: flashtext for keywords, `re` for regex, rapidfuzz for fuzzy.
-3. Default PT-BR rules seeded (saudacao, pedido_boletos, comprovante_enviado, etc.).
-4. In `ia-zero`: matcher only, no LLM. In `ia-eco`: matcher first, LLM classifier on unknown (~50 tokens).
-5. `intent_match_log` for stats and Story 11.7 learning.
-6. UI for CRUD + drag-drop priority + "Testar" tester + bulk import.
-7. Performance target: p99 < 10ms for 500 rules per tenant.
-8. ReDoS prevention on regex validation.
+1. Tabela `intent_rules` com match_type (keyword/regex/fuzzy), priority, action_type.
+2. Serviço `IntentMatcher`: flashtext para keywords, `re` para regex, rapidfuzz para fuzzy.
+3. Regras padrão PT-BR populadas (saudacao, pedido_boletos, comprovante_enviado, etc.).
+4. Em `ia-zero`: apenas matcher, sem LLM. Em `ia-eco`: matcher primeiro, classificador LLM em desconhecidos (~50 tokens).
+5. `intent_match_log` para estatísticas e aprendizado da Story 11.7.
+6. UI para CRUD + drag-drop de prioridade + "Testar" + importação em lote.
+7. Target de performance: p99 < 10ms para 500 regras por tenant.
+8. Prevenção de ReDoS na validação de regex.
 
-### Story 11.5: Receipt Dedupe + Manual Validation Queue (Core)
+### Story 11.5: Deduplicação de Comprovante + Fila de Validação Manual (Core)
 
-As a System,
-I want to detect duplicate receipts and gracefully queue low-confidence OCR results for human validation,
-So that we never double-credit a payment and the operation continues even when LLM Vision fallback is disabled.
+Como Sistema,
+quero detectar comprovantes duplicados e enfileirar resultados de OCR de baixa confiança para validação humana com elegância,
+para nunca creditar um pagamento em duplicidade e para que a operação continue mesmo quando o fallback LLM Vision está desabilitado.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Table `receipt_fingerprints` with pHash + txn_id + confidence + status.
-2. Duplicate detection: exact txn_id OR Hamming distance pHash ≤5.
-3. Auto write-off only when confidence ≥70 AND single candidate match.
-4. In `ia-eco`/`ia-zero`: LLM Vision fallback disabled; low-confidence → manual queue with customer notification template.
-5. Page `/system/receipts/pending` with detail modal + candidate ranking.
-6. SSE notification on new pending item.
-7. Approve / Reject / Reassign endpoints with audit trail.
+1. Tabela `receipt_fingerprints` com pHash + txn_id + confidence + status.
+2. Detecção de duplicata: txn_id exato OU distância de Hamming pHash ≤5.
+3. Baixa automática apenas quando confidence ≥70 E match único de candidato.
+4. Em `ia-eco`/`ia-zero`: fallback LLM Vision desabilitado; baixa confiança → fila manual com template de notificação ao cliente.
+5. Página `/system/receipts/pending` com modal de detalhe + ranking de candidatos.
+6. Notificação SSE em novo item pendente.
+7. Endpoints Aprovar / Rejeitar / Reatribuir com trilha de auditoria.
 
-### Story 11.6: Audio Handling Per Operation Mode (Core)
+### Story 11.6: Tratamento de Áudio por Modo de Operação (Core)
 
-As a Customer,
-I want my voice messages to either be transcribed (when IA is on) or deflected with a friendly menu (when IA is off),
-So that I always get a response and the company has predictable cost.
+Como Cliente,
+quero que minhas mensagens de voz sejam transcritas (quando IA está ligada) ou desviadas com um menu amigável (quando IA está desligada),
+para sempre receber resposta e a empresa ter custo previsível.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Mode gate: `ia-full`/`ia-eco` transcribe; `ia-zero` deflects.
-2. Deflection template + immediate `main_menu` follow-up.
-3. 3 consecutive deflected audios → conversation marked `needs-attention`.
-4. Inbox shows deflected audios with "Ouvir mesmo assim" manual transcribe option.
+1. Gate por modo: `ia-full`/`ia-eco` transcrevem; `ia-zero` desvia.
+2. Template de desvio + follow-up imediato com `main_menu`.
+3. 3 áudios desviados consecutivos → conversa marcada como `needs-attention`.
+4. Inbox mostra áudios desviados com opção "Ouvir mesmo assim" para transcrição manual.
 5. Toggle `transcribe_in_eco_mode` (default ON).
-6. Max audio length config (default 5min) — auto-deflect even in ia-full.
+6. Config de duração máxima de áudio (default 5min) — auto-desvio mesmo em ia-full.
 
-### Story 11.7: Out-of-Scope Detection & Manager Learning (Core)
+### Story 11.7: Detecção de Fora de Escopo e Aprendizado pelo Gestor (Core)
 
-As a Manager,
-I want to see customer messages the system couldn't classify and easily turn my manual reply into a permanent rule,
-So that the autopilot keeps getting smarter over time.
+Como Gestor,
+quero ver mensagens de cliente que o sistema não conseguiu classificar e facilmente transformar minha resposta manual em uma regra permanente,
+para que o autopilot fique cada vez mais inteligente ao longo do tempo.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Out-of-scope detection across all modes (catch-all hit, LLM unknown, explicit handover).
-2. Materialized view + top-50 grouped messages page (Settings → Aprendizado).
-3. Inline "Salvar como regra" button on inbox messages flagged out_of_scope.
-4. Keyword suggestion via IDF (no LLM) + PT-BR stop word filter.
-5. Quick-form (not wizard) to create rule from a message in 2 clicks.
-6. Dashboard widget: "X out-of-scope this week — Treinar agora".
+1. Detecção de fora-de-escopo em todos os modos (hit no catch-all, LLM unknown, handover explícito).
+2. Materialized view + página de top-50 mensagens agrupadas (Configurações → Aprendizado).
+3. Botão inline "Salvar como regra" em mensagens do inbox flagueadas como out_of_scope.
+4. Sugestão de keyword via IDF (sem LLM) + filtro de stop words PT-BR.
+5. Quick-form (não wizard) para criar regra a partir de uma mensagem em 2 cliques.
+6. Widget de dashboard: "X fora-de-escopo esta semana — Treinar agora".
 
-### Story 11.8: Plan Tiers UI & Quotas (Core)
+### Story 11.8: UI de Tiers de Plano e Quotas (Core)
 
-As a Tenant Manager,
-I want to see which plan I'm on, what each plan includes, and what I'd unlock by upgrading,
-So that I can decide whether to increase my budget when I hit limits.
+Como Gestor do Tenant,
+quero ver em qual plano estou, o que cada plano inclui e o que destravaria fazendo upgrade,
+para decidir se aumento meu budget quando atingir os limites.
 
-**Acceptance Criteria:**
+**Critérios de Aceite:**
 
-1. Table `plan_tiers` system-wide (Starter / Pro / Business / Enterprise) with features matrix + token/msg limits.
-2. `tenants.plan_tier_id` FK.
-3. `PlanService.is_feature_included()` gates feature activation (ex.: Starter can't set `ia-full`).
-4. `effective_token_limit` = min(plan limit, manager setting).
-5. Settings → Plano: comparador horizontal + upgrade modal (V1 mailto, V2 billing real).
-6. Feature gates on token budget edit, mode change, LLM provider selection.
-7. Audit log entries on plan change (category=billing).
+1. Tabela `plan_tiers` system-wide (Starter / Pro / Business / Enterprise) com matriz de features + limites de tokens/msg.
+2. FK `tenants.plan_tier_id`.
+3. `PlanService.is_feature_included()` controla ativação de feature (ex.: Starter não pode setar `ia-full`).
+4. `effective_token_limit` = min(limite do plano, setting do gestor).
+5. Configurações → Plano: comparador horizontal + modal de upgrade (V1 mailto, V2 billing real).
+6. Feature gates na edição do budget de tokens, mudança de modo, seleção de provider LLM.
+7. Entradas no log de auditoria em mudança de plano (category=billing).
 
 ---
 

@@ -1,63 +1,63 @@
 ---
 epic: 10
 story: 3
-title: "Automated Collection Engine (Pre-due Reminders + Overdue Escalation)"
+title: "Motor de Cobrança Automatizada (Lembretes Pré-vencimento + Escalonamento de Vencidos)"
 type: "Core"
 status: ready-for-dev
 ---
 
-# Story 10.3: Automated Collection Engine
+# Story 10.3: Motor de Cobrança Automatizada
 
-## User Story
-As a System,
-I want to automatically send payment reminders before due date and escalate overdue installments,
-So that collection happens without manual intervention.
+## História de Usuário
+Como Sistema,
+quero enviar automaticamente lembretes de pagamento antes da data de vencimento e escalar parcelas vencidas,
+para que a cobrança aconteça sem intervenção manual.
 
-## Acceptance Criteria
+## Critérios de Aceite
 
-1. `collection_policy` configuration in `system_settings`: `reminder_days_before`, `overdue_escalation` (array of {days, action, template_id}), `agent_can_negotiate`, `agent_max_grace_days`, interest/fine rates, `updated_value_in_message`.
-2. Celery task `check_upcoming_due_dates` (daily 08:00): finds installments due in N days, sends reminder via WhatsApp channel using template.
-3. Celery task `check_overdue_installments` (daily 09:00): finds overdue installments, updates status to `vencido`, executes escalation action per policy (reminder → warn_block → block → notify_manager).
-4. Celery task `check_paid_installments` (every 30 min): detects paid installments, sends confirmation, triggers unblock if applicable.
-5. Message templates stored in `system_settings` with variables: {nome}, {valor}, {valor_atualizado}, {data_vencimento}, {dias_atraso}, {placa}, {contrato}.
-6. All messages sent via `IMessageChannel` (channel registry), not direct WhatsApp adapter.
-7. Agent orchestrator handles customer replies with negotiation autonomy (configurable).
-8. Frontend: collection policy configuration page at `/system/settings/collection`.
-9. Tests: verify reminder timing, escalation progression, template rendering.
+1. Configuração `collection_policy` em `system_settings`: `reminder_days_before`, `overdue_escalation` (array de {days, action, template_id}), `agent_can_negotiate`, `agent_max_grace_days`, taxas de juros/multa, `updated_value_in_message`.
+2. Task Celery `check_upcoming_due_dates` (diária 08:00): encontra parcelas que vencem em N dias, envia lembrete via canal WhatsApp usando template.
+3. Task Celery `check_overdue_installments` (diária 09:00): encontra parcelas vencidas, atualiza status para `vencido`, executa ação de escalonamento conforme política (reminder → warn_block → block → notify_manager).
+4. Task Celery `check_paid_installments` (a cada 30 min): detecta parcelas pagas, envia confirmação, dispara desbloqueio se aplicável.
+5. Templates de mensagem armazenados em `system_settings` com variáveis: {nome}, {valor}, {valor_atualizado}, {data_vencimento}, {dias_atraso}, {placa}, {contrato}.
+6. Todas as mensagens enviadas via `IMessageChannel` (channel registry), não pelo adapter direto do WhatsApp.
+7. Agent orchestrator trata respostas do cliente com autonomia de negociação (configurável).
+8. Frontend: página de configuração de política de cobrança em `/system/settings/collection`.
+9. Testes: verifica timing dos lembretes, progressão de escalonamento, renderização de templates.
 
-## Technical Context
+## Contexto Técnico
 
-### Architecture References
-- `docs/architecture-recurrence-and-collection.md` Sections 3, 4, 5
+### Referências de Arquitetura
+- `docs/architecture-recurrence-and-collection.md` Seções 3, 4, 5
 
-### Files to Create/Modify
+### Arquivos a Criar/Modificar
 ```
 backend-api/
 ├── app/workers/tasks/check_upcoming_due_dates.py
 ├── app/workers/tasks/check_overdue_installments.py
 ├── app/workers/tasks/check_paid_installments.py
-├── app/domain/finance/template_renderer.py      # Render message templates with variables
-├── app/api/v1/admin_routes.py                   # Add collection policy endpoints
+├── app/domain/finance/template_renderer.py      # Renderiza templates de mensagem com variáveis
+├── app/api/v1/admin_routes.py                   # Adiciona endpoints da política de cobrança
 frontend/
 ├── src/app/features/settings/collection-settings.component.ts/html/css
-├── src/app/features/system/system.routes.ts     # Add /settings/collection route
+├── src/app/features/system/system.routes.ts     # Adiciona rota /settings/collection
 ```
 
-### Dependencies
+### Dependências
 - Epic 6 (WhatsApp gateway, agent orchestrator, conversation store)
-- Story 10-1 (updated value calculation with correction)
-- `IMessageChannel` port + channel registry
+- Story 10-1 (cálculo de valor atualizado com correção)
+- Port `IMessageChannel` + channel registry
 
-### Technical Notes
-- Escalation actions: "reminder" (send template), "warn_block" (send warning), "block" (publish InstallmentOverdueEvent → vehicle hook), "notify_manager" (SSE notification)
-- Agent negotiation: when customer replies, AgentOrchestrator processes with collection system prompt. Agent can grant up to `agent_max_grace_days` extension.
-- All collection activity logged in `conversation_messages` for audit trail
+### Notas Técnicas
+- Ações de escalonamento: "reminder" (envia template), "warn_block" (envia aviso), "block" (publica InstallmentOverdueEvent → hook de veículo), "notify_manager" (notificação SSE)
+- Negociação do agente: quando o cliente responde, AgentOrchestrator processa com system prompt de cobrança. Agente pode conceder até `agent_max_grace_days` de extensão.
+- Toda atividade de cobrança logada em `conversation_messages` para trilha de auditoria
 
-### Session Context
-- Register 3 new Celery tasks in workers/__init__.py
-- Add beat_schedule entries with crontab
+### Contexto da Sessão
+- Registrar 3 novas tasks Celery em workers/__init__.py
+- Adicionar entradas no beat_schedule com crontab
 
-## Dev Checklist
-- [ ] All acceptance criteria met
-- [ ] Tests written and passing
-- [ ] No regressions
+## Checklist do Dev
+- [ ] Todos os critérios de aceite atendidos
+- [ ] Testes escritos e passando
+- [ ] Sem regressões

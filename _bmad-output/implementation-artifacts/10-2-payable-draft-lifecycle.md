@@ -1,48 +1,48 @@
 ---
 epic: 10
 story: 2
-title: "Payable Draft Lifecycle (Rascunho → Pendente → Pago/Cancelado)"
+title: "Ciclo de Vida do Título a Pagar (Rascunho → Pendente → Pago/Cancelado)"
 type: "Core"
 status: ready-for-dev
 ---
 
-# Story 10.2: Payable Draft Lifecycle
+# Story 10.2: Ciclo de Vida do Título a Pagar
 
-## User Story
-As a Manager,
-I want recurring payables generated as drafts that I can fill in and save,
-So that the system reminds me of fixed expenses without requiring exact values upfront.
+## História de Usuário
+Como Gestor,
+quero que títulos a pagar recorrentes sejam gerados como rascunhos que eu possa preencher e salvar,
+para que o sistema me lembre das despesas fixas sem exigir valores exatos antecipadamente.
 
-## Acceptance Criteria
+## Critérios de Aceite
 
-1. Payable status lifecycle enforced: `rascunho` → `pendente` → `pago` | `cancelado`.
-2. `rascunho`: can edit all fields, can DELETE (hard delete).
-3. `pendente`: can edit, can pay, can cancel (soft — sets `status=cancelado`, never hard delete).
-4. `pago` and `cancelado`: immutable.
-5. Recurring template generates payables with `status=rascunho` (update existing task).
-6. SSE notification to manager: "Título de {description} gerado como rascunho — preencha o valor".
-7. Frontend: visual distinction for rascunho (dashed border, pencil icon), "Preencher" button.
-8. Tests: verify lifecycle transitions, verify hard delete allowed only for rascunho.
+1. Ciclo de vida de status de título a pagar é obrigatório: `rascunho` → `pendente` → `pago` | `cancelado`.
+2. `rascunho`: pode editar todos os campos, pode DELETAR (hard delete).
+3. `pendente`: pode editar, pode pagar, pode cancelar (soft — seta `status=cancelado`, nunca hard delete).
+4. `pago` e `cancelado`: imutáveis.
+5. Template de recorrência gera títulos a pagar com `status=rascunho` (atualizar task existente).
+6. Notificação SSE ao gestor: "Título de {description} gerado como rascunho — preencha o valor".
+7. Frontend: distinção visual para rascunho (borda tracejada, ícone de lápis), botão "Preencher".
+8. Testes: verifica transições do ciclo de vida, verifica que hard delete é permitido apenas para rascunho.
 
-## Technical Context
+## Contexto Técnico
 
-### Architecture References
-- `docs/architecture-recurrence-and-collection.md` Section 2
+### Referências de Arquitetura
+- `docs/architecture-recurrence-and-collection.md` Seção 2
 
-### Files to Create/Modify
+### Arquivos a Criar/Modificar
 ```
 backend-api/
-├── app/api/v1/payable_routes.py            # Enforce lifecycle rules
-├── app/workers/tasks/generate_recurring_payables.py  # Status=rascunho + SSE notify
+├── app/api/v1/payable_routes.py            # Aplica regras do ciclo de vida
+├── app/workers/tasks/generate_recurring_payables.py  # Status=rascunho + notificação SSE
 frontend/
-├── src/app/features/finance/payables-list.component.html  # Visual distinction
+├── src/app/features/finance/payables-list.component.html  # Distinção visual
 ```
 
-### Session Context
-- Existing payable table already has `status` column
-- SSE infrastructure exists (app/api/sse.py)
+### Contexto da Sessão
+- Tabela de títulos a pagar já tem coluna `status`
+- Infraestrutura SSE existe (app/api/sse.py)
 
-## Dev Checklist
-- [ ] All acceptance criteria met
-- [ ] Tests written and passing
-- [ ] No regressions
+## Checklist do Dev
+- [ ] Todos os critérios de aceite atendidos
+- [ ] Testes escritos e passando
+- [ ] Sem regressões

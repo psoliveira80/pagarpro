@@ -1,104 +1,104 @@
 # ARCHITECTURE — {{product_name}} (Fullstack)
 
-> **Metodo:** BMAD — Architect Phase (Winston)
+> **Método:** BMAD — Architect Phase (Winston)
 > **Tipo:** Greenfield Fullstack
 > **Stack Confirmada:** Python 3.12 + FastAPI + PostgreSQL 16 + Redis 7 + MinIO | Angular 21+ Standalone + Signals + Tailwind v4 + Heroicons
-> **Tema Central:** Plug-and-Play atraves de **Ports & Adapters** (Hexagonal Architecture) com **Asset Abstraction Layer** para modulos verticais
-> **Versao:** 2.0
+> **Tema Central:** Plug-and-Play através de **Ports & Adapters** (Hexagonal Architecture) com **Asset Abstraction Layer** para módulos verticais
+> **Versão:** 2.0
 > **Data:** 07/05/2026
 > **Documentos relacionados:** `PRD.md`, `angular-structure.md`, `frontend_architecture_manifesto.md`
 
 ---
 
-## 1. Introducao
+## 1. Introdução
 
-### 1.1 Proposito
+### 1.1 Propósito
 
-Este documento descreve **a arquitetura tecnica completa** do {{product_name}}, transformando os requisitos do PRD em um blueprint executavel: estilo arquitetural, tecnologias precisas, modelos de dados, contratos de API, estrutura de pastas, fluxos criticos, padroes de erro, seguranca, performance, testes e deploy. E a fonte unica da verdade para qualquer dev humano ou agente AI implementar features sem ambiguidade.
+Este documento descreve **a arquitetura técnica completa** do {{product_name}}, transformando os requisitos do PRD em um blueprint executável: estilo arquitetural, tecnologias precisas, modelos de dados, contratos de API, estrutura de pastas, fluxos críticos, padrões de erro, segurança, performance, testes e deploy. É a fonte única da verdade para qualquer dev humano ou agente AI implementar features sem ambiguidade.
 
-{{product_name}} e uma **plataforma generica de cobranca recorrente e gestao de recebimentos** com modulos verticais plugaveis por tipo de ativo. O primeiro modulo vertical e **Vehicles** (gestao de frotas de aluguel), mas a arquitetura suporta qualquer vertical — imoveis, equipamentos, maquinario, etc. — sem alteracao no Core.
+{{product_name}} é uma **plataforma genérica de cobrança recorrente e gestão de recebimentos** com módulos verticais plugáveis por tipo de ativo. O primeiro módulo vertical é **Vehicles** (gestão de frotas de aluguel), mas a arquitetura suporta qualquer vertical — imóveis, equipamentos, maquinário, etc. — sem alteração no Core.
 
 ### 1.2 Filosofia Arquitetural
 
-- **Domain-Driven Design (DDD) leve**: dominio puro no centro, infraestrutura na periferia, dependencias apontam para dentro.
-- **Hexagonal (Ports & Adapters)**: toda integracao externa e uma Port (interface) com 1+ Adapter implementando-a; troca de fornecedor nao toca regras de negocio.
-- **Core + Module Separation**: o nucleo da plataforma (billing, collections, reconciliation, auth) e completamente independente de qualquer vertical de ativo. Modulos verticais se registram via `IAssetModule` e reagem a Domain Events do Core.
-- **CQRS leve onde fizer sentido**: leituras de relatorios podem usar projections/views materializadas; escritas no dominio rico.
-- **Event sourcing seletivo**: contratos e titulos tem log de eventos imutavel (`contract_events`, `installment_adjustments`, `audit_log`); o resto e state-based classico.
+- **Domain-Driven Design (DDD) leve**: domínio puro no centro, infraestrutura na periferia, dependências apontam para dentro.
+- **Hexagonal (Ports & Adapters)**: toda integração externa é uma Port (interface) com 1+ Adapter implementando-a; troca de fornecedor não toca regras de negócio.
+- **Core + Module Separation**: o núcleo da plataforma (billing, collections, reconciliation, auth) é completamente independente de qualquer vertical de ativo. Módulos verticais se registram via `IAssetModule` e reagem a Domain Events do Core.
+- **CQRS leve onde fizer sentido**: leituras de relatórios podem usar projections/views materializadas; escritas no domínio rico.
+- **Event sourcing seletivo**: contratos e títulos têm log de eventos imutável (`contract_events`, `installment_adjustments`, `audit_log`); o resto é state-based clássico.
 - **Async first**: FastAPI async, SQLAlchemy 2 async, Celery para jobs longos, fila Redis Streams para eventos de webhook.
-- **Functional Core, Imperative Shell**: calculos financeiros (juros, multa, score, ROI) sao funcoes puras testaveis; I/O fica nos services.
-- **Boring tech wins**: PostgreSQL faz tudo (relacional, JSONB, full-text, vetorial via `pgvector`, fila leve via `LISTEN/NOTIFY` opcional). Apenas adicionamos especialista quando PG nao da conta.
-- **Default payment = Pix via WhatsApp (custo zero)**: o sistema gera QR Code Pix estatico/dinamico proprio e envia via WhatsApp. Gateways de pagamento (Asaas, Stripe, Efi) sao **plugins opcionais** — nunca obrigatorios.
+- **Functional Core, Imperative Shell**: cálculos financeiros (juros, multa, score, ROI) são funções puras testáveis; I/O fica nos services.
+- **Boring tech wins**: PostgreSQL faz tudo (relacional, JSONB, full-text, vetorial via `pgvector`, fila leve via `LISTEN/NOTIFY` opcional). Apenas adicionamos especialista quando PG não dá conta.
+- **Default payment = Pix via WhatsApp (custo zero)**: o sistema gera QR Code Pix estático/dinâmico próprio e envia via WhatsApp. Gateways de pagamento (Asaas, Stripe, Efi) são **plugins opcionais** — nunca obrigatórios.
 
-### 1.3 Decisoes Arquiteturais Criticas (Sumario)
+### 1.3 Decisões Arquiteturais Críticas (Sumário)
 
-| Decisao                                  | Escolha                       | Justificativa Curta                                                              |
+| Decisão                                  | Escolha                       | Justificativa Curta                                                              |
 |------------------------------------------|-------------------------------|----------------------------------------------------------------------------------|
-| Real-time geral (notificacoes, dashboards) | **SSE**                      | Unidirecional, leve, reconexao nativa, atras de proxy reverso facil.             |
-| Real-time chat WhatsApp                  | **WebSocket**                 | Bidirecional, baixissima latencia para typing/leitura/envio.                     |
+| Real-time geral (notificações, dashboards) | **SSE**                      | Unidirecional, leve, reconexão nativa, atrás de proxy reverso fácil.             |
+| Real-time chat WhatsApp                  | **WebSocket**                 | Bidirecional, baixíssima latência para typing/leitura/envio.                     |
 | Polling                                  | **Fallback only**             | Apenas se SSE/WS falhar (degraded mode).                                         |
-| ORM                                      | **SQLAlchemy 2 (async + typed)** | Ecosistema maduro, migrations Alembic, suporte completo a PG.                  |
+| ORM                                      | **SQLAlchemy 2 (async + typed)** | Ecossistema maduro, migrations Alembic, suporte completo a PG.                  |
 | Workers                                  | **Celery + Redis**            | Ecossistema vasto, beat embutido para cron, retry policies prontas.              |
-| Vetorial (RAG)                           | **pgvector**                  | Roda no PG ja presente, evita Qdrant/Weaviate como dependencia separada.         |
-| Storage de arquivos                      | **MinIO** (S3-compatible)     | Self-hosted, plug-and-play para AWS S3 / R2 / B2 sem alterar codigo.             |
-| Auth                                     | **JWT RS256 + refresh cookie**| Stateless, segredo so no backend (chave privada), refresh em cookie HttpOnly.    |
+| Vetorial (RAG)                           | **pgvector**                  | Roda no PG já presente, evita Qdrant/Weaviate como dependência separada.         |
+| Storage de arquivos                      | **MinIO** (S3-compatible)     | Self-hosted, plug-and-play para AWS S3 / R2 / B2 sem alterar código.             |
+| Auth                                     | **JWT RS256 + refresh cookie**| Stateless, segredo só no backend (chave privada), refresh em cookie HttpOnly.    |
 | Frontend state                           | **Signals + resource() API**  | Conforme manifesto do cliente; zero NgRx; estado local-first.                    |
-| Estilo                                   | **Tailwind v4 + tokens shadcn-like** | Conforme manifesto; tudo via variaveis CSS.                                |
-| LLM default                              | **OpenAI GPT-4o (config-able)** | Custo/qualidade/latencia atual; trocavel por adapter para Claude/Gemini/Ollama. |
+| Estilo                                   | **Tailwind v4 + tokens shadcn-like** | Conforme manifesto; tudo via variáveis CSS.                                |
+| LLM default                              | **OpenAI GPT-4o (config-able)** | Custo/qualidade/latência atual; trocável por adapter para Claude/Gemini/Ollama. |
 | WhatsApp default                         | **Evolution API (self-hosted)**| Open-source, custo zero por mensagem, sob controle do cliente.                  |
-| Bank reconciliation default              | **OFX + PDF parsing local**   | Sem custo recorrente; Pluggy e adapter opcional pago.                            |
-| Containerizacao                          | **Docker** (compose dev / k8s ou Coolify prod) | Ubiquo, simples.                                                |
-| Pagamento default                        | **Pix via WhatsApp (sem gateway)**| Custo zero; gateways sao plugins opcionais.                                 |
-| Modularizacao de ativos                  | **Asset Abstraction Layer + IAssetModule** | Core generico; verticais plugaveis por asset_type.                   |
+| Bank reconciliation default              | **OFX + PDF parsing local**   | Sem custo recorrente; Pluggy é adapter opcional pago.                            |
+| Containerização                          | **Docker** (compose dev / k8s ou Coolify prod) | Ubíquo, simples.                                                |
+| Pagamento default                        | **Pix via WhatsApp (sem gateway)**| Custo zero; gateways são plugins opcionais.                                 |
+| Modularização de ativos                  | **Asset Abstraction Layer + IAssetModule** | Core genérico; verticais plugáveis por asset_type.                   |
 
-### 1.4 Glossario
+### 1.4 Glossário
 
 - **Port**: interface (Protocol em Python, abstract class) que define contrato com mundo externo.
-- **Adapter**: implementacao concreta de uma Port (ex.: `EvolutionApiAdapter` implementa `IWhatsAppGateway`).
-- **Use Case** (alias: Service / Application Service): orquestra logica de dominio + adapters para resolver uma intencao do usuario.
-- **Repository**: porta para persistencia (esconde SQL).
-- **Domain Event**: fato imutavel que ocorreu no dominio (ex.: `InstallmentPaid`, `InstallmentOverdue`).
-- **Module Hook**: handler registrado por um modulo vertical que reage a Domain Events do Core, roteado por `asset_type`.
-- **DTO**: Data Transfer Object — Pydantic models para entrada/saida de API.
+- **Adapter**: implementação concreta de uma Port (ex.: `EvolutionApiAdapter` implementa `IWhatsAppGateway`).
+- **Use Case** (alias: Service / Application Service): orquestra lógica de domínio + adapters para resolver uma intenção do usuário.
+- **Repository**: porta para persistência (esconde SQL).
+- **Domain Event**: fato imutável que ocorreu no domínio (ex.: `InstallmentPaid`, `InstallmentOverdue`).
+- **Module Hook**: handler registrado por um módulo vertical que reage a Domain Events do Core, roteado por `asset_type`.
+- **DTO**: Data Transfer Object — Pydantic models para entrada/saída de API.
 - **Schema**: SQLAlchemy ORM model (na infraestrutura).
-- **Entity**: objeto de dominio com identidade (ex.: `Customer`).
-- **Value Object**: objeto imutavel sem identidade (ex.: `Money`, `Cpf`, `PhoneE164`).
-- **Asset**: entidade generica representando qualquer bem sob contrato recorrente (veiculo, imovel, equipamento).
-- **Vertical Module**: pacote plugavel que especializa o comportamento do Core para um tipo de ativo (ex.: `vehicles`, `properties`).
+- **Entity**: objeto de domínio com identidade (ex.: `Customer`).
+- **Value Object**: objeto imutável sem identidade (ex.: `Money`, `Cpf`, `PhoneE164`).
+- **Asset**: entidade genérica representando qualquer bem sob contrato recorrente (veículo, imóvel, equipamento).
+- **Vertical Module**: pacote plugável que especializa o comportamento do Core para um tipo de ativo (ex.: `vehicles`, `properties`).
 
-#### Termos do Dominio Financeiro (Epico 12+, nomenclatura PT-BR)
+#### Termos do Domínio Financeiro (Épico 12+, nomenclatura PT-BR)
 
-- **parcela**: titulo de pagamento mensal gerado para cobrir o uso do veiculo durante o periodo de locacao. Nao e uma prestacao de financiamento — e a contraprestacao pelo uso.
-- **opcao_compra**: titulo unico e opcional gerado ao final do contrato. Se pago pelo cliente, transfere a propriedade do veiculo. Apenas 1 por contrato (enforced por unique index).
-- **saldo_devedor**: soma dos titulos do tipo `parcela` em status `vencido` de um determinado contrato. Calculado como `SUM(titulos WHERE tipo='parcela' AND status='vencido')`. NAO e o valor residual total do contrato — e apenas o montante em atraso no momento da consulta.
-- **passivo_inoperante**: saldo em atraso de um contrato ja encerrado. O contrato nao existe mais operacionalmente, mas a divida persiste vinculada ao CPF do cliente. Registrado na tabela `passivos_inoperantes`.
-- **politica_cobranca**: conjunto de parametros que regem a automatizacao do motor de cobranca (carencia, multa, juros, limites de suspensao e encerramento). Unica por empresa.
-- **motor de cobranca**: conjunto de workers Celery (coordinators + workers de lote) responsavel por gerar titulos, aplicar encargos, enviar notificacoes e acionar bloqueios de acordo com a politica configurada.
-- **coordinator**: task Celery leve que roda no Beat, consulta IDs elegíveis via `SELECT FOR UPDATE SKIP LOCKED`, e fragmenta o trabalho em lotes (chunks de 50) despachados para workers especializados. Nao executa logica de negocio diretamente.
-- **execucao_motor**: registro de auditoria de cada rodada do motor de cobranca; armazena totais processados, erros e duracao.
+- **parcela**: título de pagamento mensal gerado para cobrir o uso do veículo durante o período de locação. Não é uma prestação de financiamento — é a contraprestação pelo uso.
+- **opcao_compra**: título único e opcional gerado ao final do contrato. Se pago pelo cliente, transfere a propriedade do veículo. Apenas 1 por contrato (enforced por unique index).
+- **saldo_devedor**: soma dos títulos do tipo `parcela` em status `vencido` de um determinado contrato. Calculado como `SUM(titulos WHERE tipo='parcela' AND status='vencido')`. NÃO é o valor residual total do contrato — é apenas o montante em atraso no momento da consulta.
+- **passivo_inoperante**: saldo em atraso de um contrato já encerrado. O contrato não existe mais operacionalmente, mas a dívida persiste vinculada ao CPF do cliente. Registrado na tabela `passivos_inoperantes`.
+- **politica_cobranca**: conjunto de parâmetros que regem a automatização do motor de cobrança (carência, multa, juros, limites de suspensão e encerramento). Única por empresa.
+- **motor de cobrança**: conjunto de workers Celery (coordinators + workers de lote) responsável por gerar títulos, aplicar encargos, enviar notificações e acionar bloqueios de acordo com a política configurada.
+- **coordinator**: task Celery leve que roda no Beat, consulta IDs elegíveis via `SELECT FOR UPDATE SKIP LOCKED`, e fragmenta o trabalho em lotes (chunks de 50) despachados para workers especializados. Não executa lógica de negócio diretamente.
+- **execucao_motor**: registro de auditoria de cada rodada do motor de cobrança; armazena totais processados, erros e duração.
 
 ### 1.5 Change Log
 
-| Data       | Versao | Descricao                                                          | Autor |
+| Data       | Versão | Descrição                                                          | Autor |
 |------------|--------|--------------------------------------------------------------------|-------|
-| 07/05/2026 | 1.0    | Criacao inicial a partir do PRD                                    | Winston (Architect) |
-| 07/05/2026 | 2.0    | Reescrita completa: Core generico + Asset Abstraction Layer + Modules | Winston (Architect) |
-| 22/05/2026 | 3.0    | Adicao: arquitetura de 7 filas Celery; padrao fan-out coordinator; inventario de 32 tasks; modelo de negocio locacao com opcao de compra; novas tabelas (tipo_titulo, politica_cobranca, passivos_inoperantes, execucoes_motor); maquina de estados do contrato (7 transicoes); ADR sobre Python vs Go para workers; convencao PT-BR para dominio financeiro (Epico 12+); expansao do glossario | Winston (Architect) |
+| 07/05/2026 | 1.0    | Criação inicial a partir do PRD                                    | Winston (Architect) |
+| 07/05/2026 | 2.0    | Reescrita completa: Core genérico + Asset Abstraction Layer + Modules | Winston (Architect) |
+| 22/05/2026 | 3.0    | Adição: arquitetura de 7 filas Celery; padrão fan-out coordinator; inventário de 32 tasks; modelo de negócio locação com opção de compra; novas tabelas (tipo_titulo, politica_cobranca, passivos_inoperantes, execucoes_motor); máquina de estados do contrato (7 transições); ADR sobre Python vs Go para workers; convenção PT-BR para domínio financeiro (Épico 12+); expansão do glossário | Winston (Architect) |
 
 ---
 
-## 2. High Level Architecture
+## 2. Arquitetura em Alto Nível
 
-### 2.1 Visao Geral em uma Frase
+### 2.1 Visão Geral em uma Frase
 
-> {{product_name}} e uma **plataforma web fullstack de cobranca recorrente e gestao de recebimentos** com SPA Angular consumindo API REST/SSE/WebSocket FastAPI, persistindo em PostgreSQL e MinIO, com workers Celery processando webhooks, jobs agendados e um **Agent Orchestrator IA** multi-canal (WhatsApp + chat in-app) com tools gated por RBAC (cobranca como caso de uso primario), **abstraindo todo fornecedor externo via Ports & Adapters e todo vertical de ativo via Asset Abstraction Layer com modulos plugaveis** — sendo o primeiro modulo **Vehicles** (gestao de frotas).
+> {{product_name}} é uma **plataforma web fullstack de cobrança recorrente e gestão de recebimentos** com SPA Angular consumindo API REST/SSE/WebSocket FastAPI, persistindo em PostgreSQL e MinIO, com workers Celery processando webhooks, jobs agendados e um **Agent Orchestrator IA** multi-canal (WhatsApp + chat in-app) com tools gated por RBAC (cobrança como caso de uso primário), **abstraindo todo fornecedor externo via Ports & Adapters e todo vertical de ativo via Asset Abstraction Layer com módulos plugáveis** — sendo o primeiro módulo **Vehicles** (gestão de frotas).
 
-### 2.2 Diagrama de Sistemas (C4 — Nivel 1)
+### 2.2 Diagrama de Sistemas (C4 — Nível 1)
 
 ```mermaid
 flowchart LR
-    User[Usuario Gestor / Operador / Validador] -->|HTTPS| Web[Angular SPA<br/>frontend]
-    Client[Cliente / Locatario] -->|WhatsApp| WAGW[(WhatsApp Gateway<br/>Evolution / Z-API / Cloud)]
+    User[Usuário Gestor / Operador / Validador] -->|HTTPS| Web[Angular SPA<br/>frontend]
+    Client[Cliente / Locatário] -->|WhatsApp| WAGW[(WhatsApp Gateway<br/>Evolution / Z-API / Cloud)]
     Web -->|REST + SSE + WS| API[FastAPI<br/>api]
     API <-->|SQL| DB[(PostgreSQL 16<br/>+ pgvector)]
     API <-->|Cache + Pub/Sub| Redis[(Redis 7)]
@@ -117,11 +117,11 @@ flowchart LR
     PIX -->|Webhook| API
 ```
 
-### 2.3 Diagrama de Containers (C4 — Nivel 2)
+### 2.3 Diagrama de Containers (C4 — Nível 2)
 
 ```mermaid
 flowchart TB
-    subgraph Browser["Browser do Usuario"]
+    subgraph Browser["Browser do Usuário"]
         SPA[Angular SPA<br/>Standalone + Signals]
         SW[Service Worker<br/>PWA]
     end
@@ -171,7 +171,7 @@ flowchart TB
     OF -.webhook.-> NG
 ```
 
-### 2.4 Padrao Arquitetural por Camada (Backend)
+### 2.4 Padrão Arquitetural por Camada (Backend)
 
 ```mermaid
 flowchart TB
@@ -189,9 +189,9 @@ flowchart TB
     style MOD fill:#e0e7ff,stroke:#3730a3
 ```
 
-**Regra de dependencia**: setas so apontam para dentro (HTTP -> APP -> DOM <- INFRA/MOD). O dominio nunca importa nada de infraestrutura. Adapters e Modules implementam ports definidos no dominio.
+**Regra de dependência**: setas só apontam para dentro (HTTP -> APP -> DOM <- INFRA/MOD). O domínio nunca importa nada de infraestrutura. Adapters e Modules implementam ports definidos no domínio.
 
-### 2.5 Padrao Arquitetural por Camada (Frontend)
+### 2.5 Padrão Arquitetural por Camada (Frontend)
 
 Conforme `frontend_architecture_manifesto.md`:
 
@@ -210,16 +210,16 @@ flowchart TB
 - **Estado**: signals locais nos componentes; signal services em `core/` apenas para estado verdadeiramente global (auth, theme, notifications, current-user).
 - **Data fetching**: API `resource()` do Angular 21 (substitui RxJS para casos comuns), com `inject(HttpClient)`.
 - **Roteamento**: lazy loading por feature shell (`auth.routes.ts`, `system.routes.ts`).
-- **Reatividade**: `computed()` para derivacoes; `effect()` apenas em side-effects controlados.
+- **Reatividade**: `computed()` para derivações; `effect()` apenas em side-effects controlados.
 
-### 2.6 Cross-Cutting Concerns
+### 2.6 Preocupações Transversais
 
 - **Logging**: `structlog` no Python emitindo JSON em stdout, capturado por loki/promtail ou outro sink.
 - **Tracing**: OpenTelemetry SDK auto-instrumenting FastAPI/SQLAlchemy/HTTPX/Celery; export OTLP para Tempo/Jaeger.
-- **Metricas**: `prometheus-fastapi-instrumentator` em `/metrics`.
+- **Métricas**: `prometheus-fastapi-instrumentator` em `/metrics`.
 - **Correlation ID**: middleware injeta UUID por request; propagado via header `X-Request-Id` para workers e adapters.
-- **i18n**: backend devolve codigos de erro estruturados; frontend traduz com Angular i18n nativo (compile-time).
-- **Feature flags**: tabela `feature_flags` + servico simples; flags lidas em runtime sem deploy.
+- **i18n**: backend devolve códigos de erro estruturados; frontend traduz com Angular i18n nativo (compile-time).
+- **Feature flags**: tabela `feature_flags` + serviço simples; flags lidas em runtime sem deploy.
 
 ---
 
@@ -229,87 +229,87 @@ flowchart TB
 
 ### 3.1 Backend
 
-| Categoria              | Tecnologia                            | Versao           | Proposito                                              | Notas |
+| Categoria              | Tecnologia                            | Versão           | Propósito                                              | Notas |
 |------------------------|---------------------------------------|------------------|--------------------------------------------------------|-------|
-| Linguagem              | Python                                | 3.12+            | Runtime                                                | Type hints obrigatorios. |
+| Linguagem              | Python                                | 3.12+            | Runtime                                                | Type hints obrigatórios. |
 | Web Framework          | FastAPI                               | >= 0.115          | API REST + WebSocket + SSE                             | Async-first.            |
 | ASGI Server            | uvicorn (com `--workers`) ou Granian | >= 0.30           | Process model                                          | Granian opcional para perf. |
-| Validacao / DTO        | Pydantic                              | v2 (>= 2.9)       | Schemas in/out                                         | `model_config` strict. |
-| ORM                    | SQLAlchemy                            | 2.x async        | Persistencia                                            | `Mapped[T]` typed. |
+| Validação / DTO        | Pydantic                              | v2 (>= 2.9)       | Schemas in/out                                         | `model_config` strict. |
+| ORM                    | SQLAlchemy                            | 2.x async        | Persistência                                            | `Mapped[T]` typed. |
 | Migrations             | Alembic                               | >= 1.13           | Versionamento de schema                                | Gerenciado por scripts. |
-| Banco                  | PostgreSQL                            | 16+              | Banco principal                                         | + extensoes `pgcrypto`, `pg_trgm`, `pgvector`, `unaccent`. |
+| Banco                  | PostgreSQL                            | 16+              | Banco principal                                         | + extensões `pgcrypto`, `pg_trgm`, `pgvector`, `unaccent`. |
 | Cache + Queue + PubSub | Redis                                 | 7+               | Caching, broker Celery, fila webhook, pubsub WS        |  |
-| Workers                | Celery                                | >= 5.4            | Jobs assincronos + cron                                 | Beat para agendados. |
+| Workers                | Celery                                | >= 5.4            | Jobs assíncronos + cron                                 | Beat para agendados. |
 | HTTP Client            | httpx                                 | >= 0.27           | Chamadas a adapters externos                           | Async, retries via `tenacity`. |
 | Resilience             | tenacity                              | >= 9              | Retry/backoff/circuit breaker                          |  |
 | Auth Tokens            | python-jose                           | >= 3.3            | JWT RS256                                              |  |
 | Hashing                | argon2-cffi                           | >= 23             | Senhas                                                  |  |
-| OCR                    | pytesseract + opencv-python           | latest           | Leitura de comprovantes                                 | Pre-processamento OpenCV. |
-| Audio Transcription    | openai (Whisper API)                  | >= 1.40           | Transcricao de audio para texto                         | Port `IAudioTranscriber`; alternativas: whisper.cpp local, Google Speech, Azure Speech. |
-| LLM SDK                | LiteLLM **ou** proprio                | >= 1.40           | Abstracao multi-provider                                | LiteLLM facilita troca. |
+| OCR                    | pytesseract + opencv-python           | latest           | Leitura de comprovantes                                 | Pré-processamento OpenCV. |
+| Audio Transcription    | openai (Whisper API)                  | >= 1.40           | Transcrição de áudio para texto                         | Port `IAudioTranscriber`; alternativas: whisper.cpp local, Google Speech, Azure Speech. |
+| LLM SDK                | LiteLLM **ou** próprio                | >= 1.40           | Abstração multi-provider                                | LiteLLM facilita troca. |
 | PDF Render             | WeasyPrint                            | >= 62             | Contratos                                              | Templates Jinja2. |
 | PDF Read               | pdfplumber                            | >= 0.11           | Extratos PDF                                            |  |
-| OFX Parser             | ofxparse                              | >= 0.21           | Importacao OFX                                         |  |
-| Pix BR Code            | pix-utils (ou propria)                | latest           | QR Code estatico                                        |  |
-| Storage SDK            | boto3                                 | >= 1.34           | Cliente S3-compatible                                   | Configuravel endpoint MinIO. |
+| OFX Parser             | ofxparse                              | >= 0.21           | Importação OFX                                         |  |
+| Pix BR Code            | pix-utils (ou própria)                | latest           | QR Code estático                                        |  |
+| Storage SDK            | boto3                                 | >= 1.34           | Cliente S3-compatible                                   | Configurável endpoint MinIO. |
 | Logs                   | structlog                             | >= 24             | JSON logs                                               |  |
-| Tracing                | OpenTelemetry SDK                     | >= 1.27           | Instrumentacao                                          |  |
+| Tracing                | OpenTelemetry SDK                     | >= 1.27           | Instrumentação                                          |  |
 | Metrics                | prometheus-fastapi-instrumentator     | >= 7              | `/metrics`                                              |  |
 | Test Framework         | pytest + pytest-asyncio + pytest-cov  | latest           | Tests                                                   |  |
 | Test DB / containers   | testcontainers                        | latest           | Postgres real em CI                                     |  |
 | Contract Tests         | schemathesis                          | >= 3.36           | Property tests sobre OpenAPI                            |  |
 | Lint                   | ruff                                  | latest           | Linter + formatter                                      |  |
 | Type Check             | mypy strict                           | latest           | Type safety                                             |  |
-| Dependency Mgmt        | uv                                    | latest           | Resolver + virtualenv ultrarrapido                      | Alternativa: poetry. |
+| Dependency Mgmt        | uv                                    | latest           | Resolver + virtualenv ultrarrápido                      | Alternativa: poetry. |
 
 ### 3.2 Frontend
 
-| Categoria              | Tecnologia                       | Versao        | Proposito                            | Notas |
+| Categoria              | Tecnologia                       | Versão        | Propósito                            | Notas |
 |------------------------|----------------------------------|---------------|---------------------------------------|-------|
 | Linguagem              | TypeScript                       | >= 5.6         | Tudo                                   | `strict: true`. |
 | Framework              | Angular                          | 21+ standalone| SPA                                    | Sem NgModules. |
-| Reatividade            | Signals + resource() + rxjs (legacy minimo) | nativo Angular 21 | Estado e dados | RxJS apenas onde resource nao cobre. |
-| Styling                | Tailwind CSS                     | v4            | Utility-first                          | Tudo via classes utilitarias. |
-| Design System          | Tokens shadcn-like (proprio)     | —             | Variaveis CSS em `:root`               | Conforme manifesto. |
-| Icones                 | @ng-icons/core + @ng-icons/heroicons | latest    | Iconografia unica                       |  |
+| Reatividade            | Signals + resource() + rxjs (legacy mínimo) | nativo Angular 21 | Estado e dados | RxJS apenas onde resource não cobre. |
+| Styling                | Tailwind CSS                     | v4            | Utility-first                          | Tudo via classes utilitárias. |
+| Design System          | Tokens shadcn-like (próprio)     | —             | Variáveis CSS em `:root`               | Conforme manifesto. |
+| Ícones                 | @ng-icons/core + @ng-icons/heroicons | latest    | Iconografia única                       |  |
 | Forms                  | Reactive Forms tipados           | nativo        | Forms                                   |  |
 | Routing                | Angular Router                   | nativo        | Lazy by feature                         |  |
 | HTTP                   | HttpClient + interceptors         | nativo        | API calls                               |  |
 | WebSocket              | RxJS WebSocketSubject **ou** native WebSocket wrapper | nativo | Chat WhatsApp |  |
-| SSE                    | EventSource API + wrapper         | nativo        | Notificacoes                            |  |
-| Drag-and-Drop          | @angular/cdk/drag-drop            | nativo CDK    | Conciliacao, schedule builder           |  |
-| Charts                 | ngx-echarts (ECharts)             | latest        | Graficos sofisticados                   | Alternativa: Chart.js. |
+| SSE                    | EventSource API + wrapper         | nativo        | Notificações                            |  |
+| Drag-and-Drop          | @angular/cdk/drag-drop            | nativo CDK    | Conciliação, schedule builder           |  |
+| Charts                 | ngx-echarts (ECharts)             | latest        | Gráficos sofisticados                   | Alternativa: Chart.js. |
 | Map                    | Leaflet + @asymmetrik/ngx-leaflet | latest        | Mapa de ativos (ex.: frota)            | OSM tiles default. |
 | PDF Viewer (in-app)    | ngx-extended-pdf-viewer           | latest        | Visualizar contratos                    |  |
 | Image Crop             | ngx-image-cropper                 | latest        | Foto perfil cliente                     |  |
-| Rich Text Editor       | Tiptap                            | latest        | Clausulas de contrato + templates IA    |  |
-| Toast / Notifications  | Proprio em `shared/components/toast` | —          | Stack unificada                         |  |
+| Rich Text Editor       | Tiptap                            | latest        | Cláusulas de contrato + templates IA    |  |
+| Toast / Notifications  | Próprio em `shared/components/toast` | —          | Stack unificada                         |  |
 | Date utils             | date-fns                          | >= 3           | Datas                                   | ISO + tz America/Sao_Paulo. |
 | BR Validators          | @brazilian-utils/brazilian-utils  | latest        | CPF, CNPJ, CEP, placa                   |  |
 | Build                  | Angular CLI + esbuild             | latest        | Bundler                                 |  |
 | Testing                | Vitest + @ngneat/spectator        | latest        | Unit / component                        |  |
-| E2E                    | Playwright                        | latest        | Fluxos criticos                         |  |
+| E2E                    | Playwright                        | latest        | Fluxos críticos                         |  |
 | Lint                   | ESLint + @angular-eslint          | latest        | Lint                                    |  |
 | Format                 | Prettier                          | latest        | Format                                  |  |
 | Style Lint             | stylelint                         | latest        | CSS                                     |  |
-| Storybook              | Storybook for Angular             | latest        | Catalogo de componentes                 |  |
+| Storybook              | Storybook for Angular             | latest        | Catálogo de componentes                 |  |
 
-### 3.3 Infra & Ops
+### 3.3 Infraestrutura e Operações
 
-| Categoria              | Tecnologia                       | Proposito                              |
+| Categoria              | Tecnologia                       | Propósito                              |
 |------------------------|----------------------------------|-----------------------------------------|
 | Container              | Docker + BuildKit                | Imagens                                  |
-| Orquestracao (dev)     | docker-compose                    | Stack local                              |
-| Orquestracao (prod)    | Coolify / Dokploy / k8s          | A definir com cliente                    |
-| Reverse Proxy          | Caddy ou Traefik                  | TLS automatico                           |
+| Orquestração (dev)     | docker-compose                    | Stack local                              |
+| Orquestração (prod)    | Coolify / Dokploy / k8s          | A definir com cliente                    |
+| Reverse Proxy          | Caddy ou Traefik                  | TLS automático                           |
 | CI/CD                  | GitHub Actions                    | Pipeline                                 |
-| Observability          | Prometheus + Grafana + Loki + Tempo | Metricas/logs/traces                  |
+| Observability          | Prometheus + Grafana + Loki + Tempo | Métricas/logs/traces                  |
 | Secrets                | HashiCorp Vault ou Doppler        | Gerenciamento                            |
 | Backup                 | wal-g + s3 ou rclone              | DB + Object store                        |
 
 ---
 
-## 4. Data Models (Dominio)
+## 4. Modelos de Dados (Domínio)
 
 ### 4.1 Bounded Contexts
 
@@ -338,98 +338,98 @@ flowchart LR
     VehiclesMod -.-> Integrations
 ```
 
-### 4.2 Entities & Value Objects (visao de dominio)
+### 4.2 Entidades e Value Objects (visão de domínio)
 
-#### Identity
+#### Identidade
 
 - **User** (Entity): `id`, `email`, `password_hash`, `full_name`, `is_active`, `is_mfa_enabled`, `mfa_secret_encrypted`, timestamps. Relacionamento N:N com `Role` via `user_roles`.
 - **Role** (Entity): `id`, `name`, `description`. Relacionamento N:N com `Permission`.
 - **Permission** (Value-like): `id`, `code` (`customers.create`, `installments.write_off`, etc), `description`.
 - **AuditLogEntry** (immutable): `id`, `user_id`, `action`, `entity`, `entity_id`, `payload_before` (JSONB), `payload_after` (JSONB), `ip`, `user_agent`, `signature_hmac`, `created_at`. Append-only.
 
-#### Asset Registry (Core)
+#### Registro de Ativos (Core)
 
-- **Asset** (Entity, generico): `id`, `asset_type` (ex.: `vehicle`, `property`, `equipment`), `name`, `status` (`disponivel`/`em_contrato`/`manutencao`/`inativo`), `metadata` (JSONB — campos universais), `module_data` (JSONB — dados especificos do modulo), `created_by_user_id`, timestamps, soft delete.
+- **Asset** (Entity, genérico): `id`, `asset_type` (ex.: `vehicle`, `property`, `equipment`), `name`, `status` (`disponivel`/`em_contrato`/`manutencao`/`inativo`), `metadata` (JSONB — campos universais), `module_data` (JSONB — dados específicos do módulo), `created_by_user_id`, timestamps, soft delete.
 - **AssetModule** (Entity, registry): `id`, `asset_type`, `display_name`, `is_active`, `config` (JSONB), `hooks_class_path`, `routes_module_path`.
 - **ModuleHooksConfig** (Entity): `id`, `asset_module_id`, `event_type` (ex.: `InstallmentOverdue`), `policy` (JSONB — ex.: `{auto_block: true, min_days_overdue: 15, requires_approval: true}`), `is_active`.
 
-#### Catalog
+#### Catálogo
 
 - **Customer** (Entity): `id`, `full_name`, `cpf` (VO `Cpf`), `rg`, `cnh` (VO `Cnh` com number/category/expiry), `phone` (VO `PhoneE164`), `email`, `address` (VO `Address`), `birth_date`, `photo_url`, `status` (`ativo`/`inativo`/`bloqueado`), `score`, `tags` (JSONB), `notes`, `created_by_user_id`, soft delete.
 - **CustomerAttachment** (Entity child): `id`, `customer_id`, `kind` (cnh/rg/comprovante/outros), `url`, `mime`, `size`, `uploaded_at`.
 - **Supplier** (Entity): `id`, `name`, `document`, `contact`, `bank_data` (JSONB).
 - **ExpenseCategory** (Entity): `id`, `parent_id`, `name`, `color`, `icon`, `is_active`.
 
-#### Module: Vehicles (vertical — nao pertence ao Core)
+#### Módulo: Veículos (vertical — não pertence ao Core)
 
 - **Vehicle** (Entity, module-specific): `id`, `asset_id` (FK -> assets), `plate` (VO `Plate`), `renavam`, `chassis`, `brand`, `model`, `version`, `year_model`, `year_manufacture`, `color`, `fuel`, `km_initial`, `km_current`, `acquisition_date`, `purchase_value` (VO `Money`), `fipe_code`, `fipe_value_current` (Money), `fipe_value_updated_at`, `tracker_device_id`, `category`, `insurance_*`, `ipva_*`, `licensing_*`.
 - **VehicleAcquisition** (Entity 1:1 com Vehicle): `id`, `vehicle_id`, `type` (`a_vista`/`financiamento`/`consorcio`/`custom`), `down_payment` (Money), `installments_definition` (JSONB), `interest_rate_pct_per_month`, `amortization_system` (`price`/`sac`/`null`), `notes`.
 - **VehiclePhoto** (Entity child).
 - **TrackerDevice** (Entity, module-specific): `id`, `external_id`, `vehicle_id`, `provider`, `last_seen_at`, `last_position` (JSONB com lat/lng/speed/ignition).
 
-#### Contracts
+#### Contratos
 
-- **Contract** (Aggregate Root): `id`, `customer_id`, `asset_id` (FK -> assets, generico), `status`, `start_date`, `end_date`, `total_amount` (Money), `periodicity` (`diaria`/`semanal`/`quinzenal`/`mensal`), `due_day`, `late_interest_pct_per_day`, `late_fine_pct`, `grace_days`, `has_purchase_option`, `residual_value`, `terms_md`, `pdf_url`, `version`, `created_by_user_id`, `signed_at`, soft delete.
+- **Contract** (Aggregate Root): `id`, `customer_id`, `asset_id` (FK -> assets, genérico), `status`, `start_date`, `end_date`, `total_amount` (Money), `periodicity` (`diaria`/`semanal`/`quinzenal`/`mensal`), `due_day`, `late_interest_pct_per_day`, `late_fine_pct`, `grace_days`, `has_purchase_option`, `residual_value`, `terms_md`, `pdf_url`, `version`, `created_by_user_id`, `signed_at`, soft delete.
 - **Installment** (Entity child de Contract): `id`, `contract_id`, `sequence`, `due_date`, `amount` (Money), `kind` (`regular`/`down_payment`/`extra_semestral`/`extra_anual`/`custom`), `status` (`em_aberto`/`vencido`/`pago_aguardando_verificacao`/`pago`/`pago_parcial`/`renegociado`/`cancelado`), `paid_at`, `paid_amount`, `payment_method`, `receipt_url`, `notes`.
-- **InstallmentAdjustment** (Entity child de Installment, append-only): `id`, `installment_id`, `kind` (`discount`/`fine`/`interest`/`renegotiation`/`bulk_edit`/`partial_payment`/`reverse_write_off`), `amount_delta`, `reason`, `applied_by_user_id`, `applied_at`. Snapshot de cada mudanca financeira. O kind `partial_payment` registra pagamento parcial e referencia o novo titulo gerado para a diferenca.
+- **InstallmentAdjustment** (Entity child de Installment, append-only): `id`, `installment_id`, `kind` (`discount`/`fine`/`interest`/`renegotiation`/`bulk_edit`/`partial_payment`/`reverse_write_off`), `amount_delta`, `reason`, `applied_by_user_id`, `applied_at`. Snapshot de cada mudança financeira. O kind `partial_payment` registra pagamento parcial e referencia o novo título gerado para a diferença.
 - **ContractEvent** (Entity child, append-only): `id`, `contract_id`, `event_type`, `payload` (JSONB), `created_by_user_id`, `created_at`.
 
-#### Maquina de Estados do Contrato
+#### Máquina de Estados do Contrato
 
 O contrato percorre os seguintes estados ao longo de seu ciclo de vida:
 
 ```
 rascunho
     └─► ativo (ao ativar o contrato)
-          ├─► suspenso (automatico: limite_dias_suspensao atingido)
+          ├─► suspenso (automático: limite_dias_suspensao atingido)
           │       └─► ativo (pagamento confirmado restaura)
-          ├─► encerrado_sem_pendencia (cancelamento limpo — sem titulos em aberto)
+          ├─► encerrado_sem_pendencia (cancelamento limpo — sem títulos em aberto)
           ├─► encerrado_com_pendencia (cancelamento com atraso → gera passivo_inoperante)
-          ├─► encerrado_compra (opcao_compra paga → evento OpcaoCompraPaga → veiculo alienado)
-          └─► rescindido (acordo formal de rescisao)
+          ├─► encerrado_compra (opcao_compra paga → evento OpcaoCompraPaga → veículo alienado)
+          └─► rescindido (acordo formal de rescisão)
 ```
 
-**Regras de transicao:**
+**Regras de transição:**
 - `rascunho → ativo`: apenas via `POST /contracts/{id}/activate`; gera parcelas + PDF.
-- `ativo → suspenso`: automatico pelo motor de cobranca apos `politica_cobranca.limite_dias_suspensao` dias de atraso; registra `ContractEvent(event_type='suspenso')`.
-- `suspenso → ativo`: automatico ao confirmar pagamento que zera saldo devedor; registra `ContractEvent(event_type='reativado')`.
-- `ativo → encerrado_compra`: ao confirmar pagamento de titulo do tipo `opcao_compra`; emite Domain Event `OpcaoCompraPaga` que o modulo Vehicles captura para alienar o veiculo.
-- `ativo/suspenso → encerrado_com_pendencia`: ao atingir `politica_cobranca.limite_dias_encerramento`; titulos restantes viram `passivos_inoperantes`.
-- `ativo → rescindido`: via endpoint de rescisao com calculo de proporcional.
+- `ativo → suspenso`: automático pelo motor de cobrança após `politica_cobranca.limite_dias_suspensao` dias de atraso; registra `ContractEvent(event_type='suspenso')`.
+- `suspenso → ativo`: automático ao confirmar pagamento que zera saldo devedor; registra `ContractEvent(event_type='reativado')`.
+- `ativo → encerrado_compra`: ao confirmar pagamento de título do tipo `opcao_compra`; emite Domain Event `OpcaoCompraPaga` que o módulo Vehicles captura para alienar o veículo.
+- `ativo/suspenso → encerrado_com_pendencia`: ao atingir `politica_cobranca.limite_dias_encerramento`; títulos restantes viram `passivos_inoperantes`.
+- `ativo → rescindido`: via endpoint de rescisão com cálculo de proporcional.
 
-#### Finance
+#### Financeiro
 
 - **Payable** (Entity): `id`, `description`, `supplier_id`, `category_id`, `asset_id` (nullable, FK -> assets), `amount` (Money), `due_date`, `status` (`em_aberto`/`pago`/`cancelado`), `paid_at`, `paid_amount`, `payment_method`, `attachment_url`, `notes`, `created_by_user_id`, `recurring_template_id` (nullable).
 - **RecurringPayableTemplate** (Entity): `id`, `description`, `supplier_id`, `category_id`, `asset_id`, `amount`, `periodicity` (`mensal`/`bimestral`/`anual`), `day_of_month`, `start_date`, `end_date`, `is_active`.
 - **BankTransaction** (Entity): `id`, `account_id`, `fitid`, `posted_at`, `amount` (signed), `description_raw`, `description_clean`, `type`, `status` (`pendente`/`conciliada`/`ignorada`), `reconciled_to_kind` (`installment`/`payable`/null), `reconciled_to_id`, `imported_from`, `imported_at`.
 - **BankAccount** (Entity): `id`, `name`, `bank_code`, `agency`, `account_number`, `type`, `is_active`.
 
-#### Agent Orchestrator & Messaging (WhatsApp + In-App Chat)
+#### Orquestrador de Agentes e Mensageria (WhatsApp + Chat In-App)
 
 - **Conversation** (Entity): `id`, `customer_id`, `channel` (`whatsapp`/`in_app`), `phone_e164` (nullable — only for WhatsApp), `user_id` (nullable — only for in-app), `last_message_at`, `unread_count`, `is_archived`, `agent_active` (bool), `agent_paused_until`.
 - **Message** (Entity, append-only): `id`, `conversation_id`, `external_id`, `direction`, `kind` (`text`/`image`/`document`/`audio`/`pix_card`/`system`), `content_text`, `media_url`, `media_mime`, `transcription` (nullable — populated when kind=audio), `sent_at`, `delivered_at`, `read_at`, `sent_by`, `status`, `context` (JSONB), `embedding` (vector(1536), nullable, populado async).
 - **AgentRun** (Entity, observability): `id`, `conversation_id`, `triggered_by_message_id`, `caller_id`, `caller_permissions` (JSONB snapshot), `provider`, `model`, `prompt_tokens`, `completion_tokens`, `latency_ms`, `tools_called` (JSONB), `tools_available` (JSONB — snapshot of permission-filtered tool list), `final_action`, `error`, `created_at`. Para auditoria e tuning.
 - **CustomerScoreSnapshot** (Entity, daily): `id`, `customer_id`, `score`, `factors` (JSONB com breakdown), `taken_at`.
-- **CollectionPolicy** (singleton config): `id`, `name`, `is_active`, `payload` (JSONB com toda a parametrizacao), `version`, `updated_by`, `updated_at`.
+- **CollectionPolicy** (singleton config): `id`, `name`, `is_active`, `payload` (JSONB com toda a parametrização), `version`, `updated_by`, `updated_at`.
 
-#### Integrations
+#### Integrações
 
-- **WebhookEventRaw** (Entity, append-only): `id`, `provider`, `external_id`, `signature_valid` (bool), `payload` (JSONB), `received_at`, `processed_at`, `processing_status`. Idempotencia por (`provider`, `external_id`).
+- **WebhookEventRaw** (Entity, append-only): `id`, `provider`, `external_id`, `signature_valid` (bool), `payload` (JSONB), `received_at`, `processed_at`, `processing_status`. Idempotência por (`provider`, `external_id`).
 - **IntegrationCredential** (Entity): `id`, `provider`, `is_active`, `config_encrypted` (bytea — JSON encriptado AES-256-GCM com chave master KMS), `last_tested_at`, `last_test_status`.
 - **FeatureFlag** (Entity): `id`, `key`, `value` (JSONB — boolean ou regra), `description`, `updated_at`.
 
-#### Reports
+#### Relatórios
 
 - **SavedReport** (Entity): `id`, `name`, `owner_user_id`, `definition` (JSONB com dimensions/measures/filters), `is_shared`, `created_at`.
 
-### 4.3 Partial Payments (Dominio Financeiro)
+### 4.3 Pagamentos Parciais (Domínio Financeiro)
 
 Quando `paid_amount < installment.amount`, o sistema trata como **pagamento parcial**:
 
-1. O titulo original recebe status `pago_parcial` e `paid_amount` registrado.
-2. Um `InstallmentAdjustment` com `kind='partial_payment'` e criado, registrando o `amount_delta` (diferenca) e o `new_installment_id` no campo `reason` (JSON).
-3. Um novo titulo (Installment) e gerado automaticamente para a diferenca (`installment.amount - paid_amount`), com `kind='regular'`, `due_date` = proximo vencimento (ou mesmo dia + grace_days), vinculado ao mesmo contrato.
-4. O contrato incrementa seu `sequence` para acomodar o novo titulo.
+1. O título original recebe status `pago_parcial` e `paid_amount` registrado.
+2. Um `InstallmentAdjustment` com `kind='partial_payment'` é criado, registrando o `amount_delta` (diferença) e o `new_installment_id` no campo `reason` (JSON).
+3. Um novo título (Installment) é gerado automaticamente para a diferença (`installment.amount - paid_amount`), com `kind='regular'`, `due_date` = próximo vencimento (ou mesmo dia + grace_days), vinculado ao mesmo contrato.
+4. O contrato incrementa seu `sequence` para acomodar o novo título.
 
 ```python
 # domain/finance/calculations.py
@@ -440,8 +440,8 @@ from datetime import date, timedelta
 @dataclass(frozen=True)
 class PartialPaymentResult:
     original_new_status: str          # 'pago_parcial'
-    remainder_amount: Decimal         # diferenca a gerar novo titulo
-    remainder_due_date: date          # vencimento do novo titulo
+    remainder_amount: Decimal         # diferença a gerar novo título
+    remainder_due_date: date          # vencimento do novo título
     adjustment_delta: Decimal         # valor pago (positivo)
 
 def compute_partial_payment(
@@ -450,7 +450,7 @@ def compute_partial_payment(
     original_due_date: date,
     grace_days: int = 0,
 ) -> PartialPaymentResult:
-    """Calcula resultado de pagamento parcial. Funcao pura, sem I/O."""
+    """Calcula resultado de pagamento parcial. Função pura, sem I/O."""
     assert Decimal("0") < paid_amount < title_amount, "Not a partial payment"
     remainder = title_amount - paid_amount
     remainder_due = original_due_date + timedelta(days=grace_days or 7)
@@ -485,7 +485,7 @@ class Money:
 
 @dataclass(frozen=True, slots=True)
 class Cpf:
-    value: str  # 11 digitos
+    value: str  # 11 dígitos
 
     @classmethod
     def parse(cls, raw: str) -> "Cpf":
@@ -506,16 +506,16 @@ class Plate:
 
 ---
 
-## 5. API Specification
+## 5. Especificação da API
 
-### 5.1 Convencoes
+### 5.1 Convenções
 
-- **Base URL** (prod): `https://api.{{product_name_slug}}.com/api/v1` (ou subpath em mesmo dominio do frontend).
-- **Autenticacao**: header `Authorization: Bearer <jwt>`; refresh via cookie `HttpOnly`.
-- **Versionamento**: prefixo `/v1` na URL; breaking changes vao para `/v2`.
-- **Paginacao**: query `?page=1&size=50` para listas pequenas; cursor `?cursor=<id>&size=50` para listas grandes (mensagens, audit log).
-- **Filtros**: query strings; filtros complexos via `POST /search` quando passar de 10 parametros.
-- **Erros**: padrao **RFC 7807 Problem Details**.
+- **Base URL** (prod): `https://api.{{product_name_slug}}.com/api/v1` (ou subpath em mesmo domínio do frontend).
+- **Autenticação**: header `Authorization: Bearer <jwt>`; refresh via cookie `HttpOnly`.
+- **Versionamento**: prefixo `/v1` na URL; breaking changes vão para `/v2`.
+- **Paginação**: query `?page=1&size=50` para listas pequenas; cursor `?cursor=<id>&size=50` para listas grandes (mensagens, audit log).
+- **Filtros**: query strings; filtros complexos via `POST /search` quando passar de 10 parâmetros.
+- **Erros**: padrão **RFC 7807 Problem Details**.
   ```json
   {
     "type": "https://{{product_name_slug}}.com/errors/installment-not-editable",
@@ -527,25 +527,25 @@ class Plate:
     "request_id": "01HX..."
   }
   ```
-- **Codigos**: 200 (ok), 201 (created), 204 (no content), 400 (bad request), 401 (unauth), 403 (forbidden), 404 (not found), 409 (conflict — regra violada), 422 (validation), 429 (rate limit), 500 (internal).
+- **Códigos**: 200 (ok), 201 (created), 204 (no content), 400 (bad request), 401 (unauth), 403 (forbidden), 404 (not found), 409 (conflict — regra violada), 422 (validation), 429 (rate limit), 500 (internal).
 
-### 5.2 Endpoints (visao consolidada)
+### 5.2 Endpoints (visão consolidada)
 
-> A documentacao OpenAPI completa e gerada automaticamente em `/docs`. Esta tabela e o **mapa mental**.
+> A documentação OpenAPI completa é gerada automaticamente em `/docs`. Esta tabela é o **mapa mental**.
 
-#### Auth
-| Metodo | Path                       | Descricao                              |
+#### Autenticação
+| Método | Path                       | Descrição                              |
 |--------|----------------------------|----------------------------------------|
 | POST   | `/auth/login`              | Login email/senha                       |
 | POST   | `/auth/refresh`            | Renova access token                     |
 | POST   | `/auth/logout`             | Invalida refresh                        |
-| POST   | `/auth/password/forgot`    | Inicia recuperacao                      |
+| POST   | `/auth/password/forgot`    | Inicia recuperação                      |
 | POST   | `/auth/password/reset`     | Conclui reset com token                 |
 | POST   | `/auth/mfa/enable`         | Ativa TOTP                              |
-| POST   | `/auth/mfa/verify`         | Verifica codigo durante login           |
+| POST   | `/auth/mfa/verify`         | Verifica código durante login           |
 
-#### Customers
-| Metodo | Path                                | Descricao                               |
+#### Clientes
+| Método | Path                                | Descrição                               |
 |--------|-------------------------------------|-----------------------------------------|
 | GET    | `/customers`                        | Lista paginada com filtros               |
 | POST   | `/customers`                        | Cria                                     |
@@ -553,46 +553,46 @@ class Plate:
 | PATCH  | `/customers/{id}`                   | Atualiza parcial                         |
 | DELETE | `/customers/{id}`                   | Soft delete                              |
 | GET    | `/customers/{id}/financials`        | KPIs financeiros do cliente              |
-| GET    | `/customers/{id}/score-history`     | Historico de score                        |
+| GET    | `/customers/{id}/score-history`     | Histórico de score                        |
 | POST   | `/customers/{id}/attachments`       | Upload anexo                             |
 | GET    | `/customers/{id}/attachments`       | Lista anexos                             |
 | DELETE | `/customers/{id}/attachments/{aid}` | Remove anexo                             |
 
-#### Assets (Core — generico)
-| Metodo | Path                                  | Descricao                                |
+#### Assets (Core — genérico)
+| Método | Path                                  | Descrição                                |
 |--------|---------------------------------------|------------------------------------------|
-| GET    | `/assets`                             | Lista (filtravel por asset_type)          |
-| POST   | `/assets`                             | Cria ativo generico                       |
+| GET    | `/assets`                             | Lista (filtrável por asset_type)          |
+| POST   | `/assets`                             | Cria ativo genérico                       |
 | GET    | `/assets/{id}`                        | Detalhe                                   |
 | PATCH  | `/assets/{id}`                        | Atualiza                                  |
 | GET    | `/assets/{id}/financials`             | KPIs financeiros do ativo                 |
 
-#### Module: Vehicles (registrado dinamicamente pelo modulo)
-| Metodo | Path                                  | Descricao                                |
+#### Módulo: Veículos (registrado dinamicamente pelo módulo)
+| Método | Path                                  | Descrição                                |
 |--------|---------------------------------------|------------------------------------------|
-| GET    | `/modules/vehicles`                   | Lista veiculos                            |
+| GET    | `/modules/vehicles`                   | Lista veículos                            |
 | POST   | `/modules/vehicles`                   | Cria (cria asset + vehicle)               |
 | GET    | `/modules/vehicles/{id}`              | Detalhe                                   |
 | PATCH  | `/modules/vehicles/{id}`              | Atualiza                                  |
-| GET    | `/modules/vehicles/{id}/financials`   | ROI, depreciacao, payback                 |
-| POST   | `/modules/vehicles/{id}/refresh-fipe` | Forca atualizacao FIPE                    |
-| GET    | `/modules/vehicles/{id}/position`     | Posicao atual via tracker                 |
-| GET    | `/modules/vehicles/{id}/position-history` | Historico de posicoes                 |
+| GET    | `/modules/vehicles/{id}/financials`   | ROI, depreciação, payback                 |
+| POST   | `/modules/vehicles/{id}/refresh-fipe` | Força atualização FIPE                    |
+| GET    | `/modules/vehicles/{id}/position`     | Posição atual via tracker                 |
+| GET    | `/modules/vehicles/{id}/position-history` | Histórico de posições                 |
 | POST   | `/modules/vehicles/{id}/block`        | Bloqueia (gated)                          |
 | POST   | `/modules/vehicles/{id}/unblock`      | Desbloqueia (gated)                       |
 | POST   | `/modules/vehicles/{id}/photos`       | Upload foto                               |
-| PUT    | `/modules/vehicles/{id}/acquisition`  | Define/atualiza forma de aquisicao        |
+| PUT    | `/modules/vehicles/{id}/acquisition`  | Define/atualiza forma de aquisição        |
 
-#### FIPE (registrado pelo modulo Vehicles)
-| Metodo | Path                                               | Descricao                          |
+#### FIPE (registrado pelo módulo Vehicles)
+| Método | Path                                               | Descrição                          |
 |--------|----------------------------------------------------|------------------------------------|
 | GET    | `/modules/vehicles/fipe/brands?type=car`           | Lista marcas                        |
 | GET    | `/modules/vehicles/fipe/models?type=car&brand=XX`  | Lista modelos                       |
 | GET    | `/modules/vehicles/fipe/years?...`                 | Lista anos                          |
-| GET    | `/modules/vehicles/fipe/price?...`                 | Preco atual                         |
+| GET    | `/modules/vehicles/fipe/price?...`                 | Preço atual                         |
 
-#### Contracts
-| Metodo | Path                                   | Descricao                                  |
+#### Contratos
+| Método | Path                                   | Descrição                                  |
 |--------|----------------------------------------|--------------------------------------------|
 | POST   | `/contracts/preview-schedule`          | Preview de parcelamento                     |
 | GET    | `/contracts`                           | Lista                                       |
@@ -601,19 +601,19 @@ class Plate:
 | PATCH  | `/contracts/{id}`                      | Atualiza (somente rascunho)                 |
 | POST   | `/contracts/{id}/activate`             | Vigente — gera parcelas + PDF                |
 | POST   | `/contracts/{id}/terminate`            | Rescinde                                    |
-| GET    | `/contracts/{id}/pdf?version=`         | PDF (URL pre-assinada)                      |
+| GET    | `/contracts/{id}/pdf?version=`         | PDF (URL pré-assinada)                      |
 | GET    | `/contracts/{id}/events`               | Timeline                                     |
-| POST   | `/contracts/{id}/installments/bulk-edit` | Edicao em lote                            |
+| POST   | `/contracts/{id}/installments/bulk-edit` | Edição em lote                            |
 
-#### Receivables (Installments)
-| Metodo | Path                                           | Descricao                              |
+#### Títulos a Receber
+| Método | Path                                           | Descrição                              |
 |--------|------------------------------------------------|----------------------------------------|
 | GET    | `/receivables`                                 | Lista filtrada                         |
 | GET    | `/receivables/{id}`                            | Detalhe                                |
 | GET    | `/receivables/{id}/updated-value?on_date=`     | Valor com juros/multa/desconto         |
 | POST   | `/receivables/{id}/write-off`                  | Baixa manual (com upload de comprovante) |
 | POST   | `/receivables/bulk-write-off`                  | Baixa em lote                           |
-| POST   | `/receivables/{id}/partial-write-off`          | Baixa parcial (gera titulo da diferenca) |
+| POST   | `/receivables/{id}/partial-write-off`          | Baixa parcial (gera título da diferença) |
 | POST   | `/receivables/{id}/reverse-write-off`          | Estorna baixa (Admin only)              |
 | POST   | `/receivables/{id}/validate`                   | Aprova/rejeita comprovante (Validador)  |
 | POST   | `/receivables/{id}/request-resubmission`       | Solicita reenvio                        |
@@ -621,99 +621,99 @@ class Plate:
 | POST   | `/receivables/renegotiate`                     | Renegocia conjunto                      |
 | GET    | `/receivables/validation-queue`                | Fila de comprovantes pendentes          |
 
-#### Payables
-| Metodo | Path                              | Descricao                                |
+#### Títulos a Pagar
+| Método | Path                              | Descrição                                |
 |--------|-----------------------------------|------------------------------------------|
 | GET    | `/payables`                       | Lista                                     |
 | POST   | `/payables`                       | Cria                                      |
 | GET    | `/payables/{id}`                  | Detalhe                                   |
 | PATCH  | `/payables/{id}`                  | Atualiza                                  |
 | POST   | `/payables/{id}/pay`              | Baixa                                     |
-| POST   | `/payables/quick-pay`             | Cria + baixa atomico                       |
+| POST   | `/payables/quick-pay`             | Cria + baixa atômico                       |
 | GET    | `/recurring-payables`             | Lista templates recorrentes                |
 | POST   | `/recurring-payables`             | Cria template                              |
 | PATCH  | `/recurring-payables/{id}`        | Atualiza                                   |
-| POST   | `/recurring-payables/{id}/run-now`| Gera titulo imediatamente                  |
+| POST   | `/recurring-payables/{id}/run-now`| Gera título imediatamente                  |
 
-#### Reconciliation
-| Metodo | Path                                          | Descricao                              |
+#### Conciliação
+| Método | Path                                          | Descrição                              |
 |--------|-----------------------------------------------|----------------------------------------|
 | POST   | `/reconciliation/import-ofx`                  | Upload OFX                              |
 | POST   | `/reconciliation/import-pdf`                  | Upload PDF de extrato                   |
 | POST   | `/reconciliation/sync-open-finance`           | Dispara sync via Pluggy                  |
-| GET    | `/reconciliation/transactions`                | Lista transacoes pendentes               |
-| GET    | `/reconciliation/match-suggestions`           | Sugestoes de match (auto)                |
+| GET    | `/reconciliation/transactions`                | Lista transações pendentes               |
+| GET    | `/reconciliation/match-suggestions`           | Sugestões de match (auto)                |
 | POST   | `/reconciliation/match`                       | Confirma match (1:1, 1:N, N:1)           |
-| POST   | `/reconciliation/transactions/{id}/ignore`    | Ignora transacao                         |
-| POST   | `/reconciliation/unmatched-as-payable`        | Converte transacao em payable            |
+| POST   | `/reconciliation/transactions/{id}/ignore`    | Ignora transação                         |
+| POST   | `/reconciliation/unmatched-as-payable`        | Converte transação em payable            |
 | POST   | `/reconciliation/unmatched-as-revenue`        | Converte em receita avulsa               |
 
-#### Collections (WhatsApp)
-| Metodo | Path                                         | Descricao                              |
+#### Cobranças (WhatsApp)
+| Método | Path                                         | Descrição                              |
 |--------|----------------------------------------------|----------------------------------------|
 | GET    | `/conversations`                             | Lista                                   |
 | GET    | `/conversations/{id}`                        | Detalhe                                 |
-| GET    | `/conversations/{id}/messages?cursor=`       | Mensagens (paginacao reversa)           |
+| GET    | `/conversations/{id}/messages?cursor=`       | Mensagens (paginação reversa)           |
 | POST   | `/conversations/{id}/messages`               | Envia mensagem (humano)                 |
 | POST   | `/conversations/{id}/agent/pause`            | Pausa agente                             |
 | POST   | `/conversations/{id}/agent/resume`           | Retoma agente                            |
 | POST   | `/conversations/{id}/mark-read`              | Marca como lida                          |
 | POST   | `/broadcasts`                                | Disparo em massa                         |
 | GET    | `/broadcasts/{id}`                           | Status do disparo                        |
-| GET    | `/agent/runs`                                | Logs de execucao do agente (auditoria)   |
+| GET    | `/agent/runs`                                | Logs de execução do agente (auditoria)   |
 
-#### Reports & Dashboards
-| Metodo | Path                                         | Descricao                              |
+#### Relatórios e Dashboards
+| Método | Path                                         | Descrição                              |
 |--------|----------------------------------------------|----------------------------------------|
 | GET    | `/dashboard/main`                            | KPIs principais                          |
 | GET    | `/dashboard/customer/{id}`                   | KPIs do cliente                          |
 | GET    | `/dashboard/asset/{id}`                      | KPIs do ativo (ROI, etc)                 |
-| GET    | `/reports/built-in/{slug}`                   | Relatorio pronto                         |
-| POST   | `/reports/saved`                             | Salva relatorio custom                    |
+| GET    | `/reports/built-in/{slug}`                   | Relatório pronto                         |
+| POST   | `/reports/saved`                             | Salva relatório custom                    |
 | GET    | `/reports/saved`                             | Lista salvos                             |
-| POST   | `/reports/run`                               | Executa relatorio custom                  |
+| POST   | `/reports/run`                               | Executa relatório custom                  |
 | GET    | `/reports/{id}/export?format=xlsx|pdf`       | Exporta                                   |
 
-#### Admin / Configuration
-| Metodo | Path                                         | Descricao                              |
+#### Admin / Configuração
+| Método | Path                                         | Descrição                              |
 |--------|----------------------------------------------|----------------------------------------|
 | GET    | `/admin/integrations`                        | Lista status                             |
 | PUT    | `/admin/integrations/{provider}`             | Atualiza credenciais                     |
-| POST   | `/admin/integrations/{provider}/test`        | Teste de conexao                          |
-| GET    | `/admin/users`                               | Lista usuarios                           |
-| POST   | `/admin/users`                               | Cria usuario                             |
-| PATCH  | `/admin/users/{id}/roles`                    | Atualiza papeis                           |
+| POST   | `/admin/integrations/{provider}/test`        | Teste de conexão                          |
+| GET    | `/admin/users`                               | Lista usuários                           |
+| POST   | `/admin/users`                               | Cria usuário                             |
+| PATCH  | `/admin/users/{id}/roles`                    | Atualiza papéis                           |
 | GET    | `/admin/audit-log?...`                       | Consulta auditoria                        |
-| GET    | `/admin/settings`                            | Configuracoes gerais                      |
+| GET    | `/admin/settings`                            | Configurações gerais                      |
 | PUT    | `/admin/settings`                            | Atualiza                                  |
-| GET    | `/admin/agent/policy`                        | Politica de cobranca                      |
-| PUT    | `/admin/agent/policy`                        | Atualiza politica                         |
-| GET    | `/admin/modules`                             | Lista modulos registrados                 |
-| PUT    | `/admin/modules/{asset_type}/config`         | Configura modulo                          |
-| GET    | `/admin/modules/{asset_type}/hooks`          | Lista hooks do modulo                     |
-| PUT    | `/admin/modules/{asset_type}/hooks/{event}`  | Configura politica de hook                |
+| GET    | `/admin/agent/policy`                        | Política de cobrança                      |
+| PUT    | `/admin/agent/policy`                        | Atualiza política                         |
+| GET    | `/admin/modules`                             | Lista módulos registrados                 |
+| PUT    | `/admin/modules/{asset_type}/config`         | Configura módulo                          |
+| GET    | `/admin/modules/{asset_type}/hooks`          | Lista hooks do módulo                     |
+| PUT    | `/admin/modules/{asset_type}/hooks/{event}`  | Configura política de hook                |
 
-#### Webhooks (publicos, validados por assinatura)
-| Metodo | Path                                         | Descricao                              |
+#### Webhooks (públicos, validados por assinatura)
+| Método | Path                                         | Descrição                              |
 |--------|----------------------------------------------|----------------------------------------|
 | POST   | `/webhooks/whatsapp/{provider}`              | WhatsApp inbound                        |
 | POST   | `/webhooks/payment-gateway/{provider}`       | Pix gateway plugin (Asaas/Efi/Stripe)   |
 | POST   | `/webhooks/open-finance/{provider}`          | Open Finance                             |
-| POST   | `/webhooks/module/{asset_type}/{provider}`   | Webhooks especificos de modulo (ex.: tracker) |
+| POST   | `/webhooks/module/{asset_type}/{provider}`   | Webhooks específicos de módulo (ex.: tracker) |
 
 #### Real-time
-| Path                       | Tipo       | Descricao                                              |
+| Path                       | Tipo       | Descrição                                              |
 |----------------------------|------------|--------------------------------------------------------|
 | `/sse/notifications`       | SSE        | Stream de eventos: nova mensagem, comprovante, alerta. |
-| `/sse/dashboard`           | SSE        | Atualizacoes de KPI ao vivo.                            |
-| `/sse/module/{asset_type}` | SSE        | Eventos especificos do modulo (ex.: posicoes de veiculos). |
+| `/sse/dashboard`           | SSE        | Atualizações de KPI ao vivo.                            |
+| `/sse/module/{asset_type}` | SSE        | Eventos específicos do módulo (ex.: posições de veículos). |
 | `/ws/conversations`        | WebSocket  | Chat WhatsApp bidirecional.                             |
 
 ---
 
-## 6. Components / Backend Modules
+## 6. Componentes / Módulos do Backend
 
-Estrutura modular por *bounded context*. Cada modulo tem seus proprios `routers/`, `use_cases/`, `domain/`, `repositories/`, `schemas/` (DTOs). Modulos verticais de ativo vivem em `app/modules/{asset_type}/`.
+Estrutura modular por *bounded context*. Cada módulo tem seus próprios `routers/`, `use_cases/`, `domain/`, `repositories/`, `schemas/` (DTOs). Módulos verticais de ativo vivem em `app/modules/{asset_type}/`.
 
 ```
 app/
@@ -721,7 +721,7 @@ app/
 │   ├── v1/
 │   │   ├── auth_routes.py
 │   │   ├── customer_routes.py
-│   │   ├── asset_routes.py         # CRUD generico de assets
+│   │   ├── asset_routes.py         # CRUD genérico de assets
 │   │   ├── contract_routes.py
 │   │   ├── receivable_routes.py
 │   │   ├── payable_routes.py
@@ -730,7 +730,7 @@ app/
 │   │   ├── dashboard_routes.py
 │   │   ├── report_routes.py
 │   │   ├── admin_routes.py
-│   │   ├── module_routes.py        # monta rotas de modulos dinamicamente
+│   │   ├── module_routes.py        # monta rotas de módulos dinamicamente
 │   │   └── webhook_routes.py
 │   ├── sse.py
 │   ├── ws.py
@@ -738,7 +738,7 @@ app/
 │   ├── exception_handlers.py
 │   └── middleware.py
 │
-├── application/                    # use cases (orquestracao)
+├── application/                    # use cases (orquestração)
 │   ├── auth/
 │   │   ├── login.py
 │   │   ├── refresh_token.py
@@ -790,7 +790,7 @@ app/
 │       ├── audit_logger.py
 │       └── notification_dispatcher.py
 │
-├── domain/                         # nucleo puro (sem I/O) — CORE GENERICO
+├── domain/                         # núcleo puro (sem I/O) — CORE GENÉRICO
 │   ├── shared/
 │   │   ├── value_objects.py        # Money, Cpf, PhoneE164, Address
 │   │   ├── exceptions.py           # DomainError, NotFound, RuleViolation
@@ -799,7 +799,7 @@ app/
 │   │   ├── entities.py             # User, Role, Permission
 │   │   └── policies.py             # password rules, mfa rules
 │   ├── assets/
-│   │   ├── asset.py                # Asset entity (generico)
+│   │   ├── asset.py                # Asset entity (genérico)
 │   │   ├── asset_module.py         # IAssetModule Protocol
 │   │   └── events.py               # AssetCreated, AssetStatusChanged
 │   ├── catalog/
@@ -831,12 +831,12 @@ app/
 │       ├── storage_provider.py
 │       └── repositories.py         # ICustomerRepo, IAssetRepo, IContractRepo, ...
 │
-├── modules/                        # MODULOS VERTICAIS (plugaveis)
-│   └── vehicles/                   # primeiro modulo
+├── modules/                        # MÓDULOS VERTICAIS (plugáveis)
+│   └── vehicles/                   # primeiro módulo
 │       ├── __init__.py
 │       ├── module.py               # VehicleModule(IAssetModule) — registration
 │       ├── hooks.py                # VehicleHook — reage a Domain Events
-│       ├── routes.py               # rotas especificas: /modules/vehicles/...
+│       ├── routes.py               # rotas específicas: /modules/vehicles/...
 │       ├── models.py               # Vehicle, VehicleAcquisition, TrackerDevice (SQLAlchemy)
 │       ├── schemas.py              # DTOs Pydantic
 │       ├── services/
@@ -857,7 +857,7 @@ app/
 │       │       ├── generic_rest_adapter.py
 │       │       ├── mqtt_rest_adapter.py
 │       │       └── suntech_adapter.py
-│       └── agent_tools.py          # tools do agente especificas de veiculos
+│       └── agent_tools.py          # tools do agente específicas de veículos
 │
 ├── infrastructure/                 # adapters (implementam ports do Core)
 │   ├── db/
@@ -891,8 +891,8 @@ app/
 │   │   │   ├── pluggy_adapter.py
 │   │   │   ├── belvo_adapter.py
 │   │   │   └── tecnospeed_adapter.py
-│   │   ├── payment/               # PLUGINS opcionais (custo por transacao)
-│   │   │   ├── noop_gateway.py    # default: sem gateway, Pix proprio
+│   │   ├── payment/               # PLUGINS opcionais (custo por transação)
+│   │   │   ├── noop_gateway.py    # default: sem gateway, Pix próprio
 │   │   │   ├── asaas_adapter.py
 │   │   │   ├── efi_adapter.py
 │   │   │   ├── stripe_adapter.py
@@ -914,7 +914,7 @@ app/
 │   │       └── contract.html.j2
 │   ├── parsing/
 │   │   ├── ofx_parser.py
-│   │   ├── pdf_extract_parser.py    # heuristicas por banco
+│   │   ├── pdf_extract_parser.py    # heurísticas por banco
 │   │   └── pix_receipt_classifier.py
 │   ├── messaging/                   # eventos internos (in-process)
 │   │   ├── event_bus.py             # publish/subscribe + module dispatcher
@@ -934,9 +934,9 @@ app/
 │   ├── celery_app.py
 │   ├── beat_schedule.py            # cron jobs
 │   ├── tasks/
-│   │   ├── recurring_payables.py   # diario: gera recorrentes
-│   │   ├── score_recompute.py      # diario: score
-│   │   ├── send_preventive_collection.py  # cron diario
+│   │   ├── recurring_payables.py   # diário: gera recorrentes
+│   │   ├── score_recompute.py      # diário: score
+│   │   ├── send_preventive_collection.py  # cron diário
 │   │   ├── handle_inbound_whatsapp.py
 │   │   ├── run_agent_turn.py
 │   │   ├── render_contract_pdf.py
@@ -950,9 +950,9 @@ app/
 │   └── retry_policies.py
 │
 ├── core/
-│   ├── config.py                   # carrega Settings, expoe constants
+│   ├── config.py                   # carrega Settings, expõe constants
 │   ├── di.py                       # container de DI
-│   ├── module_registry.py          # registro e bootstrap de modulos
+│   ├── module_registry.py          # registro e bootstrap de módulos
 │   ├── correlation.py              # context vars correlation_id
 │   └── feature_flags.py
 │
@@ -964,7 +964,7 @@ app/
 └── main.py                         # uvicorn entry: cria app FastAPI, monta routers + modules, lifespan
 ```
 
-### 6.1 Padroes de Codigo (Backend)
+### 6.1 Padrões de Código (Backend)
 
 **Use case template:**
 
@@ -1129,11 +1129,11 @@ async def write_off(
 
 ---
 
-## 7. Modules Architecture (Asset Abstraction Layer)
+## 7. Arquitetura de Módulos (Asset Abstraction Layer)
 
 ### 7.1 IAssetModule Protocol
 
-O Core define uma interface que todo modulo vertical deve implementar:
+O Core define uma interface que todo módulo vertical deve implementar:
 
 ```python
 # domain/ports/asset_module.py
@@ -1187,9 +1187,9 @@ class IModuleHooks(Protocol):
     async def on_partial_payment(self, event: "PartialPaymentApplied") -> None: ...
 ```
 
-### 7.2 Module Registration at Bootstrap
+### 7.2 Registro de Módulos no Bootstrap
 
-Modulos sao registrados no startup da aplicacao via `ModuleRegistry`:
+Módulos são registrados no startup da aplicação via `ModuleRegistry`:
 
 ```python
 # core/module_registry.py
@@ -1246,9 +1246,9 @@ def register_modules(app):
         )
 ```
 
-### 7.3 Domain Event Dispatch Pattern
+### 7.3 Padrão de Despacho de Domain Events
 
-O Core emite Domain Events quando fatos relevantes ocorrem. O `EventDispatcher` roteia eventos para os hooks do modulo correto baseado no `asset_type` do contrato/ativo envolvido:
+O Core emite Domain Events quando fatos relevantes ocorrem. O `EventDispatcher` roteia eventos para os hooks do módulo correto baseado no `asset_type` do contrato/ativo envolvido:
 
 ```python
 # domain/shared/events.py
@@ -1359,7 +1359,7 @@ def handle_domain_event(self, event_dict: dict):
     EventLogRepo.mark_completed(event.event_id)
 ```
 
-### 7.4 Exemplo Concreto: Vehicle Module Hooks
+### 7.4 Exemplo Concreto: Hooks do Módulo Vehicles
 
 ```python
 # modules/vehicles/hooks.py
@@ -1399,7 +1399,7 @@ class VehicleHooks:
                 await self._create_pending_action(
                     session, event.asset_id,
                     action="block_vehicle",
-                    reason=f"Titulo vencido ha {event.days_overdue} dias",
+                    reason=f"Título vencido há {event.days_overdue} dias",
                 )
             else:
                 # Auto-block (rare, policy must explicitly allow)
@@ -1427,9 +1427,9 @@ class VehicleHooks:
                  remainder=str(event.remainder_amount))
 ```
 
-### 7.5 Module-Aware Agent Tools (Permission-Gated)
+### 7.5 Agent Tools por Módulo (Permission-Gated)
 
-O Agent Orchestrator possui tools genericas do Core (consultar titulos, registrar baixa, enviar mensagem). Cada modulo registra tools **adicionais** que sao injetadas dinamicamente no prompt do LLM. **Todas as tools sao filtradas pelas permissoes RBAC do caller** — o orchestrator so oferece ao LLM tools que o caller pode executar:
+O Agent Orchestrator possui tools genéricas do Core (consultar títulos, registrar baixa, enviar mensagem). Cada módulo registra tools **adicionais** que são injetadas dinamicamente no prompt do LLM. **Todas as tools são filtradas pelas permissões RBAC do caller** — o orchestrator só oferece ao LLM tools que o caller pode executar:
 
 ```python
 # modules/vehicles/agent_tools.py
@@ -1439,12 +1439,12 @@ VEHICLE_AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "bloquear_veiculo",
-            "description": "Bloqueia o veiculo do cliente via rastreador GPS. "
-                           "Usar apenas quando politica de cobranca autorizar.",
+            "description": "Bloqueia o veículo do cliente via rastreador GPS. "
+                           "Usar apenas quando política de cobrança autorizar.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "asset_id": {"type": "string", "description": "ID do ativo (veiculo)"},
+                    "asset_id": {"type": "string", "description": "ID do ativo (veículo)"},
                     "reason": {"type": "string", "description": "Motivo do bloqueio"},
                 },
                 "required": ["asset_id", "reason"],
@@ -1455,11 +1455,11 @@ VEHICLE_AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "verificar_localizacao",
-            "description": "Consulta a localizacao atual do veiculo via rastreador.",
+            "description": "Consulta a localização atual do veículo via rastreador.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "asset_id": {"type": "string", "description": "ID do ativo (veiculo)"},
+                    "asset_id": {"type": "string", "description": "ID do ativo (veículo)"},
                 },
                 "required": ["asset_id"],
             },
@@ -1467,13 +1467,13 @@ VEHICLE_AGENT_TOOLS = [
     },
 ]
 
-# Exemplo para um futuro modulo 'properties':
+# Exemplo para um futuro módulo 'properties':
 # PROPERTY_AGENT_TOOLS = [
 #     {
 #         "type": "function",
 #         "function": {
 #             "name": "agendar_vistoria",
-#             "description": "Agenda vistoria do imovel.",
+#             "description": "Agenda vistoria do imóvel.",
 #             "parameters": {...},
 #         },
 #     },
@@ -1481,14 +1481,14 @@ VEHICLE_AGENT_TOOLS = [
 #         "type": "function",
 #         "function": {
 #             "name": "notificar_desocupacao",
-#             "description": "Envia notificacao de desocupacao ao inquilino.",
+#             "description": "Envia notificação de desocupação ao inquilino.",
 #             "parameters": {...},
 #         },
 #     },
 # ]
 ```
 
-O `RunAgentTurn` use case coleta tools de todos os modulos, **filtrados pelas permissoes do caller**:
+O `RunAgentTurn` use case coleta tools de todos os módulos, **filtradas pelas permissões do caller**:
 
 ```python
 # application/collections/run_agent_turn.py (trecho)
@@ -1497,13 +1497,13 @@ from app.domain.value_objects import AgentInput
 
 class RunAgentTurn:
     async def execute(self, agent_input: AgentInput, ...):
-        # AgentInput e agnostico de canal:
+        # AgentInput é agnóstico de canal:
         # AgentInput(text: str, media: list[Media], caller: Caller, permissions: set[str])
 
         # Core tools filtrados por RBAC do caller
         tools = [t for t in self._core_tools() if t.get("required_permission", "agent.basic") in agent_input.permissions]
 
-        # Module tools (dinamico + filtrado por RBAC)
+        # Module tools (dinâmico + filtrado por RBAC)
         for module in ModuleRegistry.all().values():
             module_tools = module.get_agent_tools()
             tools.extend([t for t in module_tools if t.get("required_permission", "agent.basic") in agent_input.permissions])
@@ -1524,59 +1524,59 @@ class RunAgentTurn:
                 result = await self._execute_core_tool(tool_name, response.tool_call.args)
 ```
 
-### 7.5.1 In-App Chat Channel
+### 7.5.1 Canal de Chat In-App
 
-O mesmo Agent Orchestrator serve o canal **in-app chat** (web UI) sem nenhuma diferenca de logica:
+O mesmo Agent Orchestrator serve o canal **chat in-app** (web UI) sem nenhuma diferença de lógica:
 
 - **Transporte**: HTTP `POST /api/v1/agent/chat` (request/response) ou WebSocket `/ws/agent-chat` (streaming).
-- **Autenticacao**: JWT do usuario logado — extrai `caller.permissions` do token.
+- **Autenticação**: JWT do usuário logado — extrai `caller.permissions` do token.
 - **Fluxo**: Frontend envia mensagem -> cria `Conversation(channel='in_app')` + `Message` -> enfileira `run_agent_turn` -> resposta via WebSocket ou HTTP response.
-- **O orchestrator nao sabe e nao se importa** qual canal originou a mensagem. Ele ve apenas `AgentInput(text, media, caller, permissions)`.
-- **Diferenca unica**: mensagens in-app nao passam pelo `IWhatsAppGateway` para envio — a resposta e empurrada diretamente via WebSocket/SSE ao frontend.
+- **O orchestrator não sabe e não se importa** qual canal originou a mensagem. Ele vê apenas `AgentInput(text, media, caller, permissions)`.
+- **Diferença única**: mensagens in-app não passam pelo `IWhatsAppGateway` para envio — a resposta é empurrada diretamente via WebSocket/SSE ao frontend.
 
-### 7.6 How to Create a New Module (Step-by-Step)
+### 7.6 Como Criar um Novo Módulo (Passo a Passo)
 
-Para futuros devs que queiram adicionar um novo vertical (ex.: `properties` para imoveis):
+Para futuros devs que queiram adicionar um novo vertical (ex.: `properties` para imóveis):
 
-1. **Crie a pasta do modulo**: `app/modules/properties/`
+1. **Crie a pasta do módulo**: `app/modules/properties/`
 2. **Implemente `IAssetModule`** em `module.py`:
-   - Defina `asset_type = "property"` e `display_name = "Imoveis"`
-   - Implemente `get_router()` retornando um `APIRouter` com as rotas especificas
-   - Implemente `get_agent_tools()` com as tools LLM do modulo
-   - Implemente `get_hooks()` retornando uma instancia de `PropertyHooks`
+   - Defina `asset_type = "property"` e `display_name = "Imóveis"`
+   - Implemente `get_router()` retornando um `APIRouter` com as rotas específicas
+   - Implemente `get_agent_tools()` com as tools LLM do módulo
+   - Implemente `get_hooks()` retornando uma instância de `PropertyHooks`
 3. **Crie `hooks.py`** implementando `IModuleHooks`:
    - `on_installment_overdue` — ex.: agendar vistoria
-   - `on_contract_terminated` — ex.: notificar desocupacao
+   - `on_contract_terminated` — ex.: notificar desocupação
 4. **Crie `models.py`** com tabelas module-specific (ex.: `properties` com FK para `assets.id`)
 5. **Crie `schemas.py`** com DTOs Pydantic para a API
-6. **Crie `agent_tools.py`** com definicoes de tools para o agente IA
-7. **Crie migracao Alembic** para as tabelas do modulo
+6. **Crie `agent_tools.py`** com definições de tools para o agente IA
+7. **Crie migração Alembic** para as tabelas do módulo
 8. **Registre no bootstrap** em `main.py`:
    ```python
    from app.modules.properties.module import PropertyModule
    ModuleRegistry.register(PropertyModule(app.state.sessionmaker))
    ```
-9. **Insira na tabela `asset_modules`** via seed ou migracao
+9. **Insira na tabela `asset_modules`** via seed ou migração
 10. **Configure hooks** na tabela `module_hooks_config` para o novo `asset_type`
 
-Nenhuma alteracao no Core e necessaria. O modulo e self-contained.
+Nenhuma alteração no Core é necessária. O módulo é self-contained.
 
 ---
 
-## 8. External APIs & Adapters (Plug-and-Play)
+## 8. APIs Externas e Adapters (Plug-and-Play)
 
 ### 8.1 Filosofia
 
-**Toda API externa entra pela porta da frente** (Port no dominio) e tem **uma ou mais implementacoes** (Adapters na infra). Trocar de fornecedor e:
+**Toda API externa entra pela porta da frente** (Port no domínio) e tem **uma ou mais implementações** (Adapters na infra). Trocar de fornecedor é:
 
-1. Implementar nova classe que satisfaca o Protocol.
-2. Registra-la no DI container.
+1. Implementar nova classe que satisfaça o Protocol.
+2. Registrá-la no DI container.
 3. Apontar a env `XYZ_PROVIDER` ou config no banco para o novo nome.
-4. Pronto. Dominio nunca soube que houve mudanca.
+4. Pronto. Domínio nunca soube que houve mudança.
 
 ### 8.2 Mapa de Ports e Adapters
 
-| Port (Interface)               | Default Adapter             | Alternativos                                       | Ativavel |
+| Port (Interface)               | Default Adapter             | Alternativos                                       | Ativável |
 |--------------------------------|------------------------------|----------------------------------------------------|----------|
 | `IWhatsAppGateway`             | `EvolutionApiAdapter`        | `ZapiAdapter`, `UazapiAdapter`, `WppConnectAdapter`, `MetaCloudApiAdapter` | sempre |
 | `IBankReconciliationProvider`  | `LocalImportProvider` (OFX+PDF) | `PluggyAdapter`, `BelvoAdapter`, `TecnoSpeedAdapter`, `KlaviAdapter` | opcional |
@@ -1587,28 +1587,28 @@ Nenhuma alteracao no Core e necessaria. O modulo e self-contained.
 | `IPdfRenderer`                 | `WeasyPrintRenderer`         | `BrowserlessRenderer`, `GotenbergRenderer`         | sempre |
 | `IStorageProvider`             | `S3CompatibleAdapter` apontando MinIO | mesmo adapter para AWS/R2/B2/Azure | sempre |
 
-**Module-specific Ports** (vivem dentro do modulo, nao no Core):
+**Ports específicas de módulo** (vivem dentro do módulo, não no Core):
 
-| Port (Module)                  | Default Adapter             | Alternativos                                       | Modulo |
+| Port (Module)                  | Default Adapter             | Alternativos                                       | Módulo |
 |--------------------------------|------------------------------|----------------------------------------------------|--------|
 | `IFipeProvider`                | `ApiFipeBrAdapter`           | `FipeApiBrAdapter`, `FipeOnlineAdapter`, `FallbackAdapter` (tenta em ordem) | vehicles |
-| `ITrackerGateway`              | `GenericRestTrackerAdapter`  | `Suntech...`, `Positron...`, `MqttRestAdapter` (generico configuravel), `RpaTrackerAdapter` (Playwright headless), `ManualNotifyAdapter` (notifica Admin quando nenhuma API/RPA disponivel) | vehicles |
+| `ITrackerGateway`              | `GenericRestTrackerAdapter`  | `Suntech...`, `Positron...`, `MqttRestAdapter` (genérico configurável), `RpaTrackerAdapter` (Playwright headless), `ManualNotifyAdapter` (notifica Admin quando nenhuma API/RPA disponível) | vehicles |
 
-**Fallback chain para ITrackerGateway:** API adapter -> RPA adapter (Playwright headless) -> Manual notification adapter (notifica Admin para acao manual).
+**Fallback chain para ITrackerGateway:** API adapter -> RPA adapter (Playwright headless) -> Manual notification adapter (notifica Admin para ação manual).
 
-### 8.3 Default Payment: Pix via WhatsApp (Sem Gateway)
+### 8.3 Pagamento Default: Pix via WhatsApp (Sem Gateway)
 
-O **padrao de pagamento** da plataforma e **Pix via WhatsApp com custo zero**:
+O **padrão de pagamento** da plataforma é **Pix via WhatsApp com custo zero**:
 
-1. O sistema gera QR Code Pix (BR Code estatico ou dinamico) usando a biblioteca `pix-utils` — sem gateway, sem custo por transacao.
-2. O QR Code e enviado ao cliente via WhatsApp (Evolution API — tambem sem custo por mensagem).
+1. O sistema gera QR Code Pix (BR Code estático ou dinâmico) usando a biblioteca `pix-utils` — sem gateway, sem custo por transação.
+2. O QR Code é enviado ao cliente via WhatsApp (Evolution API — também sem custo por mensagem).
 3. O cliente paga com o app do banco e envia comprovante de volta pelo WhatsApp.
-4. O comprovante e processado via OCR + validacao humana + conciliacao bancaria.
+4. O comprovante é processado via OCR + validação humana + conciliação bancária.
 
-**Gateways de pagamento (Asaas, Efi, Stripe, PagBank) sao plugins opcionais** — uteis para:
-- Confirmacao automatica via webhook (elimina validacao manual)
+**Gateways de pagamento (Asaas, Efi, Stripe, PagBank) são plugins opcionais** — úteis para:
+- Confirmação automática via webhook (elimina validação manual)
 - Clientes VIP ou contratos de alto valor
-- Habilitaveis por cliente ou por contrato individual
+- Habilitáveis por cliente ou por contrato individual
 
 ```python
 # domain/ports/payment_gateway.py
@@ -1616,11 +1616,11 @@ from typing import Protocol
 from decimal import Decimal
 
 class IPaymentGateway(Protocol):
-    """Plugin opcional. Default e NoOp (Pix proprio sem gateway)."""
+    """Plugin opcional. Default é NoOp (Pix próprio sem gateway)."""
 
     async def create_charge(self, amount: Decimal, description: str,
                             payer_cpf: str, due_date: str) -> dict:
-        """Creates a charge. NoOp returns empty dict (Pix proprio)."""
+        """Creates a charge. NoOp returns empty dict (Pix próprio)."""
         ...
 
     async def get_charge_status(self, charge_id: str) -> str: ...
@@ -1632,7 +1632,7 @@ class NoOpPaymentGateway:
     """Default: no payment gateway. System uses own Pix QR Code."""
 
     async def create_charge(self, amount, description, payer_cpf, due_date):
-        return {}  # No external charge — Pix proprio
+        return {}  # No external charge — Pix próprio
 
     async def get_charge_status(self, charge_id):
         return "not_applicable"
@@ -1641,67 +1641,67 @@ class NoOpPaymentGateway:
         return True
 ```
 
-### 8.4 Detalhes por Integracao
+### 8.4 Detalhes por Integração
 
 #### WhatsApp (Evolution API default)
 
-- **Inbound**: webhook em `POST /webhooks/whatsapp/evolution`. Validacao por `apikey` header. Idempotencia por `messageId`.
+- **Inbound**: webhook em `POST /webhooks/whatsapp/evolution`. Validação por `apikey` header. Idempotência por `messageId`.
 - **Outbound**: `send_text`, `send_image`, `send_document`, `send_pix_card` (helper que monta um *list message* ou *button message* com QR + texto Copia e Cola embutido).
-- **Midias recebidas**: o adapter baixa para MinIO antes de sinalizar processado.
-- **Cuidado**: respeitar rate limit do WhatsApp (delay configuravel entre envios — 1s default, 3s se numero novo) e janela horaria (nao enviar 22h-7h).
+- **Mídias recebidas**: o adapter baixa para MinIO antes de sinalizar processado.
+- **Cuidado**: respeitar rate limit do WhatsApp (delay configurável entre envios — 1s default, 3s se número novo) e janela horária (não enviar 22h-7h).
 
-#### Module: Vehicles — FIPE
+#### Módulo: Vehicles — FIPE
 
-- Endpoints REST simples: marcas -> modelos -> anos -> preco.
+- Endpoints REST simples: marcas -> modelos -> anos -> preço.
 - Cache **Redis** com TTL de 30 dias (chave `fipe:{type}:{brand}:{model}:{year}`).
-- Job mensal (Celery Beat: `0 3 5 * *`) percorre veiculos ativos e atualiza `fipe_value_current`.
-- Erros transitorios -> retry exponencial (tenacity, 3 tentativas).
+- Job mensal (Celery Beat: `0 3 5 * *`) percorre veículos ativos e atualiza `fipe_value_current`.
+- Erros transitórios -> retry exponencial (tenacity, 3 tentativas).
 - Erros persistentes -> cai para adapter alternativo via `FallbackAdapter`.
 
-#### Module: Vehicles — Rastreador
+#### Módulo: Vehicles — Rastreador
 
-- **Adapter generico** parametrizavel por:
+- **Adapter genérico** parametrizável por:
   - URL base
   - Auth (header / token / basic / OAuth2)
   - Mapeamento JSONPath dos campos (lat, lng, speed, ignition, last_update)
   - URL de comando bloqueio/desbloqueio + payload template
-- Para rastreadores que usam **MQTT** para comandos: adapter MQTT+REST que publica em topico do broker do fornecedor e le posicao via REST.
-- **Comandos sensiveis** (bloqueio/desbloqueio): exigem perfil Admin + senha + 2-step na UI; gravam evento de auditoria com `reason` e horario programado.
+- Para rastreadores que usam **MQTT** para comandos: adapter MQTT+REST que publica em tópico do broker do fornecedor e lê posição via REST.
+- **Comandos sensíveis** (bloqueio/desbloqueio): exigem perfil Admin + senha + 2-step na UI; gravam evento de auditoria com `reason` e horário programado.
 
 #### Open Finance (Pluggy default — opcional)
 
 - Fluxo OAuth-like via widget Pluggy embarcado no frontend (script Pluggy Connect).
 - Backend recebe `item_id` do widget, persiste em `IntegrationCredential`, e dispara primeiro sync.
-- Sync incremental a cada 6h via Celery; webhook Pluggy notifica novas transacoes.
-- Transacoes chegam estruturadas -> entram diretamente em `bank_transactions` com `imported_from='open_finance'`.
+- Sync incremental a cada 6h via Celery; webhook Pluggy notifica novas transações.
+- Transações chegam estruturadas -> entram diretamente em `bank_transactions` com `imported_from='open_finance'`.
 
 #### Gateway Pix (Asaas / Efi / Stripe — plugin opcional)
 
-- **Padrao**: desabilitado (`NoOpPaymentGateway`). Sistema gera QR estatico/dinamico proprio (sem custo).
+- **Padrão**: desabilitado (`NoOpPaymentGateway`). Sistema gera QR estático/dinâmico próprio (sem custo).
 - Quando habilitado como plugin: cria charge no provedor -> recebe `id` -> grava em `installment.external_charge_id`.
-- Webhook recebe confirmacao -> busca por `external_charge_id` -> marca `pago` direto (pula validacao manual).
-- Configuravel **por cliente ou por contrato**: ex.: somente clientes VIP usam Asaas; resto usa fluxo Pix proprio.
+- Webhook recebe confirmação -> busca por `external_charge_id` -> marca `pago` direto (pula validação manual).
+- Configurável **por cliente ou por contrato**: ex.: somente clientes VIP usam Asaas; resto usa fluxo Pix próprio.
 
-#### LLM Provider & Agent Orchestrator
+#### Provedor LLM e Agent Orchestrator
 
-- **Padrao**: OpenAI GPT-4o (custo/qualidade otimos para PT-BR).
-- **Agent Orchestrator multi-canal**: o orchestrator e agnostico de canal. Recebe `AgentInput(text, media, caller, permissions)` — nao sabe se veio de WhatsApp ou chat in-app. Transporte WhatsApp usa webhook; transporte in-app usa HTTP/WebSocket.
-- **Permission-gated tool composition**: a cada turno, a lista de tools e construida dinamicamente com base nas permissoes RBAC do caller:
+- **Padrão**: OpenAI GPT-4o (custo/qualidade ótimos para PT-BR).
+- **Agent Orchestrator multi-canal**: o orchestrator é agnóstico de canal. Recebe `AgentInput(text, media, caller, permissions)` — não sabe se veio de WhatsApp ou chat in-app. Transporte WhatsApp usa webhook; transporte in-app usa HTTP/WebSocket.
+- **Permission-gated tool composition**: a cada turno, a lista de tools é construída dinamicamente com base nas permissões RBAC do caller:
   ```python
-  # Composicao de tools por turno (RunAgentTurn)
+  # Composição de tools por turno (RunAgentTurn)
   tools = core_tools.filter_by_permissions(caller.permissions)
   for module in ModuleRegistry.all().values():
       tools += [t for t in module.get_agent_tools() if caller.has_permission(t["required_permission"])]
   ```
-  Admin recebe todos os tools. Motorista/Cliente recebe apenas consultas dos proprios dados + envio de comprovante.
-- **Tools** definidas como JSON Schemas e injetadas no prompt; Core tools + Module tools (dinamico, filtrado por RBAC). Quando o LLM responde com `tool_call`, o use case `RunAgentTurn` despacha para a funcao real — seja do Core ou do modulo.
+  Admin recebe todos os tools. Motorista/Cliente recebe apenas consultas dos próprios dados + envio de comprovante.
+- **Tools** definidas como JSON Schemas e injetadas no prompt; Core tools + Module tools (dinâmico, filtrado por RBAC). Quando o LLM responde com `tool_call`, o use case `RunAgentTurn` despacha para a função real — seja do Core ou do módulo.
 - **Function calling** com guardrails:
-  - `bloquear_veiculo` (module tool) exige condicoes satisfeitas (score, dias atraso, politica).
-  - Tools **financeiras** (registrar baixa, conceder desconto) sao logadas com extra rigor em `agent_runs`.
-- **Custo**: cada turno gasta tokens; sistema calcula e mostra em Configuracoes o gasto mensal estimado.
-- **Fallback**: se OpenAI falha, agente cai para `OllamaAdapter` local (modelo menor) — qualidade reduzida mas operacao continua.
+  - `bloquear_veiculo` (module tool) exige condições satisfeitas (score, dias atraso, política).
+  - Tools **financeiras** (registrar baixa, conceder desconto) são logadas com extra rigor em `agent_runs`.
+- **Custo**: cada turno gasta tokens; sistema calcula e mostra em Configurações o gasto mensal estimado.
+- **Fallback**: se OpenAI falha, agente cai para `OllamaAdapter` local (modelo menor) — qualidade reduzida mas operação continua.
 
-#### Audio Transcription (IAudioTranscriber)
+#### Transcrição de Áudio (IAudioTranscriber)
 
 - **Port**:
   ```python
@@ -1710,35 +1710,35 @@ class NoOpPaymentGateway:
   ```
 - **Default adapter**: `WhisperApiAdapter` (OpenAI Whisper API).
 - **Alternativas**: `LocalWhisperAdapter` (whisper.cpp — self-hosted, custo zero, mais lento), `GoogleSpeechAdapter`, `AzureSpeechAdapter`.
-- **Pipeline de audio inbound**: quando uma mensagem chega com `kind=audio` (de qualquer canal), o worker executa transcricao ANTES de passar ao orchestrator:
-  1. Download do audio (MinIO ou direto do provider).
+- **Pipeline de áudio inbound**: quando uma mensagem chega com `kind=audio` (de qualquer canal), o worker executa transcrição ANTES de passar ao orchestrator:
+  1. Download do áudio (MinIO ou direto do provider).
   2. `transcriber.transcribe(audio_bytes, mime)` -> `TranscriptionResult(text, confidence, duration_ms)`.
   3. Persiste `transcription` na Message.
-  4. Passa `text` como conteudo textual ao `RunAgentTurn`.
-- **Configuravel**: provider, language, modelo (whisper-1, large-v3, etc.) — em Configuracoes > Agente IA > Transcricao.
+  4. Passa `text` como conteúdo textual ao `RunAgentTurn`.
+- **Configurável**: provider, language, modelo (whisper-1, large-v3, etc.) — em Configurações > Agente IA > Transcrição.
 
 #### OCR (Tesseract default)
 
-- Pre-processamento OpenCV: deskew, denoise, contrast, threshold adaptativo.
+- Pré-processamento OpenCV: deskew, denoise, contrast, threshold adaptativo.
 - Linguagem: `por+eng`.
-- Pos-processamento: regex especificas para Pix (valor, data, ID transacao, banco emissor).
-- **Fallback opcional**: se confianca baixa, chama LLM Vision (`gpt-4o` ou Claude com imagem) — paga so na excecao.
+- Pós-processamento: regex específicas para Pix (valor, data, ID transação, banco emissor).
+- **Fallback opcional**: se confiança baixa, chama LLM Vision (`gpt-4o` ou Claude com imagem) — paga só na exceção.
 
 #### PDF Renderer (WeasyPrint default)
 
 - Templates Jinja2 com CSS print-ready.
-- Suporta marca d'agua, paginacao, footer com hash do PDF.
-- **Alternativos** (caso WeasyPrint nao de conta de algum CSS moderno): Browserless (Chromium headless via Docker) ou Gotenberg (LibreOffice + Chromium).
+- Suporta marca d'água, paginação, footer com hash do PDF.
+- **Alternativos** (caso WeasyPrint não dê conta de algum CSS moderno): Browserless (Chromium headless via Docker) ou Gotenberg (LibreOffice + Chromium).
 
 ---
 
-## 8. Core Workflows (Sequence Diagrams)
+## 8. Fluxos Principais (Diagramas de Sequência)
 
 ### 8.1 Login
 
 ```mermaid
 sequenceDiagram
-    participant U as Usuario (Browser)
+    participant U as Usuário (Browser)
     participant W as Angular SPA
     participant A as FastAPI
     participant DB as PostgreSQL
@@ -1757,7 +1757,7 @@ sequenceDiagram
     W-->>U: navega /dashboard
 ```
 
-### 8.2 Criar Contrato (com geracao de PDF assincrona)
+### 8.2 Criar Contrato (com geração de PDF assíncrona)
 
 ```mermaid
 sequenceDiagram
@@ -1774,7 +1774,7 @@ sequenceDiagram
     A-->>W: preview de N parcelas
     U->>W: confirma
     W->>A: POST /contracts (status=rascunho, asset_id=...)
-    A->>DB: INSERT contract + installments (em transacao)
+    A->>DB: INSERT contract + installments (em transação)
     A->>DB: INSERT contract_event(created)
     A-->>W: 201 { contract_id }
     W->>A: POST /contracts/{id}/activate
@@ -1793,7 +1793,7 @@ sequenceDiagram
     W-->>U: toast "PDF pronto" + link
 ```
 
-### 8.3 Recebimento de Comprovante via WhatsApp + Baixa Primaria + Validacao
+### 8.3 Recebimento de Comprovante via WhatsApp + Baixa Primária + Validação
 
 ```mermaid
 sequenceDiagram
@@ -1808,12 +1808,12 @@ sequenceDiagram
     participant LLM as OpenAI
     participant V as Validador (Humano)
 
-    M->>WA: envia print do comprovante (ou audio)
+    M->>WA: envia print do comprovante (ou áudio)
     WA->>API: POST /webhooks/whatsapp/evolution {messageId, image/audio}
     API->>DB: INSERT webhook_events_raw (idempotente)
     API->>Q: enqueue handle_inbound_whatsapp
     API-->>WA: 200 OK
-    W1->>WA: GET media (download imagem ou audio)
+    W1->>WA: GET media (download imagem ou áudio)
     W1->>DB: persist message(direction=in, media_url)
     alt kind == audio
         W1->>AT: transcribe(audio_bytes, mime, "pt-BR")
@@ -1821,7 +1821,7 @@ sequenceDiagram
         W1->>DB: UPDATE message.transcription = text
     end
     W1->>Q: enqueue run_agent_turn(AgentInput with caller.permissions)
-    W2->>DB: load contexto cliente + titulos abertos + ultimas N msgs + caller.permissions
+    W2->>DB: load contexto cliente + títulos abertos + últimas N msgs + caller.permissions
     W2->>W2: build permission-gated tool list
     W2->>W2: classifica imagem como comprovante (se imagem)
     W2->>W2: OCR Tesseract -> valor R$X, data Y, txid Z
@@ -1829,7 +1829,7 @@ sequenceDiagram
     LLM-->>W2: tool_call: registrar_baixa_primaria(install_id, valor, data)
     W2->>DB: UPDATE installment.status='pago_aguardando_verificacao'
     W2->>DB: INSERT installment_adjustment(kind='write_off_pending')
-    W2->>LLM: tool_result + pede mensagem de confirmacao
+    W2->>LLM: tool_result + pede mensagem de confirmação
     LLM-->>W2: "Recebi seu comprovante! ..."
     W2->>WA: send_text (resposta) [ou WebSocket se canal=in_app]
     W2->>DB: persist message(direction=out)
@@ -1842,7 +1842,7 @@ sequenceDiagram
     API-->>V: 200
 ```
 
-### 8.4 Conciliacao Bancaria Drag-and-Drop
+### 8.4 Conciliação Bancária Drag-and-Drop
 
 ```mermaid
 sequenceDiagram
@@ -1861,17 +1861,17 @@ sequenceDiagram
     A-->>W: lista
     W->>A: GET /reconciliation/match-suggestions
     A->>A: algoritmo: para cada txn, busca installment com valor +/-0% e data +/-3d
-    A-->>W: sugestoes com score 0..1
-    W-->>U: tabelas com sugestoes pintadas em verde
+    A-->>W: sugestões com score 0..1
+    W-->>U: tabelas com sugestões pintadas em verde
     U->>W: arrasta txn sobre installment (manual)
     W->>A: POST /reconciliation/match { txn_id, install_id, kind: '1to1' }
     A->>DB: UPDATE bank_transaction.status='conciliada', reconciled_to
-    A->>DB: UPDATE installment.status='pago' (final imutavel)
+    A->>DB: UPDATE installment.status='pago' (final imutável)
     A->>DB: INSERT audit_log
     A-->>W: 200
 ```
 
-### 8.5 Cobranca Preventiva Automatica (Cron)
+### 8.5 Cobrança Preventiva Automática (Cron)
 
 ```mermaid
 sequenceDiagram
@@ -1881,22 +1881,22 @@ sequenceDiagram
     participant LLM as LLM Provider
     participant WA as WhatsApp Gateway
 
-    Note over Beat: cron diario 9h
+    Note over Beat: cron diário 9h
     Beat->>W: schedule send_preventive_collection
     W->>DB: SELECT installments WHERE due_date = today + 2 AND status = 'em_aberto'
     DB-->>W: lista de N
     loop para cada installment
         W->>DB: load policy + customer + score
         W->>W: gera QR Code Pix (custo zero)
-        W->>LLM: prompt "gere mensagem preventiva amigavel com link Pix"
+        W->>LLM: prompt "gere mensagem preventiva amigável com link Pix"
         LLM-->>W: texto
         W->>WA: send_pix_card (QR + mensagem)
         W->>DB: persist message + audit
-        W->>W: sleep delay configuravel (anti-ban)
+        W->>W: sleep delay configurável (anti-ban)
     end
 ```
 
-### 8.6 Bloqueio Remoto via Module Hook (Vehicles — com Guardrails)
+### 8.6 Bloqueio Remoto via Module Hook (Veículos — com Guardrails)
 
 ```mermaid
 sequenceDiagram
@@ -1914,13 +1914,13 @@ sequenceDiagram
     Pol-->>Hook: { auto_block: true, min_days: 15, requires_approval: true }
     alt requires_human_approval
         Hook->>DB: insert pending_action (kind='block_vehicle', asset_id)
-        Hook->>U: SSE notification "acao pendente: bloqueio do veiculo X"
+        Hook->>U: SSE notification "ação pendente: bloqueio do veículo X"
         U->>U: revisa + aprova com senha
         U->>API: POST /modules/vehicles/{id}/block (approval=true)
         API->>TR: POST /command/block
         TR-->>API: ok
         API->>DB: insert audit_log(actor=user, reason=...)
-    else autopilot (raro, politica liberou)
+    else autopilot (raro, política liberou)
         Hook->>TR: POST /command/block
         TR-->>Hook: ok
         Hook->>DB: insert audit_log(actor=module:vehicles, justification)
@@ -1951,9 +1951,9 @@ sequenceDiagram
 
 ---
 
-## 9. Database Schema (PostgreSQL DDL)
+## 9. Schema de Banco de Dados (PostgreSQL DDL)
 
-> Este e o **schema canonico** que servira de base para a primeira migracao Alembic. Tipos personalizados, indices, constraints e triggers de imutabilidade incluidos. Convencao: `snake_case`, PKs `id UUID DEFAULT gen_random_uuid()`, timestamps `TIMESTAMPTZ`.
+> Este é o **schema canônico** que servirá de base para a primeira migração Alembic. Tipos personalizados, índices, constraints e triggers de imutabilidade incluídos. Convenção: `snake_case`, PKs `id UUID DEFAULT gen_random_uuid()`, timestamps `TIMESTAMPTZ`.
 
 ### 9.1 Extensions e Types
 
@@ -1975,27 +1975,27 @@ CREATE TYPE installment_status AS ENUM (
 );
 ```
 
-#### Installment Status State Machine (7 states)
+#### Máquina de Estados de Status do Installment (7 estados)
 
-| # | Status | Meaning | Mutable? |
+| # | Status | Significado | Mutável? |
 |---|---|---|---|
-| 1 | `em_aberto` | Generated, awaiting payment | Yes — editable, cancelable |
-| 2 | `vencido` | Past due date (daily cron) | Yes — editable, cancelable |
-| 3 | `pago_aguardando_verificacao` | Payment received (receipt, cash, or gateway), awaiting verification (human validation OR bank reconciliation) | No — only verifier advances |
-| 4 | `pago` | Verified and confirmed | No — IMMUTABLE (PG trigger) |
-| 5 | `pago_parcial` | Partially paid; remainder generated as new title | No — IMMUTABLE (PG trigger) |
-| 6 | `renegociado` | Replaced by renegotiation; original frozen | No — IMMUTABLE |
-| 7 | `cancelado` | Canceled (bulk edit, rollback, termination) | No — terminal state |
+| 1 | `em_aberto` | Gerado, aguardando pagamento | Sim — editável, cancelável |
+| 2 | `vencido` | Após data de vencimento (cron diário) | Sim — editável, cancelável |
+| 3 | `pago_aguardando_verificacao` | Pagamento recebido (comprovante, dinheiro ou gateway), aguardando verificação (validação humana OU conciliação bancária) | Não — apenas validador avança |
+| 4 | `pago` | Verificado e confirmado | Não — IMUTÁVEL (PG trigger) |
+| 5 | `pago_parcial` | Pago parcialmente; diferença gerada como novo título | Não — IMUTÁVEL (PG trigger) |
+| 6 | `renegociado` | Substituído por renegociação; original congelado | Não — IMUTÁVEL |
+| 7 | `cancelado` | Cancelado (edição em lote, rollback, rescisão) | Não — estado terminal |
 
-Transitions:
-- em_aberto → vencido (cron daily)
-- em_aberto/vencido → pago_aguardando_verificacao (receipt received, cash attested, or gateway notified)
-- em_aberto/vencido → pago_parcial (partial payment received)
-- em_aberto/vencido → renegociado (renegotiation replaces)
-- em_aberto/vencido → cancelado (bulk cancel, rollback, termination)
-- pago_aguardando_verificacao → pago (verified: validator approves, reconciliation matches, or gateway confirms)
-- pago_aguardando_verificacao → em_aberto (validator rejects — back to open)
-- pago_parcial → generates child em_aberto for remainder
+Transições:
+- em_aberto → vencido (cron diário)
+- em_aberto/vencido → pago_aguardando_verificacao (comprovante recebido, dinheiro atestado ou gateway notificou)
+- em_aberto/vencido → pago_parcial (pagamento parcial recebido)
+- em_aberto/vencido → renegociado (renegociação substitui)
+- em_aberto/vencido → cancelado (cancelamento em lote, rollback, rescisão)
+- pago_aguardando_verificacao → pago (verificado: validador aprova, conciliação bate ou gateway confirma)
+- pago_aguardando_verificacao → em_aberto (validador rejeita — volta para aberto)
+- pago_parcial → gera filho em_aberto para a diferença
 
 ```sql
 CREATE TYPE payment_method AS ENUM ('pix','dinheiro','transferencia','cartao','outros');
@@ -2011,7 +2011,7 @@ CREATE TYPE acquisition_type AS ENUM ('a_vista','financiamento','consorcio','cus
 CREATE TYPE amortization AS ENUM ('price','sac');
 ```
 
-### 9.2 Identity
+### 9.2 Identidade
 
 ```sql
 CREATE TABLE users (
@@ -2083,7 +2083,7 @@ CREATE TABLE audit_log (
 CREATE INDEX idx_audit_user_created ON audit_log(user_id, created_at DESC);
 CREATE INDEX idx_audit_entity ON audit_log(entity, entity_id);
 
--- audit_log e append-only: trigger bloqueia UPDATE/DELETE
+-- audit_log é append-only: trigger bloqueia UPDATE/DELETE
 CREATE OR REPLACE FUNCTION block_audit_mutation() RETURNS TRIGGER AS $$
 BEGIN RAISE EXCEPTION 'audit_log is append-only'; END;
 $$ LANGUAGE plpgsql;
@@ -2091,7 +2091,7 @@ CREATE TRIGGER audit_no_update BEFORE UPDATE OR DELETE ON audit_log
   FOR EACH ROW EXECUTE FUNCTION block_audit_mutation();
 ```
 
-### 9.3 Asset Registry (Core)
+### 9.3 Registro de Ativos (Core)
 
 ```sql
 -- Generic asset table — all verticals register here
@@ -2138,7 +2138,7 @@ CREATE TABLE module_hooks_config (
 );
 ```
 
-### 9.4 Catalog
+### 9.4 Catálogo
 
 ```sql
 CREATE TABLE customers (
@@ -2209,7 +2209,7 @@ CREATE TABLE expense_categories (
 );
 ```
 
-### 9.5 Module: Vehicles (tabelas module-specific)
+### 9.5 Módulo: Veículos (tabelas module-specific)
 
 ```sql
 -- Vehicles table: module-specific, linked to generic assets
@@ -2284,13 +2284,13 @@ CREATE TABLE tracker_devices (
 );
 ```
 
-### 9.6 Contracts
+### 9.6 Contratos
 
 ```sql
 CREATE TABLE contracts (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id     UUID NOT NULL REFERENCES customers(id),
-    asset_id        UUID NOT NULL REFERENCES assets(id),   -- generico (nao vehicle_id)
+    asset_id        UUID NOT NULL REFERENCES assets(id),   -- genérico (não vehicle_id)
     status          contract_status NOT NULL DEFAULT 'rascunho',
     start_date      DATE NOT NULL,
     end_date        DATE,
@@ -2298,7 +2298,7 @@ CREATE TABLE contracts (
     periodicity     periodicity NOT NULL,
     due_day         INT,
     custom_days_interval INT,              -- only used when periodicity = 'custom_days'
-    late_interest_pct_per_day NUMERIC(6,4) NOT NULL DEFAULT 0.0033, -- 1% ao mes ~ 0.0333%/dia
+    late_interest_pct_per_day NUMERIC(6,4) NOT NULL DEFAULT 0.0033, -- 1% ao mês ~ 0.0333%/dia
     late_fine_pct   NUMERIC(6,4) NOT NULL DEFAULT 0.02,
     grace_days      INT NOT NULL DEFAULT 0,
     has_purchase_option BOOLEAN NOT NULL DEFAULT FALSE,
@@ -2357,7 +2357,7 @@ CREATE INDEX idx_inst_due_status ON installments(due_date, status);
 CREATE INDEX idx_inst_status ON installments(status);
 CREATE INDEX idx_inst_parent ON installments(parent_installment_id) WHERE parent_installment_id IS NOT NULL;
 
--- Trigger de imutabilidade: status='pago' nao pode ser alterado
+-- Trigger de imutabilidade: status='pago' não pode ser alterado
 CREATE OR REPLACE FUNCTION enforce_paid_immutability() RETURNS TRIGGER AS $$
 BEGIN
     IF OLD.status = 'pago' AND (
@@ -2367,7 +2367,7 @@ BEGIN
        NEW.paid_amount <> OLD.paid_amount OR
        NEW.status <> OLD.status
     ) THEN
-        -- excecao: status pode ir para 'cancelado' apenas via reverse_write_off
+        -- exceção: status pode ir para 'cancelado' apenas via reverse_write_off
         IF NEW.status = 'cancelado' AND current_setting('app.reverse_write_off', TRUE) = 'true' THEN
             RETURN NEW;
         END IF;
@@ -2397,14 +2397,14 @@ CREATE TABLE contract_events (
     contract_id     UUID NOT NULL REFERENCES contracts(id),
     event_type      TEXT NOT NULL,    -- 'created','signed','installments_generated','bulk_edit','terminated','pdf_generated'
     payload         JSONB NOT NULL,
-    pdf_hash        TEXT,             -- somente em pdf_generated
+    pdf_hash        TEXT,             -- apenas em pdf_generated
     created_by_user_id UUID REFERENCES users(id),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_ctr_events ON contract_events(contract_id, created_at DESC);
 ```
 
-### 9.7 Finance (Payables + Reconciliation)
+### 9.7 Financeiro (Títulos a Pagar + Conciliação)
 
 ```sql
 CREATE TABLE payables (
@@ -2412,7 +2412,7 @@ CREATE TABLE payables (
     description     TEXT NOT NULL,
     supplier_id     UUID REFERENCES suppliers(id),
     category_id     UUID REFERENCES expense_categories(id),
-    asset_id        UUID REFERENCES assets(id),        -- custo por ativo (generico)
+    asset_id        UUID REFERENCES assets(id),        -- custo por ativo (genérico)
     amount          NUMERIC(12,2) NOT NULL,
     due_date        DATE NOT NULL,
     status          payable_status NOT NULL DEFAULT 'em_aberto',
@@ -2475,7 +2475,7 @@ CREATE INDEX idx_btx_status ON bank_transactions(status) WHERE status='pendente'
 CREATE INDEX idx_btx_posted ON bank_transactions(posted_at DESC);
 ```
 
-### 9.8 Collections
+### 9.8 Cobranças
 
 ```sql
 CREATE TABLE whatsapp_conversations (
@@ -2552,7 +2552,7 @@ CREATE TABLE collection_policies (
 CREATE UNIQUE INDEX idx_pol_active ON collection_policies(is_active) WHERE is_active=TRUE;
 ```
 
-### 9.9 Integrations
+### 9.9 Integrações
 
 ```sql
 CREATE TABLE webhook_events_raw (
@@ -2590,7 +2590,7 @@ CREATE TABLE feature_flags (
 );
 ```
 
-### 9.10 Reports
+### 9.10 Relatórios
 
 ```sql
 CREATE TABLE saved_reports (
@@ -2605,16 +2605,16 @@ CREATE TABLE saved_reports (
 CREATE INDEX idx_saved_owner ON saved_reports(owner_user_id);
 ```
 
-### 9.11 Motor de Cobranca — Novas Tabelas (Epico 12+)
+### 9.11 Motor de Cobrança — Novas Tabelas (Épico 12+)
 
 ```sql
--- Enum: tipo de titulo (discrimina parcela de opcao_compra e outros)
+-- Enum: tipo de título (discrimina parcela de opcao_compra e outros)
 CREATE TYPE tipo_titulo AS ENUM ('parcela', 'opcao_compra', 'multa', 'taxa', 'ajuste');
 
 -- Adicionar colunas ao installments existente
 ALTER TABLE installments
     ADD COLUMN tipo tipo_titulo NOT NULL DEFAULT 'parcela',
-    ADD COLUMN proxima_acao_em TIMESTAMPTZ,          -- camada 3 de idempotencia
+    ADD COLUMN proxima_acao_em TIMESTAMPTZ,          -- camada 3 de idempotência
     ADD COLUMN acoes_de_cobranca INT NOT NULL DEFAULT 0,  -- contador de tentativas
     ADD COLUMN ultima_cobranca_enviada_em TIMESTAMPTZ;
 
@@ -2623,21 +2623,21 @@ CREATE UNIQUE INDEX uniq_opcao_compra_por_contrato
     ON installments(contract_id)
     WHERE tipo = 'opcao_compra';
 
--- politica_cobranca: parametros do motor, 1 por empresa
+-- politica_cobranca: parâmetros do motor, 1 por empresa
 CREATE TABLE politica_cobranca (
     id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     empresa_id                  UUID NOT NULL REFERENCES empresas(id) UNIQUE,
     dias_antecedencia_lembrete  INTEGER NOT NULL DEFAULT 3,
     dias_carencia               INTEGER NOT NULL DEFAULT 0,
-    percentual_multa            NUMERIC(5,2) NOT NULL DEFAULT 2.00,   -- % unica na entrada em atraso
-    percentual_juros_dia        NUMERIC(5,4) NOT NULL DEFAULT 0.0333, -- 1% ao mes ~ 0.0333%/dia
-    limite_dias_suspensao       INTEGER NOT NULL DEFAULT 15,          -- dias ate suspensao do contrato
-    limite_dias_encerramento    INTEGER NOT NULL DEFAULT 60,          -- dias ate encerramento com pendencia
+    percentual_multa            NUMERIC(5,2) NOT NULL DEFAULT 2.00,   -- % única na entrada em atraso
+    percentual_juros_dia        NUMERIC(5,4) NOT NULL DEFAULT 0.0333, -- 1% ao mês ~ 0.0333%/dia
+    limite_dias_suspensao       INTEGER NOT NULL DEFAULT 15,          -- dias até suspensão do contrato
+    limite_dias_encerramento    INTEGER NOT NULL DEFAULT 60,          -- dias até encerramento com pendência
     atualizado_em               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_politica_empresa ON politica_cobranca(empresa_id);
 
--- passivos_inoperantes: dividas de contratos encerrados, vinculadas ao CPF do cliente
+-- passivos_inoperantes: dívidas de contratos encerrados, vinculadas ao CPF do cliente
 CREATE TABLE passivos_inoperantes (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     empresa_id      UUID NOT NULL REFERENCES empresas(id),
@@ -2654,7 +2654,7 @@ CREATE INDEX idx_passivo_cliente ON passivos_inoperantes(cliente_id);
 CREATE INDEX idx_passivo_contrato ON passivos_inoperantes(contrato_id);
 CREATE INDEX idx_passivo_situacao ON passivos_inoperantes(situacao) WHERE situacao = 'pendente';
 
--- execucoes_motor: registro de auditoria de cada rodada do motor de cobranca
+-- execucoes_motor: registro de auditoria de cada rodada do motor de cobrança
 CREATE TABLE execucoes_motor (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome_tarefa     VARCHAR(100) NOT NULL,
@@ -2669,12 +2669,12 @@ CREATE INDEX idx_execucao_tarefa ON execucoes_motor(nome_tarefa, iniciado_em DES
 CREATE INDEX idx_execucao_situacao ON execucoes_motor(situacao) WHERE situacao = 'executando';
 ```
 
-> **Nota**: a tabela `empresas` referenciada acima sera criada na implementacao multi-tenant (V2 planejado). Em V1 single-tenant, `empresa_id` pode referenciar uma tabela de configuracao basica ou ser omitido dos constraints ate a migracao multi-tenant.
+> **Nota**: a tabela `empresas` referenciada acima será criada na implementação multi-tenant (V2 planejado). Em V1 single-tenant, `empresa_id` pode referenciar uma tabela de configuração básica ou ser omitido dos constraints até a migração multi-tenant.
 
-### 9.12 Views Materializadas (relatorios pesados)
+### 9.12 Views Materializadas (relatórios pesados)
 
 ```sql
--- View: ROI por ativo (refresh manual ou job) — generico, usa asset
+-- View: ROI por ativo (refresh manual ou job) — genérico, usa asset
 CREATE MATERIALIZED VIEW mv_asset_roi AS
 SELECT
     a.id AS asset_id,
@@ -2697,16 +2697,16 @@ LEFT JOIN payables p ON p.asset_id = a.id AND p.status='pago'
 WHERE a.deleted_at IS NULL
 GROUP BY a.id;
 CREATE UNIQUE INDEX ON mv_asset_roi (asset_id);
--- REFRESH MATERIALIZED VIEW CONCURRENTLY mv_asset_roi; (job diario)
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY mv_asset_roi; (job diário)
 ```
 
 ---
 
-## 10. Frontend Architecture (Angular 21+)
+## 10. Arquitetura do Frontend (Angular 21+)
 
-> **Esta secao e a aplicacao concreta do `frontend_architecture_manifesto.md` e do `angular-structure.md` ao {{product_name}}.** Toda regra do manifesto e nao-negociavel.
+> **Esta seção é a aplicação concreta do `frontend_architecture_manifesto.md` e do `angular-structure.md` ao {{product_name}}.** Toda regra do manifesto é não-negociável.
 
-### 10.1 Estrutura de Pastas — Visao Completa
+### 10.1 Estrutura de Pastas — Visão Completa
 
 ```
 frontend/
@@ -2750,13 +2750,13 @@ frontend/
 │       │       ├── auth.service.ts             # signal authState() — global
 │       │       ├── theme.service.ts            # signal theme()
 │       │       ├── notification.service.ts     # toast queue + audio
-│       │       ├── current-user.service.ts     # me + permissoes
+│       │       ├── current-user.service.ts     # me + permissões
 │       │       ├── permission.service.ts       # can('action')
 │       │       ├── sse.service.ts              # EventSource singleton
 │       │       ├── ws.service.ts               # WebSocket singleton (chat)
 │       │       ├── feature-flag.service.ts
-│       │       ├── module.service.ts           # lista modulos ativos do backend
-│       │       ├── i18n.service.ts             # carrega traducoes (futuro)
+│       │       ├── module.service.ts           # lista módulos ativos do backend
+│       │       ├── i18n.service.ts             # carrega traduções (futuro)
 │       │       └── breadcrumb.service.ts
 │       │
 │       ├── shared/                      # UI REUSABLE
@@ -2768,7 +2768,7 @@ frontend/
 │       │   │   ├── button/
 │       │   │   ├── input-text/
 │       │   │   ├── input-number/
-│       │   │   ├── input-money/                # tabular-nums + formatacao BR
+│       │   │   ├── input-money/                # tabular-nums + formatação BR
 │       │   │   ├── input-date/
 │       │   │   ├── input-cpf/
 │       │   │   ├── input-cnpj/
@@ -2781,8 +2781,8 @@ frontend/
 │       │   │   ├── modal/                      # base
 │       │   │   ├── drawer/
 │       │   │   ├── command-palette/            # Ctrl+K
-│       │   │   ├── data-table/                 # tabela generica com sort/filter/paging
-│       │   │   ├── data-list/                  # cards reutilizaveis
+│       │   │   ├── data-table/                 # tabela genérica com sort/filter/paging
+│       │   │   ├── data-list/                  # cards reutilizáveis
 │       │   │   ├── kpi-card/
 │       │   │   ├── badge/
 │       │   │   ├── skeleton/
@@ -2805,7 +2805,7 @@ frontend/
 │       │   │   ├── cpf-mask.pipe.ts
 │       │   │   ├── cnpj-mask.pipe.ts
 │       │   │   ├── phone-br.pipe.ts
-│       │   │   ├── relative-date.pipe.ts        # "ha 2 horas"
+│       │   │   ├── relative-date.pipe.ts        # "há 2 horas"
 │       │   │   ├── safe-html.pipe.ts
 │       │   │   └── installment-status.pipe.ts   # enum -> label
 │       │   ├── directives/
@@ -2815,7 +2815,7 @@ frontend/
 │       │   │   ├── shortcut.directive.ts
 │       │   │   └── auto-resize-textarea.directive.ts
 │       │   ├── models/
-│       │   │   ├── api-response.model.ts        # padrao envelope se houver
+│       │   │   ├── api-response.model.ts        # padrão envelope se houver
 │       │   │   ├── pagination.model.ts
 │       │   │   ├── filter.model.ts
 │       │   │   └── enums.ts
@@ -2877,12 +2877,12 @@ frontend/
 │               │   │   └── customer-audit-tab.component.ts
 │               │   └── customers.routes.ts
 │               │
-│               ├── assets/                        # generic asset views
+│               ├── assets/                        # views genéricas de asset
 │               │   ├── assets-list.component.ts
 │               │   ├── asset-detail.component.ts
 │               │   └── assets.routes.ts
 │               │
-│               ├── vehicles/                      # module: vehicles UI
+│               ├── vehicles/                      # módulo: vehicles UI
 │               │   ├── vehicles-list.component.ts
 │               │   ├── vehicle-wizard.component.ts           # 4 passos
 │               │   ├── vehicle-detail.component.ts
@@ -2920,7 +2920,7 @@ frontend/
 │               │   │   ├── receivables-list.component.ts
 │               │   │   ├── write-off-modal.component.ts
 │               │   │   ├── partial-write-off-modal.component.ts
-│               │   │   ├── validation-queue.component.ts     # aprovacao rapida
+│               │   │   ├── validation-queue.component.ts     # aprovação rápida
 │               │   │   ├── pix-qr-modal.component.ts
 │               │   │   ├── renegotiation-modal.component.ts
 │               │   │   └── receivables.routes.ts
@@ -2946,25 +2946,25 @@ frontend/
 │               │           └── dre-table/
 │               │
 │               ├── inbox/                                    # WhatsApp Inbox
-│               │   ├── inbox.component.ts                    # 3-paineis
+│               │   ├── inbox.component.ts                    # 3-painéis
 │               │   ├── components/
 │               │   │   ├── conversation-list/
 │               │   │   ├── chat-thread/
 │               │   │   ├── chat-message/                     # bolha verde/branca
-│               │   │   ├── chat-input/                       # com audio + anexo + emoji
+│               │   │   ├── chat-input/                       # com áudio + anexo + emoji
 │               │   │   ├── customer-context-pane/
 │               │   │   ├── agent-toggle/
 │               │   │   └── broadcast-modal/
 │               │   └── inbox.routes.ts
 │               │
 │               ├── reports/
-│               │   ├── reports-list.component.ts             # cards de relatorios
+│               │   ├── reports-list.component.ts             # cards de relatórios
 │               │   ├── report-viewer.component.ts
-│               │   ├── report-builder.component.ts           # DRAG-AND-DROP de dimensoes
+│               │   ├── report-builder.component.ts           # DRAG-AND-DROP de dimensões
 │               │   ├── components/
 │               │   │   ├── dimension-palette/
 │               │   │   ├── filter-pane/
-│               │   │   └── visualization/                    # tabela + grafico
+│               │   │   └── visualization/                    # tabela + gráfico
 │               │   └── reports.routes.ts
 │               │
 │               ├── audit/
@@ -2972,16 +2972,16 @@ frontend/
 │               │   ├── audit-detail-modal.component.ts
 │               │   └── audit.routes.ts
 │               │
-│               └── config/                                   # CONFIGURACOES
+│               └── config/                                   # CONFIGURAÇÕES
 │                   ├── config.component.ts                   # tabs gerais
 │                   ├── general/
 │                   ├── company/
 │                   ├── billing-rules/                        # juros, multa, score
-│                   ├── agent/                                # parametrizacao do agente IA
+│                   ├── agent/                                # parametrização do agente IA
 │                   │   ├── agent-config.component.ts
 │                   │   ├── components/
 │                   │   │   ├── persona-editor/
-│                   │   │   ├── policy-editor/                # tabela score -> tolerancia
+│                   │   │   ├── policy-editor/                # tabela score -> tolerância
 │                   │   │   ├── template-editor/              # Tiptap
 │                   │   │   └── agent-tester/
 │                   │   └── ...
@@ -2992,7 +2992,7 @@ frontend/
 │                   │   │   ├── credentials-modal/
 │                   │   │   └── test-connection-button/
 │                   │   └── ...
-│                   ├── modules/                              # configuracao de modulos
+│                   ├── modules/                              # configuração de módulos
 │                   │   ├── modules-list.component.ts
 │                   │   ├── module-hooks-config.component.ts
 │                   │   └── ...
@@ -3002,14 +3002,14 @@ frontend/
 │                   └── config.routes.ts
 ```
 
-> **Notas criticas (manifesto):**
+> **Notas críticas (manifesto):**
 > - Cada componente tem **3 arquivos** (TS/HTML/CSS), o `.css` praticamente vazio.
 > - Estrutura **rasa**: `customers-list.component.ts` direto na pasta `customers/`, sem subpasta redundante.
-> - **Nenhum service em `/features`**. Chamadas API ficam em `core/services/` (ex.: `customer.service.ts` se necessario globalmente OU diretamente no componente via `inject(HttpClient)` + `resource()`).
+> - **Nenhum service em `/features`**. Chamadas API ficam em `core/services/` (ex.: `customer.service.ts` se necessário globalmente OU diretamente no componente via `inject(HttpClient)` + `resource()`).
 > - **Lazy loading** por feature shell (`customers.routes.ts`, `vehicles.routes.ts`, etc).
 > - Cada componente compartilhado em `shared/components/{nome}/` com seus 3 arquivos.
 
-### 10.2 Padrao de Componente — Exemplo Concreto
+### 10.2 Padrão de Componente — Exemplo Concreto
 
 ```typescript
 // features/system/customers/customers-list.component.ts
@@ -3102,7 +3102,7 @@ export class CustomersListComponent {
   } @else if (customers.value()?.items?.length === 0) {
     <ui-empty-state
       title="Nenhum cliente ainda"
-      description="Cadastre o primeiro cliente para comecar"
+      description="Cadastre o primeiro cliente para começar"
       illustration="empty-customers" />
   } @else {
     <ui-data-table
@@ -3115,6 +3115,7 @@ export class CustomersListComponent {
 
 ```css
 /* customers-list.component.css — propositalmente quase vazio */
+
 :host { display: block; height: 100%; }
 ```
 
@@ -3191,15 +3192,15 @@ html, body {
 |-------------------------------------------------|-------------------------------------------------------|
 | Auth (logged user, tokens, permissions)         | `core/services/auth.service.ts` (signal global)      |
 | Tema dark/light                                 | `core/services/theme.service.ts`                      |
-| Toasts e notificacoes                           | `core/services/notification.service.ts`               |
+| Toasts e notificações                           | `core/services/notification.service.ts`               |
 | Stream SSE/WS                                   | `core/services/{sse,ws}.service.ts`                   |
-| Modulos ativos                                  | `core/services/module.service.ts`                     |
+| Módulos ativos                                  | `core/services/module.service.ts`                     |
 | Lista de clientes da tela atual                 | **componente** com `resource()`                        |
 | Filtros da tela                                 | **componente** com signals                             |
-| Form em wizard (multi-step)                      | **componente pai** (signals) ou um service local efemero (nao global) |
+| Form em wizard (multi-step)                      | **componente pai** (signals) ou um service local efêmero (não global) |
 | Cache cross-tela (ex.: lista de fornecedores)   | `core/services/lookup.service.ts` (signal cache + invalidate) |
 
-> Quando precisar de "service de feature", mantemos a regra do manifesto: **vai para `/core/services/`** (ex.: `customer.service.ts`), nunca em `/features/`. Mas na maioria dos casos, `inject(HttpClient)` + `resource()` direto no componente ja e suficiente — Angular 21 reduziu drasticamente a necessidade de services pra dados.
+> Quando precisar de "service de feature", mantemos a regra do manifesto: **vai para `/core/services/`** (ex.: `customer.service.ts`), nunca em `/features/`. Mas na maioria dos casos, `inject(HttpClient)` + `resource()` direto no componente já é suficiente — Angular 21 reduziu drasticamente a necessidade de services pra dados.
 
 ### 10.5 Roteamento
 
@@ -3272,7 +3273,7 @@ export const SYSTEM_ROUTES: Routes = [
 
 ### 10.6 SSE e WebSocket no Frontend
 
-**SSE (notificacoes, dashboard, module-specific)**:
+**SSE (notificações, dashboard, module-specific)**:
 
 ```typescript
 // core/services/sse.service.ts
@@ -3298,7 +3299,7 @@ export class SseService {
     const token = this.auth.accessToken();
     if (!token) return;
     this.es?.close();
-    // FastAPI aceita token via query string para SSE (cookie nao funciona em EventSource cross-origin)
+    // FastAPI aceita token via query string para SSE (cookie não funciona em EventSource cross-origin)
     this.es = new EventSource(`${this.base}/sse/${channel}?token=${token}`);
     this.es.onopen = () => this.connected.set(true);
     this.es.onerror = () => this.connected.set(false);
@@ -3316,7 +3317,7 @@ export class SseService {
 **WebSocket (chat WhatsApp)**:
 
 ```typescript
-// core/services/ws.service.ts (esboco)
+// core/services/ws.service.ts (esboço)
 @Injectable({ providedIn: 'root' })
 export class WsService {
   private ws?: WebSocket;
@@ -3325,24 +3326,24 @@ export class WsService {
 }
 ```
 
-### 10.7 Drag-and-Drop — Padroes de Uso
+### 10.7 Drag-and-Drop — Padrões de Uso
 
 - **CDK `@angular/cdk/drag-drop`** para todos os casos (cobre 99%).
-- Componente **wrapper** `<ui-drag-list>` em `shared/components/drag-list/` para casos genericos (lista reordenavel).
-- Para conciliacao (split com 2 listas): **2 `cdkDropList` conectadas** via `[cdkDropListConnectedTo]`.
-- Anti-padrao: **nao** usar libs externas (SortableJS, react-dnd-port etc.) — CDK e suficiente.
+- Componente **wrapper** `<ui-drag-list>` em `shared/components/drag-list/` para casos genéricos (lista reordenável).
+- Para conciliação (split com 2 listas): **2 `cdkDropList` conectadas** via `[cdkDropListConnectedTo]`.
+- Anti-padrão: **não** usar libs externas (SortableJS, react-dnd-port etc.) — CDK é suficiente.
 
 ### 10.8 Acessibilidade
 
 - Componente `<ui-icon>` aceita `aria-label`.
-- Modais usam diretiva `focusTrap` propria.
-- `<button>` por padrao e `type="button"` (evita submit acidental).
+- Modais usam diretiva `focusTrap` própria.
+- `<button>` por padrão é `type="button"` (evita submit acidental).
 - `aria-live="polite"` no toast.
 - `aria-current="page"` na sidebar.
 
 ---
 
-## 11. Backend Architecture (FastAPI)
+## 11. Arquitetura do Backend (FastAPI)
 
 ### 11.1 Bootstrap e Lifespan
 
@@ -3470,7 +3471,7 @@ class Settings(BaseSettings):
     BANK_PROVIDER: str = "local"          # 'local' | 'pluggy' | ...
     PLUGGY_CLIENT_ID: str | None = None
     PLUGGY_CLIENT_SECRET: str | None = None
-    PAYMENT_GATEWAY_PROVIDER: str = "none" # default: no gateway (Pix proprio)
+    PAYMENT_GATEWAY_PROVIDER: str = "none" # default: no gateway (Pix próprio)
 
     # Module: Vehicles
     FIPE_PROVIDER: str = "apifipe_br"
@@ -3489,9 +3490,9 @@ class Settings(BaseSettings):
 settings = Settings()
 ```
 
-### 11.3 Dependency Injection Pattern
+### 11.3 Padrão de Injeção de Dependência
 
-FastAPI nativo cobre o caso. Cada use case e registrado via `Depends`:
+FastAPI nativo cobre o caso. Cada use case é registrado via `Depends`:
 
 ```python
 # app/api/deps.py
@@ -3511,7 +3512,7 @@ from app.application.finance.write_off_installment import WriteOffInstallment
 T = TypeVar("T")
 
 def get_use_case(uc_class: Type[T]) -> Type[T]:
-    """Factory que devolve uma funcao 'Depends'-compatible para o use case dado."""
+    """Factory que devolve uma função 'Depends'-compatible para o use case dado."""
     if uc_class is WriteOffInstallment:
         async def _build(session: SessionDep) -> WriteOffInstallment:
             return WriteOffInstallment(
@@ -3528,9 +3529,9 @@ def get_use_case(uc_class: Type[T]) -> Type[T]:
     raise ValueError(f"Unknown use case {uc_class}")
 ```
 
-> Para projetos maiores, vale considerar `dishka` ou `wired` como container DI; no MVP, fabricas explicitas bastam.
+> Para projetos maiores, vale considerar `dishka` ou `wired` como container DI; no MVP, fábricas explícitas bastam.
 
-### 11.4 Padroes de Erro & Exception Handlers
+### 11.4 Padrões de Erro e Exception Handlers
 
 ```python
 # app/domain/shared/exceptions.py
@@ -3573,31 +3574,31 @@ def register_exception_handlers(app: FastAPI):
             },
             media_type="application/problem+json",
         )
-    # handler generico p/ Exception -> 500 com correlation_id (sem vazar stack)
+    # handler genérico p/ Exception -> 500 com correlation_id (sem vazar stack)
 ```
 
 ### 11.5 Workers Celery — Estrutura e Arquitetura de Filas
 
 #### 11.5.1 Arquitetura de 7 Filas
 
-O sistema utiliza **7 filas especializadas** (mais a fila do agente) com configuracoes distintas de paralelismo, priorizando throughput onde necessario e isolamento onde critico:
+O sistema utiliza **7 filas especializadas** (mais a fila do agente) com configurações distintas de paralelismo, priorizando throughput onde necessário e isolamento onde crítico:
 
-| Fila                     | Workers | Threads/Worker | Dominio                                         | Prioridade |
+| Fila                     | Workers | Threads/Worker | Domínio                                         | Prioridade |
 |--------------------------|---------|---------------|--------------------------------------------------|------------|
-| `fila_cobranca`          | 4       | 4             | Geracao de titulos, encargos, cobrancas          | Alta       |
+| `fila_cobranca`          | 4       | 4             | Geração de títulos, encargos, cobranças          | Alta       |
 | `fila_notificacoes`      | 2       | 4             | Envio WhatsApp, email, SSE                        | Alta       |
-| `fila_verificacao`       | 2       | 4             | OCR, reconciliacao, comprovantes                  | Media      |
-| `fila_contratos`         | 2       | 2             | Ciclo de vida de contratos                        | Media      |
-| `fila_frota`             | 2       | 2             | GPS, FIPE, documentos de veiculo                  | Media      |
-| `fila_padrao`            | 2       | 2             | Coordinators, manutencao geral                    | Baixa      |
-| `fila_whatsapp_entrada`  | 2       | 4             | Inbound WhatsApp (prioridade maxima)              | Maxima     |
-| `fila_agente`            | 2       | 1 (por worker)| Turno do agente LLM (I/O-bound, sem paralelismo) | Media      |
+| `fila_verificacao`       | 2       | 4             | OCR, reconciliação, comprovantes                  | Média      |
+| `fila_contratos`         | 2       | 2             | Ciclo de vida de contratos                        | Média      |
+| `fila_frota`             | 2       | 2             | GPS, FIPE, documentos de veículo                  | Média      |
+| `fila_padrao`            | 2       | 2             | Coordinators, manutenção geral                    | Baixa      |
+| `fila_whatsapp_entrada`  | 2       | 4             | Inbound WhatsApp (prioridade máxima)              | Máxima     |
+| `fila_agente`            | 2       | 1 (por worker)| Turno do agente LLM (I/O-bound, sem paralelismo) | Média      |
 
-> **Regra do Beat**: `replicas=1` SEMPRE para o Celery Beat. Escalar o Beat para 2+ replicas resulta em disparo duplicado de tasks agendadas. Escalar apenas os workers.
+> **Regra do Beat**: `replicas=1` SEMPRE para o Celery Beat. Escalar o Beat para 2+ réplicas resulta em disparo duplicado de tasks agendadas. Escalar apenas os workers.
 
-#### 11.5.2 Padrao Fan-Out (Coordinator -> Lotes de 50)
+#### 11.5.2 Padrão Fan-Out (Coordinator -> Lotes de 50)
 
-Tasks pesadas seguem o padrao **coordinator -> lotes**: o coordinator e uma task leve que roda no Beat, consulta IDs elegiveis via `SELECT FOR UPDATE SKIP LOCKED` e dispara um `chord` de tasks de lote de ate 50 registros cada.
+Tasks pesadas seguem o padrão **coordinator -> lotes**: o coordinator é uma task leve que roda no Beat, consulta IDs elegíveis via `SELECT FOR UPDATE SKIP LOCKED` e dispara um `chord` de tasks de lote de até 50 registros cada.
 
 ```python
 # workers/tasks/cobranca/coordinators.py
@@ -3609,7 +3610,7 @@ from app.infrastructure.db.session import sync_session_factory
 def coordenador_processar_titulos_vencidos():
     """
     Coordinator leve — roda no Beat.
-    Nao executa logica de negocio; apenas fragmenta o trabalho.
+    Não executa lógica de negócio; apenas fragmenta o trabalho.
     """
     with sync_session_factory() as db:
         ids = db.execute(
@@ -3639,21 +3640,21 @@ def coordenador_processar_titulos_vencidos():
     acks_late=True,
 )
 def processar_lote_titulos_vencidos(self, ids: list[str]):
-    """Processa um lote de ate 50 titulos vencidos."""
+    """Processa um lote de até 50 títulos vencidos."""
     import asyncio
     return asyncio.run(_processar_lote_async(ids))
 ```
 
-#### 11.5.3 Tres Camadas de Idempotencia
+#### 11.5.3 Três Camadas de Idempotência
 
-Toda task do motor de cobranca implementa **3 camadas de idempotencia** para evitar processamento duplicado em caso de retry, falha de rede ou reinicio de worker:
+Toda task do motor de cobrança implementa **3 camadas de idempotência** para evitar processamento duplicado em caso de retry, falha de rede ou reinício de worker:
 
-1. **`SELECT FOR UPDATE SKIP LOCKED` no PostgreSQL** — o coordinator pega somente IDs nao bloqueados por outra transacao em andamento.
-2. **Redis lock com TTL** — antes de processar um titulo individual, a task adquire `SET titulo:{id}:cobranca NX EX 60`. Se ja existir, pula.
-3. **Coluna `proxima_acao_em TIMESTAMPTZ` na tabela `titulos`** — a task verifica se `proxima_acao_em > NOW()` antes de processar. Se sim, o titulo ja foi agendado para o futuro e nao deve ser reprocessado agora.
+1. **`SELECT FOR UPDATE SKIP LOCKED` no PostgreSQL** — o coordinator pega somente IDs não bloqueados por outra transação em andamento.
+2. **Redis lock com TTL** — antes de processar um título individual, a task adquire `SET titulo:{id}:cobranca NX EX 60`. Se já existir, pula.
+3. **Coluna `proxima_acao_em TIMESTAMPTZ` na tabela `titulos`** — a task verifica se `proxima_acao_em > NOW()` antes de processar. Se sim, o título já foi agendado para o futuro e não deve ser reprocessado agora.
 
 ```python
-# Exemplo de idempotencia em task individual
+# Exemplo de idempotência em task individual
 async def _aplicar_encargos_titulo(titulo_id: str, db, redis):
     # Camada 2: Redis lock
     lock_key = f"titulo:{titulo_id}:encargos"
@@ -3669,78 +3670,78 @@ async def _aplicar_encargos_titulo(titulo_id: str, db, redis):
     if titulo.proxima_acao_em and titulo.proxima_acao_em > datetime.now(UTC):
         return {"status": "skipped", "reason": "scheduled_for_future"}
 
-    # Logica de negocio aqui...
+    # Lógica de negócio aqui...
 ```
 
-#### 11.5.4 Inventario de Tasks (32 tasks — 9 existentes + 23 novas)
+#### 11.5.4 Inventário de Tasks (32 tasks — 9 existentes + 23 novas)
 
-**Grupo 1 — Geracao (fila_cobranca):**
+**Grupo 1 — Geração (fila_cobranca):**
 
-| Task | Status | Descricao |
+| Task | Status | Descrição |
 |------|--------|-----------|
-| `gerar_titulos_mensais` | A implementar | Gera parcelas do mes seguinte para contratos ativos |
-| `gerar_titulo_antecipado` | A implementar | Gera titulo fora do ciclo normal (ex.: antecipacao) |
-| `aplicar_encargos_vencidos` | **CRITICO** | Aplica multa + juros diarios em titulos vencidos |
-| `gerar_titulo_opcao_compra` | A implementar | Gera titulo de opcao de compra ao final do contrato |
+| `gerar_titulos_mensais` | A implementar | Gera parcelas do mês seguinte para contratos ativos |
+| `gerar_titulo_antecipado` | A implementar | Gera título fora do ciclo normal (ex.: antecipação) |
+| `aplicar_encargos_vencidos` | **CRÍTICO** | Aplica multa + juros diários em títulos vencidos |
+| `gerar_titulo_opcao_compra` | A implementar | Gera título de opção de compra ao final do contrato |
 
-**Grupo 2 — Cobranca (fila_notificacoes + fila_cobranca):**
+**Grupo 2 — Cobrança (fila_notificacoes + fila_cobranca):**
 
-| Task | Status | Descricao |
+| Task | Status | Descrição |
 |------|--------|-----------|
-| `enviar_cobranca_titulo` | Existente | Envia cobranca (parcela) via WhatsApp |
+| `enviar_cobranca_titulo` | Existente | Envia cobrança (parcela) via WhatsApp |
 | `alertar_vencimentos_proximos` | Existente | Lembrete preventivo N dias antes do vencimento |
-| `enviar_cobranca_atraso` | **CRITICO** | Cobranca de titulo vencido com valor atualizado (multa + juros) |
+| `enviar_cobranca_atraso` | **CRÍTICO** | Cobrança de título vencido com valor atualizado (multa + juros) |
 | `enviar_aviso_encargos` | A implementar | Notifica cliente sobre encargos aplicados |
-| `enviar_confirmacao_pagamento` | A implementar | Confirma recebimento apos baixa |
+| `enviar_confirmacao_pagamento` | A implementar | Confirma recebimento após baixa |
 | `enviar_campanha_disparo` | Existente | Disparo em massa (broadcast) |
-| `enviar_alerta_opcao_compra` | A implementar | Alerta opcao de compra proxima do vencimento |
+| `enviar_alerta_opcao_compra` | A implementar | Alerta opção de compra próxima do vencimento |
 
-**Grupo 3 — Verificacao (fila_verificacao):**
+**Grupo 3 — Verificação (fila_verificacao):**
 
-| Task | Status | Descricao |
+| Task | Status | Descrição |
 |------|--------|-----------|
-| `verificar_comprovante_recebido` | Existente | Pipeline de validacao de comprovante recebido |
+| `verificar_comprovante_recebido` | Existente | Pipeline de validação de comprovante recebido |
 | `processar_ocr_comprovante` | Existente | OCR Tesseract + OpenCV em imagem de comprovante |
-| `reconciliar_pagamento_pix` | **CRITICO** | Reconciliacao automatica por valor + data + chave Pix |
-| `conciliar_extrato_bancario` | Existente | Auto-match de transacoes OFX/Open Finance |
+| `reconciliar_pagamento_pix` | **CRÍTICO** | Reconciliação automática por valor + data + chave Pix |
+| `conciliar_extrato_bancario` | Existente | Auto-match de transações OFX/Open Finance |
 | `detectar_pagamento_parcial` | A implementar | Identifica se comprovante corresponde a pagamento parcial |
 
 **Grupo 4 — Contratos (fila_contratos):**
 
-| Task | Status | Descricao |
+| Task | Status | Descrição |
 |------|--------|-----------|
 | `verificar_contratos_encerrados` | A implementar | Detecta contratos no limite de encerramento |
 | `gerar_pdf_contrato` | Existente | Renderiza PDF do contrato via WeasyPrint |
-| `detectar_inadimplencia_grave` | A implementar | Aciona suspensao apos `limite_dias_suspensao` |
-| `reverter_inadimplencia` | A implementar | Reverte suspensao apos pagamento confirmado |
-| `calcular_rescisao_contrato` | A implementar | Calcula valor de rescisao com encargos proporcionais |
+| `detectar_inadimplencia_grave` | A implementar | Aciona suspensão após `limite_dias_suspensao` |
+| `reverter_inadimplencia` | A implementar | Reverte suspensão após pagamento confirmado |
+| `calcular_rescisao_contrato` | A implementar | Calcula valor de rescisão com encargos proporcionais |
 
 **Grupo 5 — Frota (fila_frota):**
 
-| Task | Status | Descricao |
+| Task | Status | Descrição |
 |------|--------|-----------|
-| `bloquear_veiculo_gps` | **CRITICO** | Aciona bloqueio remoto via rastreador GPS |
-| `desbloquear_veiculo_gps` | A implementar | Aciona desbloqueio remoto apos pagamento |
+| `bloquear_veiculo_gps` | **CRÍTICO** | Aciona bloqueio remoto via rastreador GPS |
+| `desbloquear_veiculo_gps` | A implementar | Aciona desbloqueio remoto após pagamento |
 | `atualizar_posicao_veiculo` | A implementar | Atualiza `last_position` de todos os rastreadores ativos |
-| `atualizar_tabela_fipe` | Existente | Atualiza `fipe_value_current` de veiculos ativos |
-| `alertar_documentos_vencendo` | A implementar | Alerta sobre CNH, seguro, IPVA proximos do vencimento |
-| `verificar_rastreador_offline` | A implementar | Detecta rastreadores sem sinal ha mais de N horas |
+| `atualizar_tabela_fipe` | Existente | Atualiza `fipe_value_current` de veículos ativos |
+| `alertar_documentos_vencendo` | A implementar | Alerta sobre CNH, seguro, IPVA próximos do vencimento |
+| `verificar_rastreador_offline` | A implementar | Detecta rastreadores sem sinal há mais de N horas |
 
 **Grupo 6 — Infraestrutura (fila_padrao):**
 
-| Task | Status | Descricao |
+| Task | Status | Descrição |
 |------|--------|-----------|
 | `atualizar_visoes_materializadas` | Existente | Refresh de `mv_asset_roi` e demais views |
 | `backup_banco_dados` | Existente | Backup via wal-g |
 | `atualizar_scores_clientes` | Existente | Recomputa score de todos os clientes |
-| `transcrever_audio_whatsapp` | Existente | Transcricao de audios recebidos via Whisper |
+| `transcrever_audio_whatsapp` | Existente | Transcrição de áudios recebidos via Whisper |
 | `purgar_eventos_processados` | A implementar | Remove `webhook_events_raw` mais antigos que 90 dias |
 | `monitorar_saude_integracoes` | A implementar | Health check de todos os adapters externos |
 | `processar_evento_dominio` | Existente | Despacha Domain Events para module hooks |
 | `executar_turno_agente` | Existente | Executa turno do agente LLM (fila_agente) |
 | `processar_mensagem_entrada` | Existente | Pipeline de mensagem inbound WhatsApp (fila_whatsapp_entrada) |
 
-#### 11.5.5 Celery App — Configuracao Completa com 7 Filas
+#### 11.5.5 Celery App — Configuração Completa com 7 Filas
 
 ```python
 # app/workers/celery_app.py
@@ -3755,51 +3756,51 @@ celery_app = Celery(
 )
 
 celery_app.conf.task_routes = {
-    # Fila WhatsApp entrada — prioridade maxima
+    # Fila WhatsApp entrada — prioridade máxima
     "workers.tasks.messaging.processar_mensagem_entrada": {"queue": "fila_whatsapp_entrada"},
 
-    # Fila cobranca — alta prioridade, alto throughput
+    # Fila cobrança — alta prioridade, alto throughput
     "workers.tasks.cobranca.*": {"queue": "fila_cobranca"},
-    "workers.tasks.cobranca.coordinators.*": {"queue": "fila_padrao"},  # coordinators na fila padrao
+    "workers.tasks.cobranca.coordinators.*": {"queue": "fila_padrao"},  # coordinators na fila padrão
 
-    # Fila notificacoes
+    # Fila notificações
     "workers.tasks.notificacoes.*": {"queue": "fila_notificacoes"},
 
-    # Fila verificacao
+    # Fila verificação
     "workers.tasks.verificacao.*": {"queue": "fila_verificacao"},
 
     # Fila contratos
     "workers.tasks.contratos.*": {"queue": "fila_contratos"},
 
-    # Fila frota (module: vehicles)
+    # Fila frota (módulo: vehicles)
     "workers.tasks.frota.*": {"queue": "fila_frota"},
 
     # Fila agente LLM
     "workers.tasks.agente.*": {"queue": "fila_agente"},
 
-    # Padrao
+    # Padrão
     "workers.tasks.*": {"queue": "fila_padrao"},
 }
 
 celery_app.conf.task_acks_late = True
 celery_app.conf.task_reject_on_worker_lost = True
-celery_app.conf.worker_prefetch_multiplier = 1  # critico: garante distribuicao justa entre workers
+celery_app.conf.worker_prefetch_multiplier = 1  # crítico: garante distribuição justa entre workers
 
 celery_app.autodiscover_tasks(["app.workers.tasks"])
 
 # Beat schedule — REPLICAS=1 SEMPRE (duplicar = disparo duplo)
 celery_app.conf.beat_schedule = {
-    # Geracao de titulos
+    # Geração de títulos
     "gerar-titulos-mensais": {
         "task": "workers.tasks.cobranca.coordinators.coordenador_gerar_titulos_mensais",
         "schedule": crontab(hour=6, minute=0, day_of_month="1"),
     },
-    # Encargos (critico — roda todo dia)
+    # Encargos (crítico — roda todo dia)
     "aplicar-encargos-vencidos": {
         "task": "workers.tasks.cobranca.coordinators.coordenador_aplicar_encargos_vencidos",
         "schedule": crontab(hour=7, minute=0),
     },
-    # Cobrancas
+    # Cobranças
     "alertar-vencimentos-proximos": {
         "task": "workers.tasks.cobranca.coordinators.coordenador_alertar_vencimentos",
         "schedule": crontab(hour=9, minute=0),
@@ -3813,7 +3814,7 @@ celery_app.conf.beat_schedule = {
         "task": "workers.tasks.contratos.coordinators.coordenador_verificar_contratos",
         "schedule": crontab(hour=8, minute=0),
     },
-    # Reconciliacao
+    # Reconciliação
     "auto-match-reconciliacao": {
         "task": "workers.tasks.verificacao.conciliar_extrato_bancario",
         "schedule": crontab(minute=15),
@@ -3831,7 +3832,7 @@ celery_app.conf.beat_schedule = {
         "task": "workers.tasks.infra.backup_banco_dados",
         "schedule": crontab(hour=3, minute=30),
     },
-    # Frota (module: vehicles)
+    # Frota (módulo: vehicles)
     "atualizar-fipe": {
         "task": "workers.tasks.frota.atualizar_tabela_fipe",
         "schedule": crontab(hour=3, minute=0, day_of_month="5"),
@@ -3854,7 +3855,7 @@ celery_app.conf.beat_schedule = {
 #### 11.5.6 Docker Compose — Workers por Fila
 
 ```yaml
-# No docker-compose.yml, cada tipo de worker e declarado separadamente:
+# No docker-compose.yml, cada tipo de worker é declarado separadamente:
 services:
   worker-cobranca:
     build: ./backend-api
@@ -4052,7 +4053,7 @@ async def ws_conversations(ws: WebSocket, user = Depends(get_current_user_query_
             while True:
                 data = await ws.receive_text()
                 payload = json.loads(data)
-                # ... processa acoes do cliente ...
+                # ... processa ações do cliente ...
         await asyncio.gather(from_redis(), from_client())
     except WebSocketDisconnect:
         pass
@@ -4061,7 +4062,7 @@ async def ws_conversations(ws: WebSocket, user = Depends(get_current_user_query_
         await r.close()
 ```
 
-### 11.7 Idempotencia de Webhooks
+### 11.7 Idempotência de Webhooks
 
 ```python
 # app/application/integrations/handle_webhook.py
@@ -4079,12 +4080,12 @@ async def handle_webhook(provider: str, external_id: str, payload: dict, signatu
 
 ---
 
-## 12. Project Structure (Combined)
+## 12. Estrutura do Projeto (Combinada)
 
 ```
-project-root/                              # diretorio raiz (sem product name nos paths)
+project-root/                              # diretório raiz (sem product name nos paths)
 ├── docker-compose.yml                     # postgres + redis + minio + api + worker + beat + web
-├── docker-compose.prod.yml                # producao (sem volumes locais, com TLS)
+├── docker-compose.prod.yml                # produção (sem volumes locais, com TLS)
 ├── .env.example
 ├── README.md
 ├── backend-api/                           # backend (Python)
@@ -4098,8 +4099,8 @@ project-root/                              # diretorio raiz (sem product name no
 │   │   └── versions/
 │   ├── Dockerfile
 │   ├── .dockerignore
-│   ├── app/                               # ver Secao 6
-│   │   ├── modules/                       # modulos verticais (ver Secao 7)
+│   ├── app/                               # ver Seção 6
+│   │   ├── modules/                       # módulos verticais (ver Seção 7)
 │   │   │   └── vehicles/
 │   │   └── ...
 │   ├── tests/
@@ -4126,15 +4127,15 @@ project-root/                              # diretorio raiz (sem product name no
     ├── vitest.config.ts
     ├── Dockerfile                         # multi-stage com nginx
     ├── nginx.conf
-    ├── public/                            # ver Secao 10
-    └── src/                               # ver Secao 10
+    ├── public/                            # ver Seção 10
+    └── src/                               # ver Seção 10
 ```
 
 ---
 
-## 13. Development Workflow
+## 13. Fluxo de Desenvolvimento
 
-### 13.1 Pre-requisitos do Dev
+### 13.1 Pré-requisitos do Dev
 
 - Docker + docker-compose.
 - Python 3.12+ com `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`).
@@ -4166,6 +4167,7 @@ celery -A app.workers.celery_app beat -l info
 ```
 
 ### 13.3 Comandos Make Padronizados
+
 
 ```makefile
 # Makefile
@@ -4240,7 +4242,7 @@ repos:
         pass_filenames: false
 ```
 
-### 13.5 Convencao de Branches & Commits
+### 13.5 Convenção de Branches e Commits
 
 - `main` — protegida, deploys.
 - `develop` — opcional; se simples, ir direto para `main` via PR.
@@ -4249,19 +4251,19 @@ repos:
 
 ---
 
-## 14. Deployment Architecture
+## 14. Arquitetura de Deploy
 
 ### 14.1 Ambientes
 
-| Ambiente | Proposito                  | URL                                      |
+| Ambiente | Propósito                  | URL                                      |
 |----------|----------------------------|------------------------------------------|
 | dev      | Local                      | http://localhost:4200 / :8000             |
 | staging  | Cliente revisar releases   | https://staging.example.com               |
-| prod     | Operacao                   | https://app.example.com                   |
+| prod     | Operação                   | https://app.example.com                   |
 
-### 14.2 Topologia de Producao
+### 14.2 Topologia de Produção
 
-**Opcao A — VPS unico (recomendada inicialmente, sob Coolify/Dokploy):**
+**Opção A — VPS único (recomendada inicialmente, sob Coolify/Dokploy):**
 
 ```mermaid
 flowchart TB
@@ -4279,7 +4281,7 @@ flowchart TB
     Caddy --> EvAPI
 ```
 
-**Opcao B — Kubernetes (quando crescer):**
+**Opção B — Kubernetes (quando crescer):**
 
 - Deployments separados: `web`, `api`, `worker`, `beat`, `evolution`.
 - Ingress NGINX/Traefik.
@@ -4401,55 +4403,55 @@ volumes:
   miniodata: {}
 ```
 
-### 14.5 CI/CD (GitHub Actions — sumario)
+### 14.5 CI/CD (GitHub Actions — sumário)
 
 - `api-ci.yml`: triggers em PR tocando `backend-api/**` -> ruff + mypy + pytest com Postgres testcontainer + build Docker (push para registry em `main`).
 - `web-ci.yml`: triggers em `frontend/**` -> eslint + vitest + build prod.
 - `e2e.yml`: nightly em `main` rodando Playwright contra staging.
-- `deploy-staging.yml`: ao push em `main`, deploy automatico para staging.
+- `deploy-staging.yml`: ao push em `main`, deploy automático para staging.
 - `deploy-prod.yml`: manual (release tag).
 
 ---
 
-## 15. Security
+## 15. Segurança
 
 ### 15.1 Defesa em Camadas
 
 | Camada                | Controles                                                                                  |
 |-----------------------|--------------------------------------------------------------------------------------------|
 | Edge (Caddy/Traefik)  | TLS 1.3, redirect 80->443, HSTS 1y, rate limit 100req/IP/min, body size 25MB.               |
-| Aplicacao             | CORS allow-list, CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff, Permissions-Policy. |
+| Aplicação             | CORS allow-list, CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff, Permissions-Policy. |
 | Auth                  | JWT RS256 15min, refresh rotation 7d em HttpOnly Secure SameSite=Lax, MFA TOTP opcional.   |
-| Autorizacao           | RBAC por permissao (`code`); checks via `Depends(require_permission("..."))`.              |
-| Dados em repouso      | AES-256-GCM em campos sensiveis (CPF, CNH, mfa_secret, integration_credentials.config).    |
-| Banco                 | Conexoes TLS, role minimo (read/write nos schemas necessarios), backups encriptados.        |
-| Object Storage        | Buckets privados; URLs pre-assinadas com TTL 5min para downloads.                          |
+| Autorização           | RBAC por permissão (`code`); checks via `Depends(require_permission("..."))`.              |
+| Dados em repouso      | AES-256-GCM em campos sensíveis (CPF, CNH, mfa_secret, integration_credentials.config).    |
+| Banco                 | Conexões TLS, role mínimo (read/write nos schemas necessários), backups encriptados.        |
+| Object Storage        | Buckets privados; URLs pré-assinadas com TTL 5min para downloads.                          |
 | Logs                  | PII redactado (CPF mascarado XXX.XXX.XXX-99) por filtro em structlog.                       |
 | Webhook validation    | Assinaturas HMAC (Evolution: apikey header; Pluggy: signature header SHA256).               |
 | Secrets               | Vault ou Doppler (prod), `.env` nunca commitado (validado por detect-secrets pre-commit).   |
 
-### 15.2 Threat Model — Principais Vetores
+### 15.2 Modelo de Ameaças — Principais Vetores
 
-| Ameaca                                  | Mitigacao                                                                  |
+| Ameaça                                  | Mitigação                                                                  |
 |-----------------------------------------|-----------------------------------------------------------------------------|
 | Furto de access token                   | TTL curto (15min); detection via geo-anomaly futuro.                        |
-| Furto de refresh token                  | Rotacao obrigatoria; lista de revogacao em Redis; HttpOnly impede XSS read. |
-| XSS via templates                        | Angular sanitiza por padrao; `[innerHTML]` proibido sem `safeHtml.pipe`.    |
+| Furto de refresh token                  | Rotação obrigatória; lista de revogação em Redis; HttpOnly impede XSS read. |
+| XSS via templates                        | Angular sanitiza por padrão; `[innerHTML]` proibido sem `safeHtml.pipe`.    |
 | SQL Injection                            | SQLAlchemy ORM com bind params; sem string concat em queries.               |
-| CSRF                                     | SameSite=Lax + verificacao de Origin em mutacoes publicas (webhooks).        |
-| Comprovante falsificado                  | OCR + validacao humana + conciliacao bancaria definitiva (3 camadas).       |
-| Acao de modulo maliciosa (ex.: bloqueio) | Aprovacao dupla (perfil + senha); audit_log assinado; rate limit por ativo.  |
-| Vazamento de PII em log                  | Filtro structlog `mask_pii`; revisao CI por regex.                          |
-| Webhook spoofing                         | Assinatura validada; idempotencia por `(provider, external_id)`; insert-only inicial. |
+| CSRF                                     | SameSite=Lax + verificação de Origin em mutações públicas (webhooks).        |
+| Comprovante falsificado                  | OCR + validação humana + conciliação bancária definitiva (3 camadas).       |
+| Ação de módulo maliciosa (ex.: bloqueio) | Aprovação dupla (perfil + senha); audit_log assinado; rate limit por ativo.  |
+| Vazamento de PII em log                  | Filtro structlog `mask_pii`; revisão CI por regex.                          |
+| Webhook spoofing                         | Assinatura validada; idempotência por `(provider, external_id)`; insert-only inicial. |
 | Replay de mensagem WhatsApp              | `external_id` UNIQUE + janela temporal.                                      |
-| Bypass de imutabilidade de titulo pago   | Trigger PG `enforce_paid_immutability` + checks no dominio.                  |
+| Bypass de imutabilidade de título pago   | Trigger PG `enforce_paid_immutability` + checks no domínio.                  |
 
 ### 15.3 LGPD
 
-- **Consentimentos** registrados em tabela `consents` (futura) com tipo (uso de imagem, contato WhatsApp, localizacao) + timestamp.
+- **Consentimentos** registrados em tabela `consents` (futura) com tipo (uso de imagem, contato WhatsApp, localização) + timestamp.
 - **Direito de acesso**: endpoint `GET /api/v1/customers/{id}/data-export` (Admin/dono dos dados) gera ZIP completo.
-- **Direito de exclusao**: anonimizacao (nao delete fisico — financeiro precisa reter): substitui `full_name='[redigido]'`, mascara CPF, foto, etc., mantem historico financeiro.
-- **DPO**: e-mail de contato em footer + Configuracoes > Privacidade.
+- **Direito de exclusão**: anonimização (não delete físico — financeiro precisa reter): substitui `full_name='[redigido]'`, mascara CPF, foto, etc., mantém histórico financeiro.
+- **DPO**: e-mail de contato em footer + Configurações > Privacidade.
 
 ---
 
@@ -4459,43 +4461,43 @@ volumes:
 
 - API P50 <= 80 ms, P95 <= 300 ms (read), 500 ms (write).
 - Frontend FCP <= 1.2s, TTI <= 2.5s em 4G.
-- Lista de 10k titulos rola fluida.
+- Lista de 10k títulos rola fluida.
 - Mapa renderiza 200 marcadores com cluster sem travar.
 
-### 16.2 Estrategias Backend
+### 16.2 Estratégias Backend
 
 - **Query budget**: nenhum endpoint acima de 5 queries; usar `selectinload`/`joinedload` SQLAlchemy.
 - **N+1 detection**: middleware em dev que loga selects > N por request.
-- **Index coverage** (ja no schema acima).
+- **Index coverage** (já no schema acima).
 - **Cache Redis** (TTL):
-  - Lookups estaticos (categorias, fornecedores) — 5 min.
-  - FIPE (module: vehicles) — 30 dias.
-  - Permissoes do usuario — sessao.
-- **Materialized views** para relatorios (`mv_asset_roi`).
+  - Lookups estáticos (categorias, fornecedores) — 5 min.
+  - FIPE (módulo: vehicles) — 30 dias.
+  - Permissões do usuário — sessão.
+- **Materialized views** para relatórios (`mv_asset_roi`).
 - **Pagination cursor-based** em listas crescentes (mensagens, audit_log).
-- **Background**: relatorios pesados via Celery + SSE notificacao ao concluir.
+- **Background**: relatórios pesados via Celery + SSE notificação ao concluir.
 - **Pool DB**: 20 conns por worker; total = workers x 20; ajustar conforme infra.
 
-### 16.3 Estrategias Frontend
+### 16.3 Estratégias Frontend
 
-- Lazy loading por feature shell (ja configurado).
-- `@defer` blocks Angular 17+ para secoes below-the-fold.
+- Lazy loading por feature shell (já configurado).
+- `@defer` blocks Angular 17+ para seções below-the-fold.
 - Imagens em `next/image`-style (loading=lazy, srcset apropriado).
 - Tree-shaking + esbuild.
-- Service Worker cache-first para assets estaticos; network-first para API.
+- Service Worker cache-first para assets estáticos; network-first para API.
 - Debounce em buscas (300ms).
 - Virtual scrolling em listas > 200 itens (CDK Virtual Scroll).
 - Memoization via `computed()` Signals.
 
 ---
 
-## 17. Testing Strategy
+## 17. Estratégia de Testes
 
-### 17.1 Piramide de Testes
+### 17.1 Pirâmide de Testes
 
 ```
                   +------------------+
-                  |  E2E (Playwright)  | ~5% — fluxos criticos
+                  |  E2E (Playwright)  | ~5% — fluxos críticos
                   +--------+---------+
                   +--------+-------------+
                   | Component / Contract  | ~15% — schemathesis + ngneat/spectator
@@ -4510,67 +4512,67 @@ volumes:
 
 ### 17.2 Backend
 
-- **Unit**: dominio puro 100% coberto (`calculations.py`, `schedule_calculator.py`, `policies.py`, module hooks).
-- **Integration**: cada use case testado contra Postgres real (testcontainers); evita mocks de repositorio.
+- **Unit**: domínio puro 100% coberto (`calculations.py`, `schedule_calculator.py`, `policies.py`, module hooks).
+- **Integration**: cada use case testado contra Postgres real (testcontainers); evita mocks de repositório.
 - **Contract**: `schemathesis` rodando contra OpenAPI gera tests de propriedade.
-- **Security**: testes especificos para imutabilidade (`test_paid_installment_cannot_be_updated`).
-- **Modules**: cada modulo tem seus proprios testes em `tests/unit/modules/{asset_type}/` e `tests/integration/modules/{asset_type}/`.
+- **Security**: testes específicos para imutabilidade (`test_paid_installment_cannot_be_updated`).
+- **Modules**: cada módulo tem seus próprios testes em `tests/unit/modules/{asset_type}/` e `tests/integration/modules/{asset_type}/`.
 
 ### 17.3 Frontend
 
 - **Unit (Vitest)**: services, pipes, signal-based logic.
 - **Component (@ngneat/spectator)**: render + interaction.
-- **E2E (Playwright)**: 5 fluxos criticos:
+- **E2E (Playwright)**: 5 fluxos críticos:
   1. Login -> criar contrato -> ativar -> ver PDF.
   2. Receber WhatsApp simulado -> validar -> conciliar.
   3. Importar OFX -> fazer match drag-and-drop.
-  4. Pagamento parcial -> ver novo titulo gerado.
-  5. Renegociar dois titulos vencidos.
+  4. Pagamento parcial -> ver novo título gerado.
+  5. Renegociar dois títulos vencidos.
 - **Visual regression**: Storybook + Chromatic (opcional).
 
-### 17.4 Cobertura Minima
+### 17.4 Cobertura Mínima
 
-| Area                | Cobertura minima |
+| Área                | Cobertura mínima |
 |---------------------|-------------------|
-| Dominio backend     | 90%               |
+| Domínio backend     | 90%               |
 | Use cases backend   | 80%               |
 | Adapters backend    | 60% (mocks externos) |
 | Module hooks        | 80%               |
 | Frontend services   | 70%               |
-| Frontend components | 50% (smoke + interactions criticas) |
+| Frontend components | 50% (smoke + interactions críticas) |
 
 ---
 
-## 18. Coding Standards
+## 18. Padrões de Codificação
 
 ### 18.1 Backend
 
 - **Python 3.12**, type hints em **tudo** (`mypy strict`).
 - `ruff format` (88 cols).
 - Imports ordenados: stdlib -> 3rd party -> app.
-- **Domain layer nao importa nada de `infrastructure/`**. Linter custom regra `ARCH001`.
-- **Modules (`app/modules/*`) nao importam diretamente de outros modules**. Comunicacao via Domain Events.
+- **Domain layer não importa nada de `infrastructure/`**. Linter custom regra `ARCH001`.
+- **Modules (`app/modules/*`) não importam diretamente de outros modules**. Comunicação via Domain Events.
 - **Use cases** com sufixo descritivo (`WriteOffInstallment`, `RunAgentTurn`); 1 use case = 1 arquivo.
 - **Pydantic v2** com `model_config = ConfigDict(frozen=True)` em VOs.
 - Logs sempre estruturados: `log.info("event", install_id=..., user_id=...)`.
-- Funcoes **assincronas** por padrao na camada HTTP/use case.
+- Funções **assíncronas** por padrão na camada HTTP/use case.
 
 ### 18.2 Frontend
 
 - **TypeScript strict**.
 - Componentes **standalone** sempre.
 - **Sem inline templates/styles** (manifesto).
-- **CSS files vazios**, exceto excecoes (keyframes complexas).
+- **CSS files vazios**, exceto exceções (keyframes complexas).
 - **Tailwind classes** com `var(--token)` — proibido cor fixa.
 - Imports com paths absolutos (`@core/...`, `@shared/...`, `@features/...` em `tsconfig.json`).
 - **Reactive Forms tipados** (sem template-driven).
-- **Signals** para estado local; **`resource()`** para data fetch; **`computed()`** para derivacoes; **`effect()`** apenas em side effects.
+- **Signals** para estado local; **`resource()`** para data fetch; **`computed()`** para derivações; **`effect()`** apenas em side effects.
 - **Sem RxJS** quando `resource()` resolve. Quando precisar, pelo menos `takeUntilDestroyed()`.
 - **Atalhos** mapeados via diretiva `[shortcut]`.
 
-### 18.3 Naming Conventions
+### 18.3 Convenções de Nomenclatura
 
-| Item                       | Convencao                              |
+| Item                       | Convenção                              |
 |----------------------------|----------------------------------------|
 | Tabelas                    | snake_case plural (`customers`)         |
 | Colunas                    | snake_case                              |
@@ -4578,44 +4580,44 @@ volumes:
 | Pydantic DTOs              | PascalCase + sufixo (`CustomerCreate`, `CustomerOut`) |
 | Use cases                  | VerboPhrase (`WriteOffInstallment`)     |
 | Endpoints REST             | kebab-case + recurso plural             |
-| Eventos de dominio         | PastTense (`InstallmentPaid`)            |
+| Eventos de domínio         | PastTense (`InstallmentPaid`)            |
 | Module hooks               | on_snake_case (`on_installment_overdue`) |
 | Componentes Angular        | kebab-case file (`customer-form.component.ts`) + PascalCase class |
 | Signals                    | substantivo (`customers`, `searchTerm`); sem prefixo `$` |
 
 ---
 
-## 19. Error Handling Strategy
+## 19. Estratégia de Tratamento de Erros
 
-### 19.1 Principios
+### 19.1 Princípios
 
-1. **Fail fast no dominio** — excecoes de regra de negocio (`RuleViolation`) sao levantadas imediatamente.
+1. **Fail fast no domínio** — exceções de regra de negócio (`RuleViolation`) são levantadas imediatamente.
 2. **Adaptadores devem traduzir erros externos** em `IntegrationError` (subclasse de `DomainError`) com `provider` no payload.
 3. **Retries somente em transientes** (timeout, 503) via `tenacity`.
-4. **Idempotencia** em mutacoes expostas a webhook ou cliente sujeito a retry.
+4. **Idempotência** em mutações expostas a webhook ou cliente sujeito a retry.
 5. **Frontend trata RFC 7807** uniformemente via `error.interceptor.ts`.
 
-### 19.2 Catalogo de Codigos de Erro
+### 19.2 Catálogo de Códigos de Erro
 
 | code                              | http | quando                                              |
 |-----------------------------------|------|-----------------------------------------------------|
 | `VALIDATION_ERROR`                | 422  | Pydantic validation                                  |
-| `NOT_FOUND`                       | 404  | Entidade nao encontrada                              |
-| `PERMISSION_DENIED`               | 403  | Falta permissao                                       |
-| `UNAUTHENTICATED`                 | 401  | Sem token ou token invalido                          |
-| `RULE_VIOLATION`                  | 409  | Regra de dominio violada (generico)                   |
-| `INSTALLMENT_IMMUTABLE`           | 409  | Tentativa de alterar titulo pago                       |
-| `PARTIAL_PAYMENT_INVALID`         | 409  | Pagamento parcial com valor invalido                   |
+| `NOT_FOUND`                       | 404  | Entidade não encontrada                              |
+| `PERMISSION_DENIED`               | 403  | Falta permissão                                       |
+| `UNAUTHENTICATED`                 | 401  | Sem token ou token inválido                          |
+| `RULE_VIOLATION`                  | 409  | Regra de domínio violada (genérico)                   |
+| `INSTALLMENT_IMMUTABLE`           | 409  | Tentativa de alterar título pago                       |
+| `PARTIAL_PAYMENT_INVALID`         | 409  | Pagamento parcial com valor inválido                   |
 | `CONTRACT_NOT_EDITABLE`           | 409  | Contrato encerrado/rescindido                         |
-| `RECEIPT_AMBIGUOUS`               | 409  | OCR nao conseguiu mapear para 1 titulo                |
+| `RECEIPT_AMBIGUOUS`               | 409  | OCR não conseguiu mapear para 1 título                |
 | `INTEGRATION_UNAVAILABLE`         | 503  | Provedor externo caiu (todos os fallbacks)             |
-| `INTEGRATION_WHATSAPP_FAILED`     | 502  | Gateway WhatsApp nao respondeu                        |
-| `RATE_LIMIT_EXCEEDED`             | 429  | Limit por IP/usuario                                  |
-| `WEBHOOK_INVALID_SIGNATURE`       | 401  | Webhook sem assinatura valida                          |
-| `OCR_LOW_CONFIDENCE`              | 200  | Nao erro, mas flag para o agente pedir intervencao    |
-| `MODULE_NOT_FOUND`                | 404  | Modulo vertical nao registrado para asset_type         |
+| `INTEGRATION_WHATSAPP_FAILED`     | 502  | Gateway WhatsApp não respondeu                        |
+| `RATE_LIMIT_EXCEEDED`             | 429  | Limit por IP/usuário                                  |
+| `WEBHOOK_INVALID_SIGNATURE`       | 401  | Webhook sem assinatura válida                          |
+| `OCR_LOW_CONFIDENCE`              | 200  | Não erro, mas flag para o agente pedir intervenção    |
+| `MODULE_NOT_FOUND`                | 404  | Módulo vertical não registrado para asset_type         |
 
-### 19.3 Frontend Pattern
+### 19.3 Padrão Frontend
 
 ```typescript
 // core/interceptors/error.interceptor.ts
@@ -4624,11 +4626,11 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   return next(req).pipe(
     catchError((err: HttpErrorResponse) => {
       if (err.error?.code === 'INSTALLMENT_IMMUTABLE') {
-        notify.error('Esta parcela ja foi paga e nao pode ser editada.');
+        notify.error('Esta parcela já foi paga e não pode ser editada.');
       } else if (err.error?.code === 'PARTIAL_PAYMENT_INVALID') {
-        notify.error('Valor do pagamento parcial invalido.');
+        notify.error('Valor do pagamento parcial inválido.');
       } else if (err.status === 401) {
-        // ja tratado pelo jwt.interceptor; so passa adiante
+        // já tratado pelo jwt.interceptor; só passa adiante
       } else if (err.error?.detail) {
         notify.error(err.error.detail);
       } else {
@@ -4642,157 +4644,157 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
 ---
 
-## 20. Monitoring & Observability
+## 20. Monitoramento e Observabilidade
 
 ### 20.1 Pilares
 
 1. **Logs estruturados** (JSON) -> Loki / CloudWatch / Better Stack.
-2. **Metricas** (Prometheus) -> Grafana.
+2. **Métricas** (Prometheus) -> Grafana.
 3. **Tracing** (OTLP) -> Tempo / Jaeger.
 4. **Alerting** -> Alertmanager -> Slack/Telegram do gestor de TI.
 
-### Logging Taxonomy Rules
+### Regras de Taxonomia de Logging
 
-- `category='financial'` — ALWAYS persisted, never filterable off. Covers: write-off, reversal, reconciliation, payment, generation, rollback.
-- `category='security'` — ALWAYS persisted. Covers: login, logout, failed attempts, permission violations, Admin re-auth.
-- `category='navigation'` — configurable ON/OFF in Settings > Auditoria. OFF by default (saves storage). Covers: page views, API reads, search queries.
-- `category='info'` — configurable ON/OFF. ON by default. Covers: general system activity.
-- `category='error'` — ALWAYS persisted. Covers: exceptions, integration failures, timeout.
+- `category='financial'` — SEMPRE persistido, nunca filtrável off. Cobre: write-off, reversal, reconciliation, payment, generation, rollback.
+- `category='security'` — SEMPRE persistido. Cobre: login, logout, falhas de tentativa, violações de permissão, re-autenticação Admin.
+- `category='navigation'` — configurável ON/OFF em Configurações > Auditoria. OFF por padrão (economiza storage). Cobre: page views, API reads, search queries.
+- `category='info'` — configurável ON/OFF. ON por padrão. Cobre: atividade geral do sistema.
+- `category='error'` — SEMPRE persistido. Cobre: exceções, falhas de integração, timeout.
 
-### 20.2 Metricas Chave
+### 20.2 Métricas Chave
 
 - `http_requests_total{method,route,status}` — taxa por rota.
 - `http_request_duration_seconds{...}` — histograma.
-- `celery_task_duration_seconds{task}` — duracao jobs.
+- `celery_task_duration_seconds{task}` — duração jobs.
 - `celery_queue_depth{queue}` — backlog.
-- `db_pool_used / db_pool_size` — saturacao do pool.
-- `agent_runs_total{provider,model,status}` — execucoes do agente.
+- `db_pool_used / db_pool_size` — saturação do pool.
+- `agent_runs_total{provider,model,status}` — execuções do agente.
 - `whatsapp_messages_sent_total{provider,kind}` — outbound.
 - `webhook_events_received_total{provider}` / `webhook_events_failed_total{provider}`.
-- `installments_paid_total` — KPI de negocio.
+- `installments_paid_total` — KPI de negócio.
 - `partial_payments_total` — KPI de pagamentos parciais.
 - `reconciliation_pending_count` — health financeiro.
-- `module_hooks_dispatched_total{asset_type,event}` — atividade dos modulos.
+- `module_hooks_dispatched_total{asset_type,event}` — atividade dos módulos.
 
 ### 20.3 Dashboards Grafana (versionados em `infra/observability/grafana/`)
 
-1. **API Overview**: RPS, latencia P50/95/99, erros.
+1. **Visão geral da API**: RPS, latência P50/95/99, erros.
 2. **DB**: connections, locks, slow queries, cache hit ratio.
 3. **Workers**: queue depth, retry count, failed tasks.
-4. **Business**: titulos pagos hoje, mensagens enviadas, score medio, comprovantes pendentes.
-5. **Agent IA**: gasto USD/dia, tokens medio, erros LLM, distribuicao de actions.
+4. **Negócio**: títulos pagos hoje, mensagens enviadas, score médio, comprovantes pendentes.
+5. **Agente IA**: gasto USD/dia, tokens médio, erros LLM, distribuição de actions.
 6. **Modules**: hooks dispatched, actions per module, errors per module.
 
 ### 20.4 Alertas (Alertmanager)
 
 - API 5xx > 1% por 5 min.
-- Latencia P95 > 1s por 10 min.
+- Latência P95 > 1s por 10 min.
 - Celery queue > 1000 itens por 5 min.
 - DB conn pool > 90% por 5 min.
 - Disk > 85%.
 - Webhook event failures > 5% por 10 min.
-- Agente IA gasto diario > limite parametrizado.
+- Agente IA gasto diário > limite parametrizado.
 
 ---
 
-## 21. Migration & Rollout Strategy
+## 21. Estratégia de Migração e Rollout
 
-### 21.1 Migracao de Dados do Excel
+### 21.1 Migração de Dados do Excel
 
-> O cliente ja tem dezenas de linhas de Excel com clientes, ativos e contratos. **Esta migracao e parte do go-live.**
+> O cliente já tem dezenas de linhas de Excel com clientes, ativos e contratos. **Esta migração é parte do go-live.**
 
 **Story M1 — Importador One-Shot CLI**
 
 - CLI `python -m app.cli import-excel --file=clientes.xlsx --sheet=Clientes` mapeia colunas -> `customers`.
 - Idem para `veiculos.xlsx` (cria asset + vehicle), `contratos.xlsx`.
 - Modo `--dry-run` valida sem persistir.
-- Relatorio com diferencas.
+- Relatório com diferenças.
 - Permite rerun (idempotente por CPF/placa).
 
 ### 21.2 Rollout Faseado
 
 | Semana | Marco                                                                              |
 |--------|------------------------------------------------------------------------------------|
-| 1-2    | Epicos 1 (Foundation) + 2 (Cadastros) — gestor cadastra clientes/ativos.           |
-| 3-4    | Epico 3 (Contratos) — gera contratos e emite PDF.                                  |
-| 5-6    | Epicos 4 + 5 (CR/CP) — operacao financeira completa, ainda manual.                  |
-| 7-8    | Epico 7 (Conciliacao) — reduz erro de baixa.                                        |
-| 9-11   | Epico 6 (WhatsApp + Agente) — onboarding gradual: comeca em **dry-run** (agente sugere, humano envia), evolui para autopilot. |
-| 12     | Epico 8 (Dashboards) + Epico 9 (Hardening, integracoes painel) — **GA**.            |
+| 1-2    | Épicos 1 (Foundation) + 2 (Cadastros) — gestor cadastra clientes/ativos.           |
+| 3-4    | Épico 3 (Contratos) — gera contratos e emite PDF.                                  |
+| 5-6    | Épicos 4 + 5 (CR/CP) — operação financeira completa, ainda manual.                  |
+| 7-8    | Épico 7 (Conciliação) — reduz erro de baixa.                                        |
+| 9-11   | Épico 6 (WhatsApp + Agente) — onboarding gradual: começa em **dry-run** (agente sugere, humano envia), evolui para autopilot. |
+| 12     | Épico 8 (Dashboards) + Épico 9 (Hardening, integrações painel) — **GA**.            |
 
-### 21.3 Estrategia de Banco de Dados
+### 21.3 Estratégia de Banco de Dados
 
 - Sempre via Alembic; nunca alterar schema manualmente.
 - **Backward-compatible migrations**: adicionar coluna nullable + backfill + tornar NOT NULL em segunda migration.
-- **Zero downtime** futuro: separar deploy de migration de deploy de codigo.
+- **Zero downtime** futuro: separar deploy de migration de deploy de código.
 
 ### 21.4 ADRs (Architecture Decision Records)
 
-> Cada decisao importante vira um ADR em `docs/adrs/NNNN-titulo.md`. Lista inicial:
+> Cada decisão importante vira um ADR em `docs/adrs/NNNN-titulo.md`. Lista inicial:
 
-| #   | Titulo                                                         |
+| #   | Título                                                         |
 |-----|----------------------------------------------------------------|
 | 0001 | Adotar Hexagonal Ports & Adapters como tema central             |
-| 0002 | SSE como mecanismo primario de notificacao; WS exclusivo para chat |
-| 0003 | pgvector ao inves de Qdrant/Weaviate                             |
-| 0004 | Celery ao inves de Dramatiq/Arq                                  |
+| 0002 | SSE como mecanismo primário de notificação; WS exclusivo para chat |
+| 0003 | pgvector ao invés de Qdrant/Weaviate                             |
+| 0004 | Celery ao invés de Dramatiq/Arq                                  |
 | 0005 | Evolution API self-hosted como WhatsApp default                  |
 | 0006 | Tesseract local como OCR default; LLM Vision como fallback       |
 | 0007 | Pix via WhatsApp como pagamento default (custo zero); gateways como plugins opcionais |
-| 0008 | Imutabilidade de titulo pago via trigger PG + dominio             |
+| 0008 | Imutabilidade de título pago via trigger PG + domínio             |
 | 0009 | Single-tenant first; multi-tenant em v2 se demandado              |
-| 0010 | Core generico + Asset Abstraction Layer + modulos verticais plugaveis |
-| 0011 | Pagamentos parciais com geracao automatica de titulo remanescente  |
-| 0012 | Domain Events para comunicacao Core -> Modules (nao importacao direta) |
-| 0013 | Manter Python para workers; nao extrair microsservico Go            |
-| 0014 | Nomenclatura PT-BR para tasks, eventos e ports do dominio financeiro a partir do Epico 12 |
+| 0010 | Core genérico + Asset Abstraction Layer + módulos verticais plugáveis |
+| 0011 | Pagamentos parciais com geração automática de título remanescente  |
+| 0012 | Domain Events para comunicação Core -> Modules (não importação direta) |
+| 0013 | Manter Python para workers; não extrair microsserviço Go            |
+| 0014 | Nomenclatura PT-BR para tasks, eventos e ports do domínio financeiro a partir do Épico 12 |
 
-#### ADR-0013 — Manter Python para Workers (nao Go)
+#### ADR-0013 — Manter Python para Workers (não Go)
 
-**Contexto:** Com o crescimento do inventario de tasks (32 tasks), surgiu a proposta de extrair o motor de cobranca como microsservico Go para ganhar performance.
+**Contexto:** Com o crescimento do inventário de tasks (32 tasks), surgiu a proposta de extrair o motor de cobrança como microsserviço Go para ganhar performance.
 
-**Decisao:** Manter Python + Celery + gevent pool para todos os workers.
+**Decisão:** Manter Python + Celery + gevent pool para todos os workers.
 
 **Justificativa:**
-- O motor de cobranca e **I/O-bound** (PostgreSQL, WhatsApp API, LLM, OCR), nao CPU-bound. O gargalo nao e processamento de CPU — e latencia de rede e espera de banco.
-- Python + Celery + gevent pool = **1000+ green threads por processo**, adequado para a escala projetada (dezenas de milhares de titulos/dia, nao milhoes).
-- Extrair um microsservico Go exigiria **duplicar modelos de dados** (SQLAlchemy → GORM), **duplicar logica de dominio** (calculations.py, policies.py, value objects) e manter sincronia entre dois codebases.
-- O custo de manutencao dupla supera qualquer ganho de performance para a escala atual.
+- O motor de cobrança é **I/O-bound** (PostgreSQL, WhatsApp API, LLM, OCR), não CPU-bound. O gargalo não é processamento de CPU — é latência de rede e espera de banco.
+- Python + Celery + gevent pool = **1000+ green threads por processo**, adequado para a escala projetada (dezenas de milhares de títulos/dia, não milhões).
+- Extrair um microsserviço Go exigiria **duplicar modelos de dados** (SQLAlchemy → GORM), **duplicar lógica de domínio** (calculations.py, policies.py, value objects) e manter sincronia entre dois codebases.
+- O custo de manutenção dupla supera qualquer ganho de performance para a escala atual.
 
-**Condicao de revisao:** Extrair microsservico Go **apenas se** profiling com carga real identificar gargalo CPU especifico e mensuravel em uma task especifica. Ate la, a decisao permanece.
+**Condição de revisão:** Extrair microsserviço Go **apenas se** profiling com carga real identificar gargalo CPU específico e mensurável em uma task específica. Até lá, a decisão permanece.
 
-#### ADR-0014 — Nomenclatura PT-BR para Dominio Financeiro (Epico 12+)
+#### ADR-0014 — Nomenclatura PT-BR para Domínio Financeiro (Épico 12+)
 
-**Contexto:** As tasks, eventos e ports do dominio financeiro foram originalmente nomeados em ingles (ex.: `send_preventive_collection`, `InstallmentPaid`). A partir do Epico 12, o dominio financeiro ganhou complexidade suficiente para justificar nomenclatura explicita no idioma do negocio.
+**Contexto:** As tasks, eventos e ports do domínio financeiro foram originalmente nomeados em inglês (ex.: `send_preventive_collection`, `InstallmentPaid`). A partir do Épico 12, o domínio financeiro ganhou complexidade suficiente para justificar nomenclatura explícita no idioma do negócio.
 
-**Decisao:** A partir do Epico 12, todos os **novos** nomes de tasks, eventos de dominio, hooks e ports do dominio financeiro sao em PT-BR.
+**Decisão:** A partir do Épico 12, todos os **novos** nomes de tasks, eventos de domínio, hooks e ports do domínio financeiro são em PT-BR.
 
 **Exemplos:**
 - Tasks: `coordenador_processar_titulos_vencidos`, `aplicar_encargos_vencidos`, `enviar_cobranca_atraso`
 - Eventos: `OpcaoCompraPaga`, `ContratoSuspenso`, `PassivoInoperanteGerado`
 - Tabelas: `politica_cobranca`, `passivos_inoperantes`, `execucoes_motor`
 
-**Escopo:** Somente dominio financeiro (Epico 12+). O Core existente (auth, assets, modules, reconciliation) mantém ingles para nao gerar reescrita de codigo estavel. Ver mapeamento completo em `docs/glossario_dominio.md`.
+**Escopo:** Somente domínio financeiro (Épico 12+). O Core existente (auth, assets, modules, reconciliation) mantém inglês para não gerar reescrita de código estável. Ver mapeamento completo em `docs/glossario_dominio.md`.
 
 ---
 
-## 22. Riscos & Mitigacoes
+## 22. Riscos e Mitigações
 
-| Risco                                                              | Prob | Impacto | Mitigacao                                                                              |
+| Risco                                                              | Prob | Impacto | Mitigação                                                                              |
 |--------------------------------------------------------------------|------|---------|-----------------------------------------------------------------------------------------|
-| Evolution API instavel (bugs documentados)                          | Alta | Medio   | Adapter abstrato; ZapiAdapter como plano B; monitoramento agressivo de webhook failures. |
-| Banimento do numero WhatsApp                                        | Media | Alto    | Janela horaria, rate limit, anti-spam guard (200/dia max), uso de numero oficial Cloud API se necessario. |
-| Erro de OCR em comprovante -> baixa errada                           | Media | Alto    | Sempre cai em fila de validacao humana; conciliacao bancaria e palavra final.            |
-| Custo LLM disparar                                                  | Media | Medio   | Metrica + alerta de gasto diario; fallback automatico para Ollama local.                  |
-| Modulo vertical mal implementado afeta Core                          | Baixa | Alto    | IAssetModule protocol enforced; modules nao importam Core internals; Domain Events sao one-way. |
-| Pagamento parcial gera muitos titulos fragmentados                   | Media | Medio   | Politica configuravel: minimo de pagamento parcial (ex.: 30% do valor); alerta no dashboard. |
-| Open Finance Pluggy sair do ar                                      | Baixa | Baixo   | OFX e PDF continuam disponiveis; Pluggy e opcional.                                       |
-| Cliente se arrepender da escolha de tom do agente                   | Media | Medio   | Tudo parametrizavel + dry-run mode + interceptacao humana sempre disponivel.              |
-| LGPD: cliente pedir exclusao de dados financeiros                   | Baixa | Medio   | Anonimizacao preservando historico (nao delete); processo documentado.                    |
+| Evolution API instável (bugs documentados)                          | Alta | Médio   | Adapter abstrato; ZapiAdapter como plano B; monitoramento agressivo de webhook failures. |
+| Banimento do número WhatsApp                                        | Média | Alto    | Janela horária, rate limit, anti-spam guard (200/dia max), uso de número oficial Cloud API se necessário. |
+| Erro de OCR em comprovante -> baixa errada                           | Média | Alto    | Sempre cai em fila de validação humana; conciliação bancária é palavra final.            |
+| Custo LLM disparar                                                  | Média | Médio   | Métrica + alerta de gasto diário; fallback automático para Ollama local.                  |
+| Módulo vertical mal implementado afeta Core                          | Baixa | Alto    | IAssetModule protocol enforced; modules não importam Core internals; Domain Events são one-way. |
+| Pagamento parcial gera muitos títulos fragmentados                   | Média | Médio   | Política configurável: mínimo de pagamento parcial (ex.: 30% do valor); alerta no dashboard. |
+| Open Finance Pluggy sair do ar                                      | Baixa | Baixo   | OFX e PDF continuam disponíveis; Pluggy é opcional.                                       |
+| Cliente se arrepender da escolha de tom do agente                   | Média | Médio   | Tudo parametrizável + dry-run mode + interceptação humana sempre disponível.              |
+| LGPD: cliente pedir exclusão de dados financeiros                   | Baixa | Médio   | Anonimização preservando histórico (não delete); processo documentado.                    |
 
 ---
 
-## 23. Anexo — Comandos Uteis para o CLI
+## 23. Anexo — Comandos Úteis para o CLI
 
 ```bash
 # Backend
@@ -4801,7 +4803,7 @@ alembic revision --autogenerate -m "add_x"
 alembic upgrade head
 alembic downgrade -1
 pytest -k "write_off" -v
-pytest -k "vehicle_hook" -v               # testes de module hooks
+pytest -k "vehicle_hook" -v               # testes de hooks de módulo
 ruff check . --fix
 mypy app
 
@@ -4823,34 +4825,34 @@ docker compose exec postgres psql -U platform
 
 ---
 
-## 24. Proximos Passos Pos-Architecture
+## 24. Próximos Passos Pós-Architecture
 
 ### Para o Scrum Master / Dev Agent BMAD:
 
 1. Ler PRD + ARCHITECTURE inteiro.
-2. Iniciar Epico 1 / Story 1.1.
+2. Iniciar Épico 1 / Story 1.1.
 3. Para cada story:
    - Gerar branch `feat/{epic}-{story}-{slug}`.
-   - Implementar respeitando os padroes (DDD, Hexagonal, manifesto Angular, Core/Module separation).
-   - Escrever testes conforme matriz da secao 17.
+   - Implementar respeitando os padrões (DDD, Hexagonal, manifesto Angular, Core/Module separation).
+   - Escrever testes conforme matriz da seção 17.
    - Atualizar OpenAPI / docs se contrato muda.
    - Abrir PR com checklist de Definition of Done.
-4. Ao final de cada epico, validar acceptance criteria com PO.
+4. Ao final de cada épico, validar acceptance criteria com PO.
 
 ### Definition of Done (DoD) — checklist da story
 
 - [ ] Acceptance Criteria 100% atendidos (cada item marcado).
-- [ ] Testes unitarios novos/atualizados (passando).
-- [ ] Teste de integracao (se aplicavel).
-- [ ] Sem regressao (CI verde).
-- [ ] Sem violacao de lint/type.
-- [ ] Documentacao ajustada (README, ADR, comentario em codigo).
+- [ ] Testes unitários novos/atualizados (passando).
+- [ ] Teste de integração (se aplicável).
+- [ ] Sem regressão (CI verde).
+- [ ] Sem violação de lint/type.
+- [ ] Documentação ajustada (README, ADR, comentário em código).
 - [ ] Logs estruturados nos pontos chave.
-- [ ] Metricas relevantes adicionadas.
-- [ ] Audit trail nas mutacoes.
-- [ ] Domain Events emitidos quando aplicavel (para module hooks).
-- [ ] Validacao manual no ambiente dev.
+- [ ] Métricas relevantes adicionadas.
+- [ ] Audit trail nas mutações.
+- [ ] Domain Events emitidos quando aplicável (para module hooks).
+- [ ] Validação manual no ambiente dev.
 
 ---
 
-> *"A arquitetura e o conjunto de decisoes dificeis de mudar depois. Acerte essas, e tudo o mais e detalhe."* — Winston, Architect (BMAD)
+> *"A arquitetura é o conjunto de decisões difíceis de mudar depois. Acerte essas, e tudo o mais é detalhe."* — Winston, Architect (BMAD)

@@ -1,30 +1,30 @@
 ---
 epic: 11
 story: 4
-title: "Intent Rules Engine (flashtext + rapidfuzz + regex)"
+title: "Motor de Intent Rules (flashtext + rapidfuzz + regex)"
 type: "Core"
 status: ready-for-dev
 ---
 
-# Story 11.4: Intent Rules Engine
+# Story 11.4: Motor de Intent Rules
 
-## User Story
-As a System,
-I want to classify customer messages deterministically without LLM,
-So that we can route to templates/menus/functions in ia-eco and ia-zero modes with zero token cost.
+## História de Usuário
+Como Sistema,
+quero classificar mensagens de clientes de forma determinística sem usar LLM,
+para que possamos rotear para templates/menus/funções nos modos ia-eco e ia-zero com custo zero de tokens.
 
-## Acceptance Criteria
+## Critérios de Aceite
 
-1. New table `intent_rules`: `id`, `tenant_id`, `intent_name` (snake_case, e.g., `pedido_segunda_via`, `comprovante_enviado`), `match_type` ('keyword' | 'regex' | 'fuzzy'), `pattern` (text — palavras separadas por vírgula, regex, ou frase para fuzzy), `min_score` (NUMERIC, only for fuzzy, 0-100, default 80), `priority` INT (default 100, lower = higher priority), `action_type` ('send_template' | 'show_menu' | 'call_function' | 'classify_only'), `action_payload` JSONB (`{template_id}`, `{menu_slug}`, `{function_name, args}`), `enabled` BOOL, timestamps, soft delete.
-2. `IntentMatcher` service:
-   - Loads enabled rules for tenant from cache (Redis, key `intent_rules:{tenant_id}`, TTL 60s, invalidated on rule CRUD)
-   - `match(text: str, tenant_id) -> Optional[IntentMatch]` where `IntentMatch = {intent_name, score, rule_id, action_type, action_payload}`
-   - Evaluation order: priority ASC, then match_type ('regex' > 'keyword' > 'fuzzy' for same priority)
-   - Returns first match where score ≥ threshold (regex/keyword = 100, fuzzy = `min_score`)
+1. Nova tabela `intent_rules`: `id`, `tenant_id`, `intent_name` (snake_case, ex.: `pedido_segunda_via`, `comprovante_enviado`), `match_type` ('keyword' | 'regex' | 'fuzzy'), `pattern` (text — palavras separadas por vírgula, regex, ou frase para fuzzy), `min_score` (NUMERIC, apenas para fuzzy, 0-100, default 80), `priority` INT (default 100, menor = maior prioridade), `action_type` ('send_template' | 'show_menu' | 'call_function' | 'classify_only'), `action_payload` JSONB (`{template_id}`, `{menu_slug}`, `{function_name, args}`), `enabled` BOOL, timestamps, soft delete.
+2. Serviço `IntentMatcher`:
+   - Carrega regras habilitadas do tenant a partir de cache (Redis, key `intent_rules:{tenant_id}`, TTL 60s, invalidado no CRUD de regra)
+   - `match(text: str, tenant_id) -> Optional[IntentMatch]` onde `IntentMatch = {intent_name, score, rule_id, action_type, action_payload}`
+   - Ordem de avaliação: priority ASC, depois match_type ('regex' > 'keyword' > 'fuzzy' para mesma prioridade)
+   - Retorna o primeiro match onde score ≥ threshold (regex/keyword = 100, fuzzy = `min_score`)
 3. **Tech stack** (não usar Rasa):
-   - `flashtext` para `match_type=keyword` — KeywordProcessor por tenant, case-insensitive, com unicode normalization (remove acentos)
+   - `flashtext` para `match_type=keyword` — KeywordProcessor por tenant, case-insensitive, com normalização unicode (remove acentos)
    - `re` (builtin) para `match_type=regex` — pattern compilado e cacheado
-   - `rapidfuzz` (`fuzz.partial_ratio`) para `match_type=fuzzy` — handle de typos comuns em WhatsApp
+   - `rapidfuzz` (`fuzz.partial_ratio`) para `match_type=fuzzy` — lida com typos comuns no WhatsApp
 4. Seed de regras padrão em português:
    ```
    intent_name              match_type  pattern (exemplos)                                  priority  action
@@ -38,42 +38,42 @@ So that we can route to templates/menus/functions in ia-eco and ia-zero modes wi
    reclamacao               keyword     reclamar, problema, errado, absurdo                 50        handover_human
    unknown                  regex       .*                                                  9999      show_menu(main_menu)  # catch-all
    ```
-5. Inbound pipeline em `ia-zero` ou quando `OperationModeService.is_allowed('llm_classify') == False`:
+5. Pipeline de entrada em `ia-zero` ou quando `OperationModeService.is_allowed('llm_classify') == False`:
    - Chama `IntentMatcher.match()` direto
-   - Executa `action_payload` via dispatcher comum (mesmo da Story 11.3)
+   - Executa `action_payload` via dispatcher comum (o mesmo da Story 11.3)
    - Nenhuma chamada de LLM acontece
-6. Inbound pipeline em `ia-eco`: primeiro tenta `IntentMatcher`; se `intent_name == 'unknown'`, então chama LLM com prompt curto: "classifique em uma das intents X, Y, Z. Responda só o nome ou 'unknown'." (~50 tokens). Se LLM retorna conhecida, executa ação; se 'unknown', fallback para menu.
-7. Backend endpoints:
-   - `GET /api/v1/intent-rules` — list com filtros
-   - `POST /api/v1/intent-rules` — create
-   - `PUT /api/v1/intent-rules/{id}` — update
+6. Pipeline de entrada em `ia-eco`: primeiro tenta `IntentMatcher`; se `intent_name == 'unknown'`, então chama LLM com prompt curto: "classifique em uma das intents X, Y, Z. Responda só o nome ou 'unknown'." (~50 tokens). Se o LLM retorna uma intent conhecida, executa a ação; se 'unknown', fallback para o menu.
+7. Endpoints do backend:
+   - `GET /api/v1/intent-rules` — lista com filtros
+   - `POST /api/v1/intent-rules` — cria
+   - `PUT /api/v1/intent-rules/{id}` — atualiza
    - `DELETE /api/v1/intent-rules/{id}` — soft delete
    - `POST /api/v1/intent-rules/test` — body `{text, tenant_id}` → retorna `{matched_intent, matched_rule, score, all_candidates: [...]}`
-   - `POST /api/v1/intent-rules/import` — bulk import JSON/CSV
-   - `GET /api/v1/intent-rules/stats` — para cada rule, quantas vezes foi match nos últimos 30 dias (de `intent_match_log`)
+   - `POST /api/v1/intent-rules/import` — import em massa JSON/CSV
+   - `GET /api/v1/intent-rules/stats` — para cada regra, quantas vezes deu match nos últimos 30 dias (a partir de `intent_match_log`)
 8. Tabela `intent_match_log` (append-only, particionada por mês): `id`, `tenant_id`, `conversation_id`, `message_id`, `matched_rule_id` (nullable), `intent_name`, `score`, `created_at`. Index em `(tenant_id, matched_rule_id, created_at)`.
-9. Frontend page **Settings → Autoatendimento → Regras**:
-   - Tabela com regras, search, filtro por intent_name/action_type/enabled
+9. Página de frontend **Configurações → Autoatendimento → Regras**:
+   - Tabela com regras, busca, filtro por `intent_name`/`action_type`/`enabled`
    - Drag-handle para reordenar (atualiza `priority`)
-   - Botão "Nova Regra" abre wizard 3 steps: 1) match (tipo + pattern + min_score), 2) ação (action_type + payload), 3) preview/teste
-   - Aba "Testar": textarea + botão "Match" mostra qual rule bateu, score, top 5 candidates
-   - Para cada regra: badge "X matches nos últimos 30 dias" (de `intent_match_log` stats)
-10. Performance target: `IntentMatcher.match()` p99 < 10ms para até 500 rules por tenant. Benchmark incluído nos testes.
-11. Tests:
+   - Botão "Nova Regra" abre wizard de 3 steps: 1) match (tipo + pattern + min_score), 2) ação (action_type + payload), 3) preview/teste
+   - Aba "Testar": textarea + botão "Match" mostra qual regra bateu, score, top 5 candidatos
+   - Para cada regra: badge "X matches nos últimos 30 dias" (de stats de `intent_match_log`)
+10. Meta de performance: `IntentMatcher.match()` p99 < 10ms para até 500 regras por tenant. Benchmark incluído nos testes.
+11. Testes:
     - Cada match_type funciona isolado
-    - Priority + match_type tiebreak funciona
-    - Cache invalidation no CRUD
+    - Tiebreak por priority + match_type funciona
+    - Invalidação de cache no CRUD
     - Fuzzy ignora acentos e maiúsculas
-    - Regex catastrófico é prevenido (re.compile com timeout via signal ou `regex` lib)
+    - Regex catastrófico é prevenido (re.compile com timeout via signal ou lib `regex`)
 
-## Technical Context
+## Contexto Técnico
 
-### Architecture References
-- IntentMatcher é um **service de domínio puro** (sem I/O exceto load de rules) — facilmente unitestável
-- Cache Redis por tenant + invalidation event-driven (não TTL apenas)
-- `intent_match_log` é base para stats e também para Story 11.7 (manager learning)
+### Referências de Arquitetura
+- `IntentMatcher` é um **serviço de domínio puro** (sem I/O exceto o load das regras) — facilmente testável em unitário
+- Cache Redis por tenant + invalidação event-driven (não somente TTL)
+- `intent_match_log` é base para stats e também para a Story 11.7 (manager learning)
 
-### Files to Create/Modify
+### Arquivos a Criar/Modificar
 ```
 backend-api/
 ├── app/domain/intents/
@@ -96,25 +96,25 @@ frontend/
 └── src/app/core/services/intent-rules.service.ts
 ```
 
-### New dependencies
+### Novas dependências
 - `flashtext==2.7` (Python)
 - `rapidfuzz==3.x` (Python)
 - `regex` (opcional — versão melhorada do `re`, suporta timeout)
 
-### Dependencies
+### Dependências
 - Story 10.4 (message templates — alvo de `action_type=send_template`)
-- Story 11.2 (operation mode service — gates whether LLM is called)
+- Story 11.2 (serviço de modo de operação — controla se o LLM é chamado)
 - Story 11.3 (menus — alvo de `action_type=show_menu`)
 
-### Technical Notes
-- **ReDoS prevention**: validar `pattern` no POST com `try compile + timeout 1s contra string longa de teste`. Rejeitar 400 se compilação ou execução demora.
-- **Tenant isolation**: NUNCA carregar rules de outro tenant. Cache key tem `tenant_id`.
-- **Normalização**: aplicar antes de matchar tanto em keyword quanto em fuzzy. Regex respeita o pattern do usuário (que pode incluir flags).
-- **Catch-all rule** com `pattern='.*'` priority 9999 garante que sempre há um match (fallback para menu)
-- **Bulk import** valida cada linha; relatório por linha com erros/successos
+### Notas Técnicas
+- **Prevenção de ReDoS**: validar `pattern` no POST com `try compile + timeout 1s contra string longa de teste`. Rejeitar com 400 se compilação ou execução demorar.
+- **Isolamento de tenant**: NUNCA carregar regras de outro tenant. A key de cache tem `tenant_id`.
+- **Normalização**: aplicar antes do match tanto em keyword quanto em fuzzy. Regex respeita o pattern do usuário (que pode incluir flags).
+- **Regra catch-all** com `pattern='.*'` priority 9999 garante que sempre há um match (fallback para menu)
+- **Import em massa** valida cada linha; relatório por linha com erros/sucessos
 
-## Dev Checklist
-- [ ] All acceptance criteria met
-- [ ] Tests written and passing
-- [ ] No regressions
-- [ ] Code review (`bmad-code-review`) executed and approved
+## Checklist do Dev
+- [ ] Todos os critérios de aceite atendidos
+- [ ] Testes escritos e passando
+- [ ] Sem regressões
+- [ ] Code review (`bmad-code-review`) executado e aprovado

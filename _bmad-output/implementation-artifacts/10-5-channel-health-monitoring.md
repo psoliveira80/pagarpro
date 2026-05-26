@@ -1,45 +1,45 @@
 ---
 epic: 10
 story: 5
-title: "Channel Health Monitoring and Auto-Discovery"
+title: "Monitoramento de Saúde de Canais e Auto-descoberta"
 type: "Core"
 status: ready-for-dev
 ---
 
-# Story 10.5: Channel Health Monitoring and Auto-Discovery
+# Story 10.5: Monitoramento de Saúde de Canais e Auto-descoberta
 
-## User Story
-As a Manager,
-I want to see which messaging channels are configured and healthy,
-So that I know if my automated collection will work.
+## História de Usuário
+Como Gestor,
+quero ver quais canais de mensageria estão configurados e saudáveis,
+para que eu saiba se minha cobrança automatizada vai funcionar.
 
-## Acceptance Criteria
+## Critérios de Aceite
 
-1. Celery task `check_channel_health` runs every 5 minutes — calls `health_check()` on all registered channels, stores result in `integration_credentials.status` and `last_health_check`.
-2. Dashboard widget showing channel status: green dot (healthy), yellow (degraded), red (down), gray (not configured).
-3. SSE notification when a channel goes from healthy to unhealthy.
-4. Settings > Integrações page shows real-time health status per channel with latency.
-5. Channel registration at startup reads from `integration_credentials` table and wraps adapters via `WhatsAppChannelWrapper`.
-6. Tests: mock health check, verify status persistence.
+1. Task Celery `check_channel_health` roda a cada 5 minutos — chama `health_check()` em todos os canais registrados, armazena resultado em `integration_credentials.status` e `last_health_check`.
+2. Widget no painel mostrando status do canal: ponto verde (saudável), amarelo (degradado), vermelho (fora do ar), cinza (não configurado).
+3. Notificação SSE quando um canal passa de saudável para não saudável.
+4. Página Configurações > Integrações mostra status de saúde em tempo real por canal com latência.
+5. Registro de canais no startup lê da tabela `integration_credentials` e encapsula adapters via `WhatsAppChannelWrapper`.
+6. Testes: mock do health check, verifica persistência do status.
 
-## Technical Context
+## Contexto Técnico
 
-### Architecture References
+### Referências de Arquitetura
 - `docs/architecture-messaging-channels.md`
 - `app/core/channels/registry.py` (ChannelRegistry)
 - `app/domain/ports/message_channel.py` (IMessageChannel.health_check)
 
-### Files to Create/Modify
+### Arquivos a Criar/Modificar
 ```
 backend-api/
 ├── app/workers/tasks/check_channel_health.py
-├── app/main.py                              # Register channels from DB at startup
+├── app/main.py                              # Registra canais a partir do banco no startup
 frontend/
-├── src/app/features/settings/integrations.component.html  # Add health badges
-├── src/app/features/dashboard/dashboard.component.html    # Add channel widget
+├── src/app/features/settings/integrations.component.html  # Adiciona badges de saúde
+├── src/app/features/dashboard/dashboard.component.html    # Adiciona widget de canal
 ```
 
-## Dev Checklist
-- [ ] All acceptance criteria met
-- [ ] Tests written and passing
-- [ ] No regressions
+## Checklist do Dev
+- [ ] Todos os critérios de aceite atendidos
+- [ ] Testes escritos e passando
+- [ ] Sem regressões

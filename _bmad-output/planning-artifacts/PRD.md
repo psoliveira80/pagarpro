@@ -10,9 +10,9 @@
 
 ---
 
-## 1. Goals and Background Context
+## 1. Objetivos e Contexto
 
-### 1.1 Goals (Objetivos do Produto)
+### 1.1 Objetivos do Produto
 
 - **G1.** Oferecer uma **plataforma genérica de cobrança recorrente e gestão de recebíveis** que substitua planilhas e processos manuais para qualquer negócio que alugue, loque, financie ou assine ativos ou serviços — eliminando retrabalho de digitação e divergências entre versões.
 - **G2.** Reduzir em **>= 70%** o tempo gasto com cobranças manuais via WhatsApp através de um **Agent Orchestrator** conversacional inteligente e parametrizável — capaz de operar em qualquer canal (WhatsApp remoto, chat in-app web) e executar qualquer ação que o caller esteja autorizado a realizar (cobrança sendo o caso de uso primário).
@@ -23,7 +23,7 @@
 - **G7.** Construir uma arquitetura **plug-and-play** onde fornecedores externos (WhatsApp, Open Finance, gateway de pagamento, LLM, OCR, storage, módulos verticais) sejam intercambiáveis sem refatoração de regras de negócio.
 - **G8.** Entregar uma experiência de UI/UX **premium** com componentes sofisticados (drag-and-drop em conciliação, chat estilo WhatsApp, mapas interativos, dashboards reativos com Signals).
 
-### 1.2 Background Context
+### 1.2 Contexto
 
 A plataforma {{product_name}} nasce para atender um mercado amplo de negócios que operam com **cobrança recorrente e gestão de ativos**: frotas de veículos, locação de imóveis, assinaturas de serviços, equipamentos alugados, etc. O core genérico cobre: clientes, contratos com construtor flexível de parcelas, recebíveis (lifecycle de 7 estados), contas a pagar, agente de cobrança IA via WhatsApp, conciliação bancária, dashboards e auditoria. Módulos verticais plugáveis adicionam funcionalidades de domínio específico.
 
@@ -57,7 +57,7 @@ O primeiro deployment target opera no modelo de **locação com opção de compr
 
 ---
 
-### 1.3 Change Log
+### 1.3 Histórico de Mudanças
 
 | Data       | Versão | Descrição                                                                 | Autor     |
 |------------|--------|---------------------------------------------------------------------------|-----------|
@@ -67,9 +67,9 @@ O primeiro deployment target opera no modelo de **locação com opção de compr
 
 ---
 
-## 2. Requirements
+## 2. Requisitos
 
-### 2.1 Functional Requirements (Requisitos Funcionais)
+### 2.1 Requisitos Funcionais
 
 > Convenção de IDs:
 > - **Core (genérico):** `FR-CORE-{módulo}-{nº}`. Módulos core: `AUTH` (autenticação), `CAD` (cadastros genéricos), `CTR` (contratos), `CR` (contas a receber), `CP` (contas a pagar), `COB` (cobranças), `CON` (conciliação), `DSH` (dashboards/relatórios), `INT` (integrações), `PRM` (parametrização), `AUD` (auditoria), `AST` (asset abstraction).
@@ -300,7 +300,7 @@ O primeiro deployment target opera no modelo de **locação com opção de compr
 
 ---
 
-### 2.2 Non-Functional Requirements (Requisitos Não-Funcionais)
+### 2.2 Requisitos Não-Funcionais
 
 - **NFR-1 (Desempenho).** O P95 das requisições de leitura deve ser <= 300 ms; das mutações <= 500 ms; renderização de dashboard inicial <= 1.5 s em rede 4G.
 - **NFR-2 (Escalabilidade).** Arquitetura deve suportar até **10 k ativos / 50 k títulos ativos / 100 k mensagens WhatsApp/mês** sem refatoração estrutural; horizontal scaling via stateless API + workers.
@@ -320,9 +320,9 @@ O primeiro deployment target opera no modelo de **locação com opção de compr
 
 ---
 
-## 3. User Interface Design Goals
+## 3. Objetivos de Design de Interface
 
-### 3.1 Overall UX Vision
+### 3.1 Visão Geral de UX
 
 A interface deve transmitir a sensação de uma **ferramenta operacional premium** — o mesmo nível de polimento de produtos como Linear, Notion, Stripe Dashboard ou Vercel. O gestor passa horas no sistema; cada microinteração precisa ser fluida. Princípios:
 
@@ -333,7 +333,7 @@ A interface deve transmitir a sensação de uma **ferramenta operacional premium
 5. **Sophisticated where it matters**: drag-and-drop na conciliação e no construtor de parcelamento; mapas com clusters; gráficos animados; chat estilo WhatsApp pixel-perfect.
 6. **Module-aware UI**: a interface adapta-se aos módulos verticais ativos — menus, dashboards, formulários e relatórios exibem apenas o que é relevante para os módulos habilitados.
 
-### 3.2 Key Interaction Paradigms
+### 3.2 Principais Paradigmas de Interação
 
 - **Command Palette (Ctrl+K)**: acesso rápido a qualquer tela, busca global por cliente/ativo/título, ações rápidas ("baixar título 1234").
 - **Inline Editing**: tabelas com edição direta (clique para editar célula). Validação inline.
@@ -346,7 +346,7 @@ A interface deve transmitir a sensação de uma **ferramenta operacional premium
 - **Filters as URL state**: filtros vivem na query string para serem compartilháveis e bookmarkáveis.
 - **Keyboard-First**: toda ação primária tem atalho.
 
-### 3.3 Core Screens and Views
+### 3.3 Telas Principais
 
 Lista mínima de telas/views (não exaustiva — apenas as estruturais):
 
@@ -366,13 +366,13 @@ Lista mínima de telas/views (não exaustiva — apenas as estruturais):
 - **Auditoria** (log searchable).
 - **Perfil & Preferências** (tema, notificações, atalhos).
 
-### 3.4 Accessibility
+### 3.4 Acessibilidade
 
 - WCAG 2.1 AA estrita (contraste 4.5:1, foco visível, ARIA correto).
 - *Skip links*, navegação por teclado completa, leitor de tela testado em NVDA + VoiceOver.
 - *Reduced motion* respeitado (prefere `transform: none` em quem ativa).
 
-### 3.5 Branding & Visual Style
+### 3.5 Branding e Estilo Visual
 
 - **Stack visual**: Tailwind CSS v4 + design tokens estilo shadcn/ui + Heroicons.
 - **Tema**: Light / Dark sincronizado com OS, persistido em `theme.service.ts`. Variáveis CSS globais em `styles.css`:
@@ -387,7 +387,7 @@ Lista mínima de telas/views (não exaustiva — apenas as estruturais):
 - **Iconografia**: Heroicons exclusivamente, via `@ng-icons/core` + `@ng-icons/heroicons`. Nenhum SVG inline solto.
 - **Branding**: o nome do produto (`{{product_name}}`) é configurável via variável de ambiente e exibido no header, login, favicon e manifest. Nenhum nome hardcoded no código.
 
-### 3.6 Target Device and Platforms
+### 3.6 Dispositivos e Plataformas Alvo
 
 - **Web Responsive** (desktop > tablet > mobile, nessa ordem de prioridade).
 - **PWA**: instalável, splash screen, ícones, offline shell (cobrança offline com fila de sync futura).
@@ -395,9 +395,9 @@ Lista mínima de telas/views (não exaustiva — apenas as estruturais):
 
 ---
 
-## 4. Technical Assumptions
+## 4. Premissas Técnicas
 
-### 4.1 Repository Structure
+### 4.1 Estrutura do Repositório
 
 **Monorepo** com Nx ou Turborepo opcional, mas como início simples: **dois diretórios paralelos** (`frontend/` Angular e `api/` FastAPI) gerenciados juntos sob um diretório guarda-chuva com `docker-compose.yml` para dev local. Nenhum nome de produto em nomes de pasta ou pacotes.
 
@@ -412,7 +412,7 @@ project-root/
 
 > Justificativa: a estrutura Angular do cliente já é muito específica (arquivos anexados); um monorepo Nx adiciona complexidade desnecessária no MVP. Pode-se migrar depois. O nome do produto é injetado via variável de ambiente `PRODUCT_NAME`, nunca hardcoded.
 
-### 4.2 Service Architecture
+### 4.2 Arquitetura de Serviços
 
 **API monolítica modular** (não microsserviços). FastAPI organizado em módulos por *bounded context*:
 - **Core modules**: auth, customers, contracts, finance (receivables + payables), collections, reconciliation, integrations, reports, audit, assets.
@@ -431,13 +431,13 @@ Workers Celery rodam em processos separados para tarefas assíncronas (cobrança
 
 > **Decisão**: SSE como primário para notificações (unidirecional, leve, reconexão automática nativa); WebSocket somente para chat (bidirecional, baixa latência); polling somente como fallback explícito.
 
-### 4.3 Testing Requirements
+### 4.3 Requisitos de Testes
 
 - **Backend**: unit tests com pytest (cobertura >= 80% no domínio); integration tests com testcontainers (Postgres real); contract tests com schemathesis sobre o OpenAPI.
 - **Frontend**: unit tests com Vitest + @ngneat/spectator; component tests com Storybook + Chromatic (visual regression); E2E com Playwright cobrindo os 5 fluxos críticos.
 - **CI**: GitHub Actions executando lint + test + build em cada PR; bloqueio de merge sem testes verdes.
 
-### 4.4 Additional Technical Assumptions
+### 4.4 Premissas Técnicas Adicionais
 
 - **Banco**: PostgreSQL 16+ (com `pgvector` para RAG do agente de cobrança).
 - **Cache & Queue**: Redis 7.
@@ -461,7 +461,7 @@ Workers Celery rodam em processos separados para tarefas assíncronas (cobrança
 
 ---
 
-## 5. Epic List (Visão Geral)
+## 5. Lista de Épicos
 
 > A divisão em épicos segue a regra BMAD: **cada épico entrega valor utilizável de ponta-a-ponta**, na menor granularidade possível. A primeira história do Épico 1 sempre estabelece a fundação técnica (login + endpoint de saúde + UI base navegável).
 
@@ -486,7 +486,7 @@ Workers Celery rodam em processos separados para tarefas assíncronas (cobrança
 
 ---
 
-### Épico 1 — Foundation & Identity (Core)
+### Épico 1 — Fundação e Identidade (Core)
 
 **Objetivo do épico:** ter o esqueleto técnico do produto rodando em dev e produção, com login funcional, layout base navegável, tema dark/light, Asset Abstraction Layer (interface `IAssetModule` + event bus) e CI/CD verde — sem nenhuma funcionalidade de domínio ainda. Ao final do épico, qualquer dev consegue clonar, subir o ambiente e ver a tela "Olá, X" autenticado.
 
@@ -615,7 +615,7 @@ Workers Celery rodam em processos separados para tarefas assíncronas (cobrança
 
 ---
 
-### Épico 2A — Core Asset Management & Cadastros (Core)
+### Épico 2A — Gestão Core de Ativos e Cadastros (Core)
 
 **Objetivo:** o gestor consegue cadastrar clientes e ter a infraestrutura genérica de ativos pronta. O core gerencia clientes e delega detalhes de ativos aos módulos verticais via `IAssetModule`.
 
@@ -693,7 +693,7 @@ Workers Celery rodam em processos separados para tarefas assíncronas (cobrança
 
 ---
 
-### Épico 2B — Vehicle Module: Cadastros & Integrações (Vehicle Module)
+### Épico 2B — Módulo de Veículos: Cadastros e Integrações
 
 **Objetivo:** o módulo Vehicle está implementado e registrado como `IAssetModule`. O gestor consegue cadastrar veículos, ver a frota em um mapa em tempo real, e o sistema atualiza automaticamente o valor patrimonial via FIPE. Ao final do épico, o Excel de cadastros de veículos é substituível.
 
@@ -1106,7 +1106,7 @@ Workers Celery rodam em processos separados para tarefas assíncronas (cobrança
 
 ---
 
-### Épico 6 — Agent Orchestrator, Messaging & Inbox (Core + Hooks)
+### Épico 6 — Orquestrador de Agentes, Mensageria e Inbox (Core + Hooks)
 
 **Objetivo:** o gestor para de cobrar manualmente. Um Agent Orchestrator conversacional, educado e parametrizável conduz cobranças (caso de uso primário) e qualquer outra ação autorizada, seguindo políticas pré-definidas, com humano podendo intervir a qualquer momento. O orchestrator é multi-canal (WhatsApp remoto + chat in-app web), aceita texto, áudio (transcrito via `IAudioTranscriber`) e imagens, e compõe a lista de tools dinamicamente com base nas permissões RBAC do caller. Tools core estão sempre disponíveis; tools de módulo vertical são injetados via `IAssetModule.get_agent_tools()`. O fluxo padrão de pagamento é: agente envia Pix card -> cliente paga e manda screenshot -> OCR valida -> baixa primária.
 

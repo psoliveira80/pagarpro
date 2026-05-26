@@ -1,47 +1,47 @@
 ---
 epic: 10
 story: 1
-title: "Monthly Installment Generation with Correction Index"
+title: "Geração Mensal de Parcelas com Índice de Correção"
 type: "Core"
 status: review
 ---
 
-# Story 10.1: Monthly Installment Generation with Correction Index
+# Story 10.1: Geração Mensal de Parcelas com Índice de Correção
 
-## User Story
-As a System,
-I want to generate installments monthly applying the current correction index,
-So that contracts with monetary correction have accurate values each month.
+## História de Usuário
+Como Sistema,
+quero gerar parcelas mensalmente aplicando o índice de correção vigente,
+para que contratos com correção monetária tenham valores precisos a cada mês.
 
-## Acceptance Criteria
+## Critérios de Aceite
 
-1. Contract model extended with `generation_mode` (upfront | monthly), `correction_index` (igpm | ipca | inpc | null), `generation_day` (1-28), `next_generation_date`.
-2. `ICorrectionIndexProvider` port with `get_current_rate(index, reference_date) -> Decimal`.
-3. `BcbCorrectionAdapter` fetching rates from BCB API (Banco Central do Brasil).
-4. Celery Beat task `generate_monthly_installments` runs daily at 06:00 — for each contract with `generation_mode=monthly` and `next_generation_date <= today`: calculates corrected value, creates Installment, advances `next_generation_date`, creates ContractEvent.
-5. Migration adds columns to `contracts` table.
-6. Tests: mock BCB adapter, verify corrected value calculation, verify date advancement.
+1. Modelo de Contrato estendido com `generation_mode` (upfront | monthly), `correction_index` (igpm | ipca | inpc | null), `generation_day` (1-28), `next_generation_date`.
+2. Port `ICorrectionIndexProvider` com `get_current_rate(index, reference_date) -> Decimal`.
+3. `BcbCorrectionAdapter` busca taxas da API do BCB (Banco Central do Brasil).
+4. Task Celery Beat `generate_monthly_installments` roda diariamente às 06:00 — para cada contrato com `generation_mode=monthly` e `next_generation_date <= today`: calcula valor corrigido, cria Installment (parcela), avança `next_generation_date`, cria ContractEvent.
+5. Migration adiciona colunas à tabela `contracts`.
+6. Testes: mock do adapter BCB, verifica cálculo do valor corrigido, verifica avanço da data.
 
-## Technical Context
+## Contexto Técnico
 
-### Architecture References
-- `docs/architecture-recurrence-and-collection.md` Section 1 — Modalidade B
+### Referências de Arquitetura
+- `docs/architecture-recurrence-and-collection.md` Seção 1 — Modalidade B
 
-### Files to Create/Modify
+### Arquivos a Criar/Modificar
 ```
 backend-api/
-├── app/domain/ports/correction_index_provider.py    # ICorrectionIndexProvider Protocol
-├── app/infrastructure/adapters/bcb_correction_adapter.py  # BCB API adapter
-├── app/workers/tasks/generate_monthly_installments.py     # Celery task
+├── app/domain/ports/correction_index_provider.py    # Protocol ICorrectionIndexProvider
+├── app/infrastructure/adapters/bcb_correction_adapter.py  # Adapter da API BCB
+├── app/workers/tasks/generate_monthly_installments.py     # Task Celery
 ├── alembic/versions/0013_contract_generation_mode.py      # Migration
 └── app/tests/test_monthly_generation.py
 ```
 
-### Dependencies
-- Story 3-1 (Contract/Installment models)
+### Dependências
+- Story 3-1 (modelos Contract/Installment)
 - Story 3-2 (schedule_calculator)
 
-### External API Dependency: BCB (Banco Central do Brasil)
+### Dependência de API Externa: BCB (Banco Central do Brasil)
 
 **API pública, gratuita, sem autenticação.**
 
@@ -71,62 +71,62 @@ ICorrectionIndexProvider (Protocol)
 - Registrar como integração em `integration_credentials` (category=`correction_index`, provider=`bcb`)
 - Futuramente pode ter adapters alternativos (ex: API do IBGE, planilha manual)
 
-### Technical Notes
-- `generation_day`: if day doesn't exist in month (e.g., 31 in Feb), use last day of month
-- Task must be idempotent — check if installment for that period already exists
+### Notas Técnicas
+- `generation_day`: se o dia não existir no mês (ex: 31 em fevereiro), usar último dia do mês
+- Task deve ser idempotente — verificar se a parcela daquele período já existe
 - O valor corrigido = `base_value * (1 + taxa/100)` onde taxa é o valor retornado pela API
 
-### Session Context
-- Docker-only, API port 8100, Celery worker must register new task
+### Contexto da Sessão
+- Apenas Docker, API na porta 8100, worker Celery deve registrar a nova task
 
-## Dev Checklist
-- [x] All acceptance criteria met
-- [x] Tests written and passing (11/11 in `app/tests/test_monthly_generation.py`)
-- [x] Lint/type-check passing (`ruff check` clean on new files)
-- [x] No regressions (only pre-existing flake in `test_list_customers_with_pagination`, unrelated)
-- [ ] Code review (`bmad-code-review`) executed and approved
+## Checklist do Dev
+- [x] Todos os critérios de aceite atendidos
+- [x] Testes escritos e passando (11/11 em `app/tests/test_monthly_generation.py`)
+- [x] Lint/type-check passando (`ruff check` limpo nos novos arquivos)
+- [x] Sem regressões (apenas flake pré-existente em `test_list_customers_with_pagination`, sem relação)
+- [ ] Code review (`bmad-code-review`) executado e aprovado
 
-## Dev Agent Record
+## Registro do Dev Agent
 
-### Completion Notes
-**Implementation summary:**
-- Migration **renumbered from `0013` → `0014`** because `0013_integration_credentials_update.py` already exists. `down_revision="0013"`.
-- Added **5 columns** to `contracts` (story called for 4, but `monthly_base_value` is structurally necessary — see *Decisions* below). All gated by CHECK constraints to enforce mode invariants at the DB level.
-- BCB adapter uses `httpx.AsyncClient(timeout=30)` and Redis (`sgs`-series cache key `correction_index:{idx}:{YYYY-MM}`, TTL 30 days). When the live API fails, the adapter tries the current bucket then the previous month before raising `CorrectionIndexUnavailableError`.
-- Celery task uses sync-wrapper + `asyncio.run(_run())` pattern (matches `generate_recurring_payables.py`). `with_for_update(skip_locked=True)` lets multiple beat ticks safely race. Beat schedule registered for **06:00 UTC** via `crontab()`.
-- Task is **idempotent**: an installment for the same `(contract_id, due_date)` is never inserted twice; date is still advanced so the contract progresses.
-- Each generation emits a `ContractEvent` row with type `monthly_installment_generated` and a payload capturing the rate and base/corrected values (audit trail).
-- The task module imports `app.infrastructure.db.models` (`# noqa: F401`) to ensure all ORM models are registered before issuing `select(Contract)` — without this, `contracts.customer_id` FK resolution fails when the worker boots in isolation.
+### Notas de Conclusão
+**Resumo da implementação:**
+- Migration **renumerada de `0013` → `0014`** porque `0013_integration_credentials_update.py` já existe. `down_revision="0013"`.
+- Adicionadas **5 colunas** em `contracts` (a story pedia 4, mas `monthly_base_value` é estruturalmente necessária — ver *Decisões* abaixo). Todas protegidas por CHECK constraints para forçar invariantes de modo no nível do banco.
+- Adapter BCB usa `httpx.AsyncClient(timeout=30)` e Redis (chave de cache `correction_index:{idx}:{YYYY-MM}` da série `sgs`, TTL 30 dias). Quando a API ao vivo falha, o adapter tenta o bucket atual e depois o mês anterior antes de lançar `CorrectionIndexUnavailableError`.
+- Task Celery usa padrão sync-wrapper + `asyncio.run(_run())` (igual ao `generate_recurring_payables.py`). `with_for_update(skip_locked=True)` permite múltiplos ticks do beat correrem com segurança. Beat schedule registrado para **06:00 UTC** via `crontab()`.
+- Task é **idempotente**: uma parcela para o mesmo `(contract_id, due_date)` nunca é inserida duas vezes; a data ainda é avançada para o contrato progredir.
+- Cada geração emite uma linha em `ContractEvent` com tipo `monthly_installment_generated` e payload capturando taxa e valores base/corrigidos (trilha de auditoria).
+- O módulo da task importa `app.infrastructure.db.models` (`# noqa: F401`) para garantir que todos os modelos ORM estejam registrados antes do `select(Contract)` — sem isso, a resolução da FK `contracts.customer_id` falha quando o worker sobe isolado.
 
-**Decisions:**
-- **5th column `monthly_base_value`** (Numeric 15,2, nullable): the AC formula `corrected = base * (1 + rate/100)` needs a base value that is *not* `total_value` (which means "sum of all installments" for upfront mode, and is irrelevant for monthly). A CHECK constraint enforces it must be set when `generation_mode='monthly'`. Discussed implicitly with the planner during exploration; documented here so the wizard story (3.4) knows to collect it.
-- **Inactive status filter**: task skips contracts with `status IN ('rascunho','encerrado','rescindido','cancelado')` — anything else (typically `vigente`) is processed. Avoided hardcoding `status='vigente'` to be robust against future statuses.
-- **`generation_day` clamped to 1-28** at the DB level (CHECK constraint). Removes the "what if Feb has no day 31?" branch entirely — no fallback logic needed.
-- **Cache TTL 30 days** for correction rates: BCB publishes monthly, so a 30-day TTL guarantees one refresh per release cycle while surviving a multi-day BCB outage.
-- **No SSE notification on `CorrectionIndexUnavailableError`** (story mentioned it but no recipient is well-defined in the task context — needs to be added in 10.3 or a dedicated alerting story). Failures are logged via `structlog`.
-- **`models/__init__.py`** updated to export `Customer` and `Asset` (they were missing). Defensive — fixes potential metadata resolution issues across other workers/tasks.
+**Decisões:**
+- **5ª coluna `monthly_base_value`** (Numeric 15,2, nullable): a fórmula do critério `corrected = base * (1 + rate/100)` precisa de um valor base que *não* seja `total_value` (que significa "soma de todas as parcelas" no modo upfront, e é irrelevante no modo monthly). Uma CHECK constraint força que seja preenchida quando `generation_mode='monthly'`. Discutido implicitamente com o planejador durante a exploração; documentado aqui para que a story do wizard (3.4) saiba que precisa coletar esse valor.
+- **Filtro de status inativos**: task pula contratos com `status IN ('rascunho','encerrado','rescindido','cancelado')` — qualquer outro (tipicamente `vigente`) é processado. Evitado hardcoding `status='vigente'` para ser robusto contra status futuros.
+- **`generation_day` limitado a 1-28** no nível do banco (CHECK constraint). Remove totalmente o branch "e se fevereiro não tem dia 31?" — nenhuma lógica de fallback necessária.
+- **Cache TTL de 30 dias** para taxas de correção: BCB publica mensalmente, então um TTL de 30 dias garante um refresh por ciclo de release enquanto sobrevive a uma indisponibilidade BCB de múltiplos dias.
+- **Sem notificação SSE em `CorrectionIndexUnavailableError`** (a story mencionou mas nenhum destinatário está bem definido no contexto da task — precisa ser adicionado na 10.3 ou em uma story dedicada de alertas). Falhas são logadas via `structlog`.
+- **`models/__init__.py`** atualizado para exportar `Customer` e `Asset` (estavam faltando). Defensivo — corrige potenciais problemas de resolução de metadata em outros workers/tasks.
 
-### File List
+### Lista de Arquivos
 
-**New:**
+**Novos:**
 - `src/backend-api/alembic/versions/0014_contract_generation_mode.py`
 - `src/backend-api/app/domain/ports/correction_index_provider.py`
 - `src/backend-api/app/infrastructure/adapters/bcb_correction_adapter.py`
 - `src/backend-api/app/workers/tasks/generate_monthly_installments.py`
 - `src/backend-api/app/tests/test_monthly_generation.py`
 
-**Modified:**
-- `src/backend-api/app/infrastructure/db/models/contract.py` (5 new mapped columns on `Contract`)
-- `src/backend-api/app/infrastructure/db/models/__init__.py` (export `Customer`, `Asset`)
-- `src/backend-api/app/workers/__init__.py` (register new task module + beat entry `generate-monthly-installments-06utc`)
+**Modificados:**
+- `src/backend-api/app/infrastructure/db/models/contract.py` (5 novas mapped columns em `Contract`)
+- `src/backend-api/app/infrastructure/db/models/__init__.py` (exporta `Customer`, `Asset`)
+- `src/backend-api/app/workers/__init__.py` (registra novo módulo de task + entrada de beat `generate-monthly-installments-06utc`)
 
-### Change Log
-- 2026-05-20 — Story 10.1 implemented (Pablo + dev agent). Migration 0014 applied. All 11 unit tests passing.
+### Histórico de Mudanças
+- 2026-05-20 — Story 10.1 implementada (Pablo + dev agent). Migration 0014 aplicada. Todos os 11 testes unitários passando.
 
-### Review Findings
+### Achados da Revisão
 <!-- bmad-code-review: 2026-05-20 | D=4 P=9 W=3 R=11 -->
 
-#### Decision Needed
+#### Decisão Necessária
 - [ ] [Review][Decision] D1: Arquitetura — `with_for_update` bloqueia linhas do banco enquanto faz chamadas HTTP BCB (até 30s × N contratos). O loop carrega todos os contratos com FOR UPDATE numa única sessão e faz N chamadas HTTP dentro desse lock. Opções: (a) buscar taxa BCB antes de adquirir locks; (b) cada contrato em transação própria; (c) pré-aquecer cache Redis fora do lock antes do loop.
 - [ ] [Review][Decision] D2: Comportamento de catch-up — tarefa gera apenas 1 parcela por execução para contratos com múltiplos meses em atraso; além disso `today` é passado como `reference_date` em vez de `due_date` (após P1 ser corrigido, a taxa ainda seria do mês atual, não do mês da parcela). Opções: (a) loop dentro de `_process_contract` até `next_generation_date > today`, passando `due_date` como referência de taxa; (b) manter 1/execução mas usar `due_date` como referência; (c) manter comportamento atual.
 - [ ] [Review][Decision] D3: Arredondamento financeiro — `_apply_correction` usa `ROUND_HALF_EVEN` (banker's rounding) por omitir `rounding=`. Padrão contábil brasileiro é `ROUND_HALF_UP`. Opções: (a) adicionar `rounding=ROUND_HALF_UP`; (b) documentar que ROUND_HALF_EVEN é intencional.
@@ -143,7 +143,7 @@ ICorrectionIndexProvider (Protocol)
 - [ ] [Review][Patch] P8: Teste de idempotência ausente — segunda execução do task no mesmo dia não deve criar parcela duplicada [test_monthly_generation.py]
 - [ ] [Review][Patch] P9: `BcbCorrectionAdapter` não herda explicitamente de `ICorrectionIndexProvider` — política do projeto exige herança explícita do Protocol (CLAUDE.md) [bcb_correction_adapter.py:BcbCorrectionAdapter]
 
-#### Deferred
-- [x] [Review][Defer] W1: Notificação SSE ao gestor quando BCB completamente indisponível [bcb_correction_adapter.py] — deferred, pre-existing: notas dev explicitamente adiam para Epic 10.3 ou story de alertas dedicada
-- [x] [Review][Defer] W2: `_advance_one_month` re-ancora silenciosamente em `generation_day` após `next_generation_date` irregular (ex: override admin) [generate_monthly_installments.py:_advance_one_month] — deferred, pre-existing: edge case de intervenção manual; não é fluxo normal
-- [x] [Review][Defer] W3: Fallback de cache para mês anterior quando cache do mês atual está vazio [bcb_correction_adapter.py:get_current_rate] — deferred, pre-existing: extensão razoável do spec ("usar último valor em cache" não restringe qual mês)
+#### Adiados
+- [x] [Review][Defer] W1: Notificação SSE ao gestor quando BCB completamente indisponível [bcb_correction_adapter.py] — adiado, pré-existente: notas do dev explicitamente adiam para Epic 10.3 ou story de alertas dedicada
+- [x] [Review][Defer] W2: `_advance_one_month` re-ancora silenciosamente em `generation_day` após `next_generation_date` irregular (ex: override admin) [generate_monthly_installments.py:_advance_one_month] — adiado, pré-existente: edge case de intervenção manual; não é fluxo normal
+- [x] [Review][Defer] W3: Fallback de cache para mês anterior quando cache do mês atual está vazio [bcb_correction_adapter.py:get_current_rate] — adiado, pré-existente: extensão razoável do spec ("usar último valor em cache" não restringe qual mês)
