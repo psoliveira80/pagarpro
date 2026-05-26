@@ -1,0 +1,99 @@
+<app-modal [open]="open()" (closed)="closed.emit()" size="md" title="Dar Baixa">
+  <!-- Body -->
+  <div class="space-y-4">
+    <div class="rounded-xl bg-[var(--border-subtle)] p-3">
+      <p class="text-sm text-[var(--text-secondary)]">
+        Parcela #{{ receivable().sequencia }} {{ receivable().observacoes ? ' - ' + receivable().observacoes : '' }}
+      </p>
+      <p class="mt-1 text-lg font-semibold text-[var(--text-primary)]">
+        {{ formatCurrency(receivable().valor) }}
+      </p>
+    </div>
+
+    <label for="wo-partial" class="flex items-center gap-3 cursor-pointer">
+      <input
+        id="wo-partial"
+        type="checkbox"
+        [checked]="isPartial()"
+        (change)="isPartial.set($any($event.target).checked)"
+        class="h-4 w-4 rounded border-[var(--border)]"
+      />
+      <span class="text-sm text-[var(--text-primary)]">Baixa parcial</span>
+    </label>
+
+    <div>
+      <label for="wo-date" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Data</label>
+      <input
+        id="wo-date"
+        type="date"
+        [value]="date()"
+        (input)="date.set($any($event.target).value)"
+        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+
+    <div>
+      <label for="wo-amount" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Valor (R$)</label>
+      <input
+        id="wo-amount"
+        type="number"
+        [value]="amount()"
+        (input)="amount.set(+$any($event.target).value)"
+        min="0"
+        step="0.01"
+        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+
+    <div>
+      <label for="wo-method" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Método</label>
+      <app-select
+        [options]="methodOptions"
+        [(value)]="method"
+        placeholder="Método"
+      />
+    </div>
+
+    <div>
+      <label for="wo-file" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Comprovante (opcional)</label>
+      <div class="flex items-center gap-3 rounded-xl border border-dashed border-[var(--border)] p-4 relative">
+        <ui-icon name="heroArrowUpTray" size="1.25rem" class="text-[var(--text-muted)]" />
+        <div class="flex-1">
+          @if (file(); as f) {
+            <p class="text-sm text-[var(--text-primary)]">{{ f.name }}</p>
+          } @else {
+            <p class="text-sm text-[var(--text-muted)]">Arraste ou clique para enviar</p>
+          }
+        </div>
+        <input
+          id="wo-file"
+          type="file"
+          (change)="onFileChange($event)"
+          class="absolute inset-0 opacity-0 cursor-pointer"
+          accept=".pdf,.jpg,.jpeg,.png"
+        />
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div modal-footer class="flex items-center justify-end gap-3 border-t border-[var(--border)] px-6 py-4">
+    <button
+      (click)="close()"
+      class="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+    >
+      Cancelar
+    </button>
+    <button
+      (click)="submit()"
+      [disabled]="isSaving()"
+      class="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-40 cursor-pointer"
+    >
+      @if (isSaving()) {
+        Salvando...
+      } @else {
+        Confirmar Baixa
+      }
+    </button>
+  </div>
+</app-modal>

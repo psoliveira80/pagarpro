@@ -1,0 +1,104 @@
+@if (isOpen()) {
+  <div
+    class="palette-backdrop fixed inset-0 z-[10000] flex items-start justify-center bg-black/60 pt-[15vh]"
+    tabindex="0"
+    role="dialog"
+    aria-label="Busca global"
+    (click)="onBackdropClick($event)"
+    (keydown.escape)="close()"
+  >
+    <div class="w-full max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-2xl overflow-hidden palette-enter">
+      <!-- Search input -->
+      <div class="flex items-center gap-3 border-b border-[var(--border)] px-4">
+        <ui-icon name="heroMagnifyingGlass" size="1.25rem" />
+        <input
+          #searchInput
+          type="text"
+          [value]="query()"
+          (input)="onInput($any($event.target).value)"
+          (keydown)="onKeydown($event)"
+          placeholder="Buscar clientes, veiculos, contratos..."
+          class="flex-1 bg-transparent py-4 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
+        />
+        <kbd class="hidden sm:inline-flex items-center rounded-md border border-[var(--border)] px-1.5 py-0.5 text-xs text-[var(--text-muted)]">
+          ESC
+        </kbd>
+      </div>
+
+      <!-- Results or Recent -->
+      <div class="max-h-[50vh] overflow-y-auto">
+        @if (isSearching()) {
+          <div class="flex items-center justify-center py-8 text-[var(--text-muted)]">
+            <div class="animate-spin h-5 w-5 border-2 border-[var(--accent)] border-t-transparent rounded-full mr-3"></div>
+            <span class="text-sm">Buscando...</span>
+          </div>
+        } @else if (query() && flatResults().length === 0) {
+          <div class="flex flex-col items-center justify-center py-8 text-[var(--text-muted)]">
+            <ui-icon name="heroMagnifyingGlass" size="2rem" />
+            <p class="mt-2 text-sm">Nenhum resultado para "{{ query() }}"</p>
+          </div>
+        } @else if (!query() && recentSearches().length > 0) {
+          <!-- Recent searches -->
+          <div class="px-4 py-3">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">Buscas recentes</h3>
+            @for (recent of recentSearches(); track recent) {
+              <button
+                (click)="selectRecent(recent)"
+                class="flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition text-left cursor-pointer"
+              >
+                <ui-icon name="heroArrowPath" size="0.875rem" />
+                {{ recent }}
+              </button>
+            }
+          </div>
+        } @else if (!query()) {
+          <div class="flex flex-col items-center justify-center py-8 text-[var(--text-muted)]">
+            <p class="text-sm">Digite para buscar...</p>
+            <p class="text-xs mt-1">Clientes, veiculos e contratos</p>
+          </div>
+        } @else {
+          <!-- Grouped results -->
+          @for (group of groupedResults(); track group.type) {
+            <div class="px-2 py-1">
+              <h3 class="px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                {{ group.label }}
+              </h3>
+              @for (item of group.items; track item.id) {
+                <button
+                  (click)="selectResult(item)"
+                  [class.bg-[var(--border-subtle)]]="selectedIndex() === getItemIndex(item)"
+                  class="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-left hover:bg-[var(--border-subtle)] transition cursor-pointer"
+                >
+                  <ui-icon [name]="typeIcon(item.type)" size="1rem" />
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-[var(--text-primary)] truncate">{{ item.title }}</p>
+                    @if (item.subtitle) {
+                      <p class="text-xs text-[var(--text-muted)] truncate">{{ item.subtitle }}</p>
+                    }
+                  </div>
+                  <ui-icon name="heroChevronRight" size="0.75rem" />
+                </button>
+              }
+            </div>
+          }
+        }
+      </div>
+
+      <!-- Footer -->
+      <div class="flex items-center justify-between border-t border-[var(--border)] px-4 py-2.5 text-xs text-[var(--text-muted)]">
+        <div class="flex items-center gap-3">
+          <span class="flex items-center gap-1">
+            <kbd class="rounded border border-[var(--border)] px-1 py-0.5">&#8593;</kbd>
+            <kbd class="rounded border border-[var(--border)] px-1 py-0.5">&#8595;</kbd>
+            navegar
+          </span>
+          <span class="flex items-center gap-1">
+            <kbd class="rounded border border-[var(--border)] px-1 py-0.5">&#9166;</kbd>
+            abrir
+          </span>
+        </div>
+        <span>{{ shortcutLabel }} para abrir</span>
+      </div>
+    </div>
+  </div>
+}

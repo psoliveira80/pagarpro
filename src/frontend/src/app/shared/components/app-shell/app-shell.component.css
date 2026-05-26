@@ -1,0 +1,32 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.settings-sidebar-enter {
+  animation: slide-in-left 200ms ease-out;
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* 9-8: Sidebar hover micro-interactions */
+@media (prefers-reduced-motion: no-preference) {
+  :host ::ng-deep nav a {
+    transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  }
+
+  :host ::ng-deep nav a:hover {
+    transform: scale(1.02);
+  }
+
+  :host ::ng-deep nav a:active {
+    transform: scale(0.98);
+  }
+}

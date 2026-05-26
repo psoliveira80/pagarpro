@@ -1,0 +1,297 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h2 class="text-xl font-semibold text-[var(--text-primary)]">Conciliação Bancária</h2>
+      <p class="text-sm text-[var(--text-muted)]">Reconcilie transações bancárias com títulos do sistema</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a
+        routerLink="/system/finance/bank-import"
+        class="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+      >
+        <ui-icon name="heroArrowUpTray" size="1rem" />
+        Importar Extrato
+      </a>
+      @if (suggestions().length > 0) {
+        <button
+          (click)="acceptAllSuggestions()"
+          class="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition"
+        >
+          <ui-icon name="heroSparkles" size="1rem" />
+          Aceitar Sugestões
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Account selector -->
+  @if (accountOptions().length > 0) {
+    <div class="max-w-sm">
+      <app-select
+        [options]="accountOptions()"
+        [(value)]="selectedAccountId"
+        (valueChange)="onAccountChange($event)"
+      />
+    </div>
+  }
+
+  <!-- Indicators bar -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <p class="text-2xl font-bold text-[var(--text-primary)]">{{ pendingTxCount() }}</p>
+      <p class="text-xs text-[var(--text-muted)]">Transações pendentes</p>
+    </div>
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <p class="text-2xl font-bold text-[var(--text-primary)]">{{ pendingTitlesCount() }}</p>
+      <p class="text-xs text-[var(--text-muted)]">Títulos pendentes</p>
+    </div>
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <p class="text-2xl font-bold text-[var(--accent)]">{{ suggestions().length }}</p>
+      <p class="text-xs text-[var(--text-muted)]">Sugestões de match</p>
+    </div>
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <p class="text-2xl font-bold"
+        [class.text-red-400]="totalDivergences() > 0"
+        [class.text-green-400]="totalDivergences() === 0"
+      >{{ totalDivergences() }}</p>
+      <p class="text-xs text-[var(--text-muted)]">Divergências</p>
+    </div>
+  </div>
+
+  <!-- Divergence alerts -->
+  @if (divergences() && totalDivergences() > 0) {
+    <div class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <ui-icon name="heroExclamationTriangle" size="1.25rem" />
+        <span class="text-sm font-semibold text-yellow-400">Alertas de Divergência</span>
+      </div>
+      <div class="flex flex-wrap gap-4 text-sm">
+        @if (divergences()!.total_orfas > 0) {
+          <a routerLink="/system/finance/divergences" class="text-yellow-300 hover:underline">
+            {{ divergences()!.total_orfas }} transações órfãs
+          </a>
+        }
+        @if (divergences()!.total_suspeitos > 0) {
+          <a routerLink="/system/finance/divergences" class="text-yellow-300 hover:underline">
+            {{ divergences()!.total_suspeitos }} títulos suspeitos
+          </a>
+        }
+        @if (divergences()!.total_divergencias > 0) {
+          <a routerLink="/system/finance/divergences" class="text-yellow-300 hover:underline">
+            {{ divergences()!.total_divergencias }} divergências de valor
+          </a>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Error / Success -->
+  @if (error()) {
+    <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+      {{ error() }}
+    </div>
+  }
+  @if (successMessage()) {
+    <div class="rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-400">
+      {{ successMessage() }}
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (isLoading()) {
+    <div class="flex items-center justify-center py-12">
+      <div class="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent"></div>
+    </div>
+  }
+
+  <!-- Match Confirmation Modal -->
+  <app-modal [open]="showMatchConfirm()" (closed)="showMatchConfirm.set(false)" size="sm" title="Confirmar Conciliação">
+    <p class="text-sm text-[var(--text-secondary)] mb-2">
+      Vincular {{ selectedTxIds().size }} transação(ões) a um(a) {{ selectedTargetKind() === 'installment' ? 'parcela' : 'conta a pagar' }}.
+    </p>
+    <p class="text-xs text-[var(--text-muted)]">
+      As transações serão marcadas como conciliadas e o título como pago (imutável).
+    </p>
+    <div modal-footer class="flex justify-end gap-3 px-6 py-4 border-t border-[var(--border)]">
+      <button
+        (click)="cancelMatch()"
+        class="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+      >
+        Cancelar
+      </button>
+      <button
+        (click)="confirmMatch()"
+        class="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition"
+      >
+        Confirmar
+      </button>
+    </div>
+  </app-modal>
+
+  <!-- Two-column layout -->
+  @if (!isLoading()) {
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Left pane: Bank transactions -->
+      <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] overflow-hidden">
+        <div class="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <h3 class="text-sm font-semibold text-[var(--text-primary)]">Transações Bancárias</h3>
+          <p class="text-xs text-[var(--text-muted)]">Selecione transações para conciliar</p>
+        </div>
+        <div class="max-h-[60vh] overflow-y-auto">
+          @if (transactions().length === 0) {
+            <div class="flex flex-col items-center justify-center py-12 text-[var(--text-muted)]">
+              <ui-icon name="heroInboxStack" size="2rem" />
+              <p class="mt-2 text-sm">Nenhuma transação pendente</p>
+            </div>
+          }
+          @for (tx of transactions(); track tx.id) {
+            <div
+              class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 hover:bg-[var(--border-subtle)] transition cursor-pointer"
+              [class.bg-[var(--accent)]/10]="isTxSelected(tx.id)"
+              role="button"
+              tabindex="0"
+              (click)="toggleTxSelection(tx.id)"
+              (keydown.enter)="toggleTxSelection(tx.id)"
+            >
+              <input
+                type="checkbox"
+                [checked]="isTxSelected(tx.id)"
+                class="rounded border-[var(--border)] text-[var(--accent)]"
+                (click)="$event.stopPropagation()"
+                (change)="toggleTxSelection(tx.id)"
+              />
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-[var(--text-primary)] truncate">
+                  {{ tx.descricao_limpa || tx.descricao_bruta || 'Sem descrição' }}
+                </p>
+                <p class="text-xs text-[var(--text-muted)]">{{ tx.lancado_em }} &middot; {{ tx.importado_de }}</p>
+              </div>
+              <div class="text-right">
+                <p class="text-sm font-mono font-semibold"
+                  [class.text-green-400]="tx.valor > 0"
+                  [class.text-red-400]="tx.valor < 0"
+                >
+                  R$ {{ tx.valor > 0 ? '+' : '' }}{{ tx.valor.toFixed(2) }}
+                </p>
+                @if (getSuggestionForTx(tx.id); as sug) {
+                  <span class="inline-flex items-center rounded-full bg-[var(--accent)]/20 px-2 py-0.5 text-[10px] font-medium text-[var(--accent)]">
+                    Match {{ (sug.pontuacao * 100).toFixed(0) }}%
+                  </span>
+                }
+              </div>
+              <button
+                (click)="$event.stopPropagation(); ignoreTransaction(tx.id)"
+                class="rounded-lg p-1 text-[var(--text-muted)] hover:text-red-400 transition"
+                title="Ignorar transação"
+              >
+                <ui-icon name="heroXMark" size="0.875rem" />
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Right pane: Titles (Receivables + Payables) -->
+      <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] overflow-hidden">
+        <div class="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <h3 class="text-sm font-semibold text-[var(--text-primary)]">Títulos do Sistema</h3>
+          <p class="text-xs text-[var(--text-muted)]">Clique em um título para vincular às transações selecionadas</p>
+        </div>
+        <div class="max-h-[60vh] overflow-y-auto">
+          @if (receivables().length === 0 && payables().length === 0) {
+            <div class="flex flex-col items-center justify-center py-12 text-[var(--text-muted)]">
+              <ui-icon name="heroClipboardDocumentCheck" size="2rem" />
+              <p class="mt-2 text-sm">Nenhum título pendente de verificação</p>
+            </div>
+          }
+
+          <!-- Receivables -->
+          @for (rec of receivables(); track rec.id) {
+            <div
+              class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 hover:bg-[var(--border-subtle)] transition cursor-pointer"
+              [class.bg-green-500/10]="selectedTargetId() === rec.id"
+              role="button"
+              tabindex="0"
+              (click)="selectTarget('installment', rec.id)"
+              (keydown.enter)="selectTarget('installment', rec.id)"
+            >
+              <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/10 text-green-400">
+                <ui-icon name="heroCurrencyDollar" size="1rem" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-[var(--text-primary)] truncate">
+                  Parcela #{{ rec.sequencia }}
+                </p>
+                <p class="text-xs text-[var(--text-muted)]">Venc. {{ rec.data_vencimento }} &middot; {{ rec.status }}</p>
+              </div>
+              <p class="text-sm font-mono font-semibold text-green-400">
+                R$ {{ rec.valor.toFixed(2) }}
+              </p>
+            </div>
+          }
+
+          <!-- Payables -->
+          @for (pay of payables(); track pay.id) {
+            <div
+              class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 hover:bg-[var(--border-subtle)] transition cursor-pointer"
+              [class.bg-red-500/10]="selectedTargetId() === pay.id"
+              role="button"
+              tabindex="0"
+              (click)="selectTarget('payable', pay.id)"
+              (keydown.enter)="selectTarget('payable', pay.id)"
+            >
+              <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
+                <ui-icon name="heroBanknotes" size="1rem" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-[var(--text-primary)] truncate">
+                  {{ pay.descricao }}
+                </p>
+                <p class="text-xs text-[var(--text-muted)]">Venc. {{ pay.data_vencimento }} &middot; {{ pay.status }}</p>
+              </div>
+              <p class="text-sm font-mono font-semibold text-red-400">
+                R$ {{ pay.valor.toFixed(2) }}
+              </p>
+            </div>
+          }
+
+          <!-- Suggested matches section -->
+          @if (suggestions().length > 0) {
+            <div class="border-t border-[var(--border)] bg-[var(--surface)] px-4 py-2">
+              <p class="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Sugestões</p>
+            </div>
+            @for (sug of suggestions(); track sug.transacao_id) {
+              <div
+                class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 hover:bg-[var(--accent)]/5 transition cursor-pointer"
+                role="button"
+                tabindex="0"
+                (click)="acceptSuggestion(sug)"
+                (keydown.enter)="acceptSuggestion(sug)"
+              >
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)]/10 text-[var(--accent)]">
+                  <ui-icon name="heroSparkles" size="1rem" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-[var(--text-primary)]">
+                    {{ sug.tipo_destino === 'installment' ? 'Parcela' : 'Conta a Pagar' }}
+                  </p>
+                  <p class="text-xs text-[var(--text-muted)]">
+                    Confiança: {{ (sug.pontuacao * 100).toFixed(0) }}% &middot;
+                    Diff: R$ {{ sug.diferenca_valor.toFixed(2) }} &middot;
+                    {{ sug.diferenca_dias }}d
+                  </p>
+                </div>
+                <button
+                  class="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition"
+                >
+                  Aceitar
+                </button>
+              </div>
+            }
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

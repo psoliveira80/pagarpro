@@ -1,0 +1,215 @@
+# generated: 2026-05-07
+# last_updated: 2026-05-24
+# project: FrotaUber
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+#
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:    backlog → in-progress → done
+# Story Status:   backlog → ready-for-dev → in-progress → review → done
+# Retrospective:  optional ↔ done
+
+generated: 2026-05-07
+last_updated: 2026-05-25
+project: FrotaUber
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # ─── Epic 1: Foundation & Identity ───
+  epic-1: done
+  1-1-bootstrap-the-fastapi-backend: done
+  1-2-bootstrap-the-angular-21-frontend: done
+  1-3-user-identity-tables-and-initial-migration: done
+  1-4-login-endpoint-with-jwt: done
+  1-5-login-screen-on-the-frontend: done
+  1-6-authguard-jwt-interceptor-and-silent-refresh: done
+  1-7-initial-ci-cd-pipeline: done
+  1-8-asset-abstraction-layer-bootstrap: done
+  1-9-sse-infrastructure: done
+  1-10-password-recovery: done
+  epic-1-retrospective: done
+
+  # ─── Epic 2A: Core Asset Management & Registrations ───
+  epic-2a: done
+  2a-1-customer-domain-model-and-crud-api: done
+  2a-2-customers-list-screen: done
+  2a-3-customer-create-edit-drawer: done
+  2a-4-customer-detail-page-with-tabs: done
+  2a-5-generic-assets-list: done
+  2a-6-excel-one-shot-importer-customers: done
+  epic-2a-retrospective: optional
+
+  # ─── Epic 2B: Vehicle Module Registrations & Integrations ───
+  epic-2b: done
+  2b-1-vehicle-module-structure-and-iassetmodule-registration: done
+  2b-2-fipe-provider-adapter: done
+  2b-3-vehicle-domain-model-fipe-integration-and-acquisition: done
+  2b-4-vehicle-registration-wizard: done
+  2b-5-vehicles-list-and-card-grid: done
+  2b-6-gps-tracker-adapter: done
+  2b-7-interactive-fleet-map: done
+  2b-8-overdue-hook-gps-block-policy: done
+  2b-9-cnh-schema-extension-for-customer: done
+  2b-10-excel-one-shot-importer-vehicles: done
+  epic-2b-retrospective: optional
+
+  # ─── Epic 3: Contracts & Flexible Installments ───
+  epic-3: done
+  3-1-contract-installment-contractevent-domain-model: done
+  3-2-installment-builder-backend-preview-persist: done
+  3-3-visual-installment-builder-frontend: done
+  3-4-contract-creation-wizard: done
+  3-5-contract-pdf-generation: done
+  3-6-bulk-edit-on-open-installments: done
+  3-7-contract-versioning-and-event-timeline: done
+  3-8-contract-termination: done
+  3-9-contract-simulation: done
+  3-10-installment-generation-management-and-rollback: done
+  epic-3-retrospective: optional
+
+  # ─── Epic 4: Receivables, Partial Payments & Validation ───
+  epic-4: done
+  4-1-master-receivables-list: done
+  4-2-updated-value-calculation-interest-fine-discount: done
+  4-3-manual-write-off-modal: done
+  4-4-partial-payment-support: done
+  4-5-ocr-provider-adapter: done
+  4-6-receipt-validation-queue: done
+  4-7-static-pix-qr-code-generation: done
+  4-8-renegotiation-of-overdue-installments: done
+  4-9-optional-pix-payment-gateway-adapter: done
+  4-10-installment-reversal: done
+  4-11-bulk-write-off: done
+  epic-4-retrospective: optional
+
+  # ─── Epic 5: Payables & Recurring Expenses ───
+  epic-5: done
+  5-1-categories-and-suppliers-domain-and-crud-api: done
+  5-2-payables-domain-and-api: done
+  5-3-recurring-expenses: done
+  5-4-quick-pay-modal: done
+  5-5-simplified-dre: done
+  epic-5-retrospective: optional
+
+  # ─── Epic 6: WhatsApp Inbox, AI Collection Agent & Internal AI Chat ───
+  epic-6: done
+  6-1-whatsapp-gateway-adapter: done
+  6-2-conversations-and-messages-domain: done
+  6-3-webhook-receiver-and-inbound-pipeline: done
+  6-4-ai-agent-engine-with-tool-use: done
+  6-5-agent-parameterization-ui: done
+  6-6-customer-score-calculation: done
+  6-7-whatsapp-style-in-app-inbox: done
+  6-8-controlled-mass-broadcast: done
+  6-9-receipt-detection-and-primary-write-off-via-agent: done
+  6-10-in-app-chat-channel: done
+  6-11-audio-transcription: done
+  6-12-internal-ai-chat-bi-tools: done
+  epic-6-retrospective: optional
+
+  # ─── Epic 7: Sophisticated Bank Reconciliation ───
+  epic-7: done
+  7-0-bank-account-setup: done
+  7-1-ofx-importer: done
+  7-2-smart-pdf-importer: done
+  7-3-open-finance-adapter-pluggy-default: done
+  7-4-drag-and-drop-reconciliation-screen: done
+  7-5-divergence-detection: done
+  epic-7-retrospective: optional
+
+  # ─── Epic 8: Dashboards, Reports & Asset Analytics ───
+  epic-8: done
+  8-0-materialized-views-migration: done
+  8-1-main-dashboard: done
+  8-2-customer-dashboard: done
+  8-3-vehicle-dashboard: done
+  8-4-pre-built-reports: done
+  8-5-custom-report-builder: done
+  epic-8-retrospective: optional
+
+  # ─── Epic 9: Hardening, Plug-and-Play & Final Documentation ───
+  epic-9: done
+  9-1-centralized-integrations-panel: done
+  9-2-audit-log-search-and-viewer: done
+  9-3-module-management-ui: done
+  9-4-backup-restore-and-dr: done
+  9-5-full-observability: done
+  9-6-load-tests-and-performance-tuning: done
+  9-7-final-documentation: done
+  9-8-ux-polish-and-microinteractions: done
+  9-9-versioned-configuration-and-settings-consolidation: done
+  9-10-lgpd-my-data: done
+  9-11-command-palette: done
+  epic-9-retrospective: optional
+
+  # ─── Epic 10: Recurrence Engine, Automated Collection & Channel Health ───
+  epic-10: backlog
+  10-1-monthly-installment-generation-with-correction: review
+  10-2-payable-draft-lifecycle: ready-for-dev
+  10-3-automated-collection-engine: ready-for-dev
+  10-4-message-template-management: ready-for-dev
+  10-5-channel-health-monitoring: ready-for-dev
+  10-6-worker-scheduler-consolidation: ready-for-dev
+  10-7-user-registration-and-email-verification: done
+  10-8-reusable-modal-component: ready-for-dev
+  epic-10-retrospective: optional
+
+  # ─── Epic 11: WhatsApp Token Economy & Operational Modes ───
+  epic-11: backlog
+  11-1-token-budget-and-throttle-engine: ready-for-dev
+  11-2-operation-modes-ia-full-eco-zero: ready-for-dev
+  11-3-interactive-whatsapp-menu: ready-for-dev
+  11-4-intent-rules-engine: ready-for-dev
+  11-5-receipt-dedupe-and-manual-validation-queue: ready-for-dev
+  11-6-audio-handling-per-mode: ready-for-dev
+  11-7-out-of-scope-detection-and-manager-learning: ready-for-dev
+  11-8-plan-tiers-and-quotas: ready-for-dev
+  epic-11-retrospective: optional
+
+  # ─── Epic 12: Schema Restructure, Rename & Multi-Tenancy ───
+  epic-12: in-progress
+  12-1-ddl-migration-schema-restructure: done
+  12-2-sqlalchemy-models-rename: done  # CR fixed: migration 0016 corrige 2 HIGH multi-tenant; Modelo A confirmado (Usuario.email global unique mantido)
+  12-3-pydantic-schemas-routes-repositories: review  # 12-3c backend COMPLETO em sessão 2026-05-26: 6 blocos PT-BR puros (Receivables, Payables, Customers, Vehicles, Contracts, Bank) — schemas + routes + tests, 183 testes verdes. Helpers internos (compute_updated_value, calculate_schedule) mantidos em EN com mappers PT-BR↔EN no entry-point. Frontend (12-8) e URL paths (12-3e) ainda pendentes. Aliases retroativos só no schemas/bank.py (transição).
+  12-4-tenant-middleware: review  # 2026-05-25: code review APROVADO após 2 rodadas. 5 HIGHs + 3 MEDs resolvidos: agent_chat kwarg fix, refresh token cross-empresa validation, JWT algorithm whitelist (anti-confusion), refresh-views role check, ContextVar reset middleware + EmpresaContextoAusenteError handler 403, mensagens 403 genéricas, payload[sub] try/except, sentinela UNSET em 8 construtores. 170 testes verdes.
+  12-5-row-level-security: review  # 2026-05-25: Migration 0020 cria policies tenant_isolation em 29 tabelas strict + 4 nullable (logs/webhooks/categorias). get_current_user seta `app.empresa_id` via SET LOCAL (transaction-scoped). env.py já tinha `SET row_security = off` para migrations. 179 testes verdes.
+  12-6-workers-and-tasks: review  # 2026-05-25 CR rodada 1 APROVADO COM RESSALVAS: 16 HIGH/MED resolvidos (signature whatsapp_factory, score_calculator empresa_id, recalcular_scores savepoint, atualizar_views AUTOCOMMIT+async, gerar_titulos_mensais catch-up+clamp+savepoint+redis, gerar_despesas_recorrentes catch-up+data_fim+raise+assert, dispatcher excluido_em+resilient+max_retries=0). 6 findings deferidos. 183 testes verdes em 2 rodadas.
+  12-7-tenant-isolation-tests: review  # 2026-05-25: 9 testes em test_tenant_isolation.py — 3 testes diretos de RLS (com role app_runtime_test NOSUPERUSER/NOBYPASSRLS) + 6 testes via API (lista isolada, GET/PATCH/DELETE de outra empresa retornam 404, cliente próprio acessível). Cobre clientes + contratos. Validação completa do isolamento multi-tenant.
+  12-8-frontend-angular-rename: in-progress  # 2026-05-26: Pablo escolheu opção B (refactor completo, sem gambiarra). Services TS reescritos PT-BR puro (receivable, payable, customer, vehicle, contract, bank, auth). Sed batch renomeou ~30 componentes/templates (interface names + field accesses). 288 erros build remanescentes em ~50 arquivos. Ver memory project-implementation-state — estratégia: method params PT-BR, forms PT-BR, campos faltantes (customer_name/asset_label) ou backend joins ou simplificar UI, signature mismatches (activate/terminate/confirmMatch), bulk-edit refactor, status strings 'ativo'→'vigente'.
+  12-9-traducao-artefatos-ptbr: ready-for-dev  # 2026-05-24 Pablo: documentação em inglês cega revisão. Config BMad mudado para PT-BR; falta traduzir backlog existente (PRD, ARCHITECTURE, épicos 1-11, stories ready/backlog). Alta prioridade — fazer antes de iniciar Epic 13.
+  epic-12-retrospective: optional
+
+  # ─── Epic 13: Motor Financeiro Central ───
+  # Pré-requisito: Epic 12 (Schema Restructure) deve estar completo
+  epic-13: backlog
+  13-1-verificacao-consistencia-ptbr-glossario: backlog
+  13-2-maquina-estados-contrato-suspenso: backlog
+  13-3-tipo-titulo-opcao-compra: backlog
+  13-4-sistema-configuracoes-tipadas: backlog
+  13-5-infraestrutura-base-workers: backlog
+  13-6-motor-gerar-titulos-mensais: backlog
+  13-7-motor-alertar-vencimentos-proximos: backlog
+  13-8-motor-processar-titulos-vencidos: backlog
+  13-9-motor-conciliar-pagamentos-recebidos: backlog
+  13-10-renderizador-templates-mensagem: backlog
+  13-11-ledger-passivo-inoperante: backlog
+  13-12-heroi-financeiro-detalhe-contrato: backlog
+  13-13-desbloqueio-confianca-expiracao: backlog
+  13-14-override-valor-mercado-veiculo: backlog
+  13-15-tela-configuracoes-motor: backlog
+  epic-13-retrospective: optional
+
+  # ─── Epic 14: Manual do Desenvolvedor & Documentação Final ───
+  # Iniciar APÓS épicos 10, 11, 12, 13 done
+  epic-14: backlog
+  14-1-manual-tecnico: backlog  # rascunho 1123 linhas já entregue em docs/manual-desenvolvedor-tecnico.md
+  14-2-manual-funcional: backlog  # rascunho 662 linhas já entregue em docs/manual-desenvolvedor-funcional.md
+  14-3-api-reference: backlog
+  14-4-runbook-operacional: backlog
+  14-5-adapters-guide: backlog
+  14-6-modules-guide: backlog
+  14-7-videos-onboarding: backlog  # V2 diferido
+  epic-14-retrospective: optional

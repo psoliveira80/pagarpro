@@ -1,0 +1,62 @@
+# =============================================================================
+# .gitignore — Frota/Recurring Billing Platform
+# =============================================================================
+
+# --- Logs gerados localmente ---
+_build_log.txt
+_build_prod_log.txt
+*.log
+
+# --- Backups da refatoração Story 12.8 ---
+*.bak
+
+# --- Node / Angular ---
+node_modules/
+dist/
+.angular/
+.cache/
+coverage/
+
+# --- Python / FastAPI ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# --- Virtualenvs ---
+.venv/
+venv/
+env/
+
+# --- Celery runtime ---
+celerybeat-schedule
+celerybeat-schedule.db
+celerybeat.pid
+
+# --- Variáveis de ambiente (NUNCA commitar credenciais) ---
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# --- IDE / Editor ---
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Claude Code / sessões locais ---
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+.claude/worktrees/
+
+# --- Output temporário do BMad ---
+_bmad-output/**/*.tmp

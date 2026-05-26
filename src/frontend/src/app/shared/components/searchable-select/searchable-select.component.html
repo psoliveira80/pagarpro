@@ -1,0 +1,128 @@
+<!-- Trigger -->
+<button
+  #triggerEl
+  type="button"
+  cdkOverlayOrigin
+  #trigger="cdkOverlayOrigin"
+  (click)="hasSelection() ? null : open()"
+  class="flex w-full items-center rounded-xl border bg-[var(--surface)] px-4 py-2.5 text-sm transition
+         border-[var(--border)] cursor-pointer
+         hover:border-[var(--accent)] focus:border-[var(--accent)] focus:outline-none"
+  [class.opacity-50]="disabled()"
+  [class.cursor-not-allowed]="disabled()"
+  [disabled]="disabled()"
+>
+  @if (hasSelection()) {
+    <!-- Selected item display -->
+    <span class="flex flex-1 items-center gap-2 min-w-0">
+      <span class="flex-1 truncate text-[var(--text-primary)] font-medium text-left">
+        {{ displayValue() }}
+      </span>
+      <span
+        role="button"
+        tabindex="0"
+        (click)="clear($event)"
+        (keydown.enter)="clear($event)"
+        class="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] transition cursor-pointer"
+      >
+        <ui-icon name="heroXMark" size="1rem" />
+      </span>
+    </span>
+  } @else {
+    <!-- Placeholder / trigger to open -->
+    <span class="flex flex-1 items-center gap-2 text-[var(--text-muted)] text-left">
+      <ui-icon name="heroMagnifyingGlass" size="1rem" />
+      <span>{{ placeholder() }}</span>
+    </span>
+    <ui-icon
+      name="heroChevronDown"
+      size="1rem"
+      class="text-[var(--text-muted)] transition-transform duration-200"
+      [class.rotate-180]="isOpen()"
+    />
+  }
+</button>
+
+<!-- Dropdown overlay -->
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="trigger"
+  [cdkConnectedOverlayOpen]="isOpen()"
+  [cdkConnectedOverlayPositions]="dropdownPositions"
+  [cdkConnectedOverlayHasBackdrop]="true"
+  cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+  (backdropClick)="onBackdropClick()"
+  (attach)="refreshWidth()"
+>
+  <!-- eslint-disable-next-line @angular-eslint/template/interactive-supports-focus -->
+  <div
+    [style.width.px]="triggerWidth()"
+    class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-lg overflow-hidden animate-dropdown"
+    (keydown)="onKeydown($event)"
+  >
+    <!-- Search input -->
+    <div class="p-2 border-b border-[var(--border)]">
+      <div class="relative">
+        <ui-icon
+          name="heroMagnifyingGlass"
+          size="1rem"
+          class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+        />
+        <input
+          #searchInput
+          type="text"
+          [placeholder]="'Digite ' + minChars() + '+ caracteres...'"
+          [value]="searchQuery()"
+          (input)="onSearchInput($event)"
+          (keydown)="onKeydown($event)"
+          class="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] pl-9 pr-3 py-1.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
+        @if (loading()) {
+          <svg class="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        }
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="max-h-64 overflow-auto py-1">
+      @if (loading()) {
+        <div class="px-4 py-3 text-sm text-[var(--text-muted)] text-center">
+          Buscando...
+        </div>
+      } @else if (options().length === 0 && searchQuery().length >= minChars()) {
+        <div class="px-4 py-3 text-sm text-[var(--text-muted)] text-center">
+          Nenhum resultado encontrado
+        </div>
+      } @else if (options().length === 0) {
+        <div class="px-4 py-3 text-sm text-[var(--text-muted)] text-center">
+          Digite para buscar...
+        </div>
+      } @else {
+        @for (opt of options(); track opt.value) {
+          <button
+            type="button"
+            (click)="select(opt)"
+            [disabled]="opt.disabled"
+            class="flex w-full flex-col px-4 py-2.5 text-left transition cursor-pointer
+                   disabled:opacity-40 disabled:cursor-not-allowed"
+            [class]="isSelected(opt)
+              ? 'bg-[var(--accent)]/10'
+              : isHighlighted(opt)
+                ? 'bg-[var(--border-subtle)]'
+                : 'hover:bg-[var(--border-subtle)]'"
+          >
+            <span class="text-sm font-medium" [class]="isSelected(opt) ? 'text-[var(--accent)]' : 'text-[var(--text-primary)]'">
+              {{ opt.label }}
+            </span>
+            @if (opt.subtitle) {
+              <span class="text-xs text-[var(--text-muted)] mt-0.5">{{ opt.subtitle }}</span>
+            }
+          </button>
+        }
+      }
+    </div>
+  </div>
+</ng-template>

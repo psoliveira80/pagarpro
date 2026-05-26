@@ -1,0 +1,103 @@
+<app-modal [open]="open()" (closed)="closed.emit()" size="lg" title="Simulação de Contrato">
+  <!-- Body -->
+  <div class="space-y-5">
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="sim-value" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Valor (R$)</label>
+        <input
+          id="sim-value"
+          type="number"
+          [value]="value()"
+          (input)="value.set(+$any($event.target).value)"
+          min="0"
+          step="100"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+        />
+      </div>
+      <div>
+        <label for="sim-installments" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Parcelas</label>
+        <input
+          id="sim-installments"
+          type="number"
+          [value]="installments()"
+          (input)="installments.set(+$any($event.target).value)"
+          min="1"
+          max="120"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+        />
+      </div>
+      <div>
+        <label for="sim-rate" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Taxa (% a.m.)</label>
+        <input
+          id="sim-rate"
+          type="number"
+          [value]="rate()"
+          (input)="rate.set(+$any($event.target).value)"
+          min="0"
+          step="0.1"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+        />
+      </div>
+      <div>
+        <label for="sim-method" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Método</label>
+        <app-select
+          [options]="methodOptions"
+          [(value)]="method"
+          placeholder="Método"
+        />
+      </div>
+    </div>
+
+    <button
+      (click)="simulate()"
+      [disabled]="isLoading()"
+      class="w-full rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-40 cursor-pointer"
+    >
+      @if (isLoading()) {
+        Calculando...
+      } @else {
+        Simular
+      }
+    </button>
+
+    @if (result(); as r) {
+      <!-- Totals -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="rounded-xl border border-[var(--border)] p-3 text-center">
+          <p class="text-xs text-[var(--text-muted)]">Total Pago</p>
+          <p class="mt-1 text-sm font-semibold text-[var(--text-primary)]">{{ formatCurrency(r.resumo.total_pago) }}</p>
+        </div>
+        <div class="rounded-xl border border-[var(--border)] p-3 text-center">
+          <p class="text-xs text-[var(--text-muted)]">Juros</p>
+          <p class="mt-1 text-sm font-semibold text-red-400">{{ formatCurrency(r.resumo.total_juros) }}</p>
+        </div>
+        <div class="rounded-xl border border-[var(--border)] p-3 text-center">
+          <p class="text-xs text-[var(--text-muted)]">Parcelas</p>
+          <p class="mt-1 text-sm font-semibold text-[var(--text-primary)]">{{ r.titulos.length }}</p>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="max-h-64 overflow-y-auto rounded-xl border border-[var(--border)]">
+        <table class="w-full text-sm">
+          <thead class="sticky top-0 bg-[var(--surface-elevated)]">
+            <tr class="border-b border-[var(--border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+              <th class="px-3 py-2 font-medium">#</th>
+              <th class="px-3 py-2 font-medium">Vencimento</th>
+              <th class="px-3 py-2 font-medium text-right">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (inst of r.titulos; track inst.sequencia) {
+              <tr class="border-b border-[var(--border)] last:border-0">
+                <td class="px-3 py-2 text-[var(--text-primary)]">{{ inst.sequencia }}</td>
+                <td class="px-3 py-2 text-[var(--text-secondary)]">{{ formatDate(inst.data_vencimento) }}</td>
+                <td class="px-3 py-2 text-right text-[var(--text-primary)] font-medium">{{ formatCurrency(inst.valor) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</app-modal>

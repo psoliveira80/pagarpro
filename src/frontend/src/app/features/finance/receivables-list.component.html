@@ -1,0 +1,212 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-[var(--text-primary)]">Recebíveis</h2>
+      <p class="text-sm text-[var(--text-muted)] mt-1">Gerencie suas contas a receber</p>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <p class="text-xs uppercase tracking-wider text-[var(--text-muted)]">Total a Receber</p>
+      <p class="mt-1 text-lg font-semibold text-[var(--text-primary)]">{{ formatCurrency(totalAmount()) }}</p>
+    </div>
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <p class="text-xs uppercase tracking-wider text-[var(--text-muted)]">Total Recebido</p>
+      <p class="mt-1 text-lg font-semibold text-green-400">{{ formatCurrency(totalPaid()) }}</p>
+    </div>
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <p class="text-xs uppercase tracking-wider text-[var(--text-muted)]">Total Vencido</p>
+      <p class="mt-1 text-lg font-semibold text-red-400">{{ formatCurrency(totalOverdue()) }}</p>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="flex flex-col sm:flex-row gap-3">
+    <div class="relative flex-1">
+      <ui-icon
+        name="heroMagnifyingGlass"
+        size="1rem"
+        class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+      />
+      <input
+        type="text"
+        placeholder="Buscar por cliente, descrição..."
+        (input)="onSearchInput($any($event.target).value)"
+        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] py-2.5 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+    <app-select
+      [options]="statusOptions"
+      [(value)]="statusFilter"
+      placeholder="Todos os status"
+      (valueChange)="onStatusChange($event)"
+    />
+    <input
+      type="date"
+      [value]="dateFrom()"
+      (input)="onDateFromChange($any($event.target).value)"
+      placeholder="De"
+      class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+    />
+    <input
+      type="date"
+      [value]="dateTo()"
+      (input)="onDateToChange($any($event.target).value)"
+      placeholder="Até"
+      class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+    />
+  </div>
+
+  <!-- Table -->
+  <div class="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)]">
+    @if (isLoading()) {
+      <div class="flex items-center justify-center py-16 text-[var(--text-muted)]">
+        <svg class="animate-spin h-6 w-6 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span class="ml-3 text-sm">Carregando...</span>
+      </div>
+    } @else if (error()) {
+      <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+        <ui-icon name="heroExclamationTriangle" size="2.5rem" class="text-red-400" />
+        <p class="mt-3 text-sm text-red-400">{{ error() }}</p>
+        <button
+          (click)="loadReceivables()"
+          class="mt-4 flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    } @else if (receivables().length === 0) {
+      <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+        <ui-icon name="heroCurrencyDollar" size="2.5rem" />
+        <p class="mt-3 text-sm">Nenhum recebível encontrado</p>
+      </div>
+    } @else {
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-[var(--border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+            <th class="px-4 py-3 font-medium">Cliente</th>
+            <th class="px-4 py-3 font-medium">Descrição</th>
+            <th class="px-4 py-3 font-medium">Vencimento</th>
+            <th class="px-4 py-3 font-medium text-right">Valor</th>
+            <th class="px-4 py-3 font-medium">Status</th>
+            <th class="px-4 py-3 font-medium text-right">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (rec of receivables(); track rec.id) {
+            <tr class="border-b border-[var(--border)] last:border-0 hover:bg-[var(--border-subtle)] transition">
+              <td class="px-4 py-3 font-medium text-[var(--text-primary)]">Parcela #{{ rec.sequencia }}</td>
+              <td class="px-4 py-3 text-[var(--text-secondary)]">{{ rec.observacoes || '—' }}</td>
+              <td class="px-4 py-3 text-[var(--text-secondary)]">{{ formatDate(rec.data_vencimento) }}</td>
+              <td class="px-4 py-3 text-right text-[var(--text-primary)] font-medium">{{ formatCurrency(rec.valor) }}</td>
+              <td class="px-4 py-3">
+                <span [class]="statusClass(rec.status)" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
+                  {{ statusLabel(rec.status) }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-right">
+                <div class="relative inline-block">
+                  <button
+                    (click)="toggleActionMenu(rec.id); $event.stopPropagation()"
+                    class="rounded-lg p-1.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+                  >
+                    <ui-icon name="heroBars3" size="1rem" />
+                  </button>
+                  @if (actionMenuId() === rec.id) {
+                    <div class="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-lg py-1">
+                      <button
+                        (click)="openWriteOff(rec)"
+                        class="w-full px-4 py-2 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+                      >
+                        Dar Baixa
+                      </button>
+                      <button
+                        (click)="openPixQr(rec)"
+                        class="w-full px-4 py-2 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+                      >
+                        Pix QR Code
+                      </button>
+                      <button
+                        (click)="openRenegotiation(rec)"
+                        class="w-full px-4 py-2 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+                      >
+                        Renegociar
+                      </button>
+                      <button
+                        (click)="reverseReceivable(rec)"
+                        class="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-[var(--border-subtle)] transition cursor-pointer"
+                      >
+                        Estornar
+                      </button>
+                    </div>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+
+  <!-- Pagination -->
+  @if (totalPages() > 1) {
+    <div class="flex items-center justify-between text-sm text-[var(--text-muted)]">
+      <span>{{ total() }} recebível(is) encontrado(s)</span>
+      <div class="flex items-center gap-1">
+        <button
+          (click)="goToPage(page() - 1)"
+          [disabled]="page() === 1"
+          class="rounded-lg px-3 py-1.5 hover:bg-[var(--border-subtle)] transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <ui-icon name="heroChevronLeft" size="1rem" />
+        </button>
+        @for (p of pages(); track p) {
+          <button
+            (click)="goToPage(p)"
+            [class]="p === page() ? 'bg-[var(--accent)] text-white' : 'hover:bg-[var(--border-subtle)]'"
+            class="rounded-lg px-3 py-1.5 transition cursor-pointer"
+          >
+            {{ p }}
+          </button>
+        }
+        <button
+          (click)="goToPage(page() + 1)"
+          [disabled]="page() === totalPages()"
+          class="rounded-lg px-3 py-1.5 hover:bg-[var(--border-subtle)] transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <ui-icon name="heroChevronRight" size="1rem" />
+        </button>
+      </div>
+    </div>
+  }
+</div>
+
+@if (writeOffOpen() && writeOffReceivable()) {
+  <app-write-off-modal
+    [receivable]="writeOffReceivable()!"
+    (saved)="onWriteOffSaved()"
+    (closed)="closeWriteOff()"
+  />
+}
+
+@if (pixQrOpen()) {
+  <app-pix-qr-modal
+    [receivableId]="pixQrReceivableId()"
+    (closed)="closePixQr()"
+  />
+}
+
+@if (renegotiationOpen()) {
+  <app-renegotiation-modal
+    [receivables]="selectedForRenegotiation()"
+    (saved)="onRenegotiationSaved()"
+    (closed)="closeRenegotiation()"
+  />
+}

@@ -1,0 +1,112 @@
+@if (isLoading()) {
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
+    @for (i of [1,2,3,4,5,6,7]; track i) {
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <div class="h-3 w-16 bg-[var(--border)] rounded mb-2"></div>
+        <div class="h-6 w-24 bg-[var(--border)] rounded"></div>
+      </div>
+    }
+  </div>
+}
+
+@if (error()) {
+  <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center">
+    <p class="text-sm text-red-400">Erro ao carregar dashboard do veículo</p>
+    <button (click)="loadData()" class="mt-2 text-xs text-[var(--accent)] hover:underline">Tentar novamente</button>
+  </div>
+}
+
+@if (!isLoading() && !error() && data()) {
+  <div class="space-y-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Purchase Value -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Investimento</p>
+        <p class="mt-1 text-xl font-bold text-[var(--text-primary)]">{{ formatCurrency(data()!.purchase_value) }}</p>
+      </div>
+
+      <!-- FIPE -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">FIPE Atual</p>
+        <p class="mt-1 text-xl font-bold text-[var(--text-primary)]">{{ formatCurrency(data()!.fipe_value) }}</p>
+        @if (data()!.purchase_value > 0) {
+          <p class="text-xs mt-0.5"
+            [class.text-green-400]="data()!.fipe_value >= data()!.purchase_value"
+            [class.text-red-400]="data()!.fipe_value < data()!.purchase_value"
+          >
+            Depr: {{ formatCurrency(data()!.purchase_value - data()!.fipe_value) }}
+          </p>
+        }
+      </div>
+
+      <!-- Total Revenue -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Receita Total</p>
+        <p class="mt-1 text-xl font-bold text-green-400">{{ formatCurrency(data()!.total_revenue) }}</p>
+      </div>
+
+      <!-- ROI -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">ROI</p>
+        <p class="mt-1 text-xl font-bold" [class]="roiColor(data()!.roi_percent)">
+          {{ data()!.roi_percent }}%
+        </p>
+      </div>
+
+      <!-- Expenses -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Despesas</p>
+        <p class="mt-1 text-xl font-bold text-red-400">{{ formatCurrency(data()!.total_expenses) }}</p>
+      </div>
+
+      <!-- Accumulated Profit -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Lucro Acumulado</p>
+        <p class="mt-1 text-xl font-bold"
+          [class.text-green-400]="data()!.accumulated_profit >= 0"
+          [class.text-red-400]="data()!.accumulated_profit < 0"
+        >
+          {{ formatCurrency(data()!.accumulated_profit) }}
+        </p>
+      </div>
+
+      <!-- In Service Since -->
+      @if (data()!.in_service_since) {
+        <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+          <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Em Serviço Desde</p>
+          <p class="mt-1 text-xl font-bold text-[var(--text-primary)]">{{ data()!.in_service_since }}</p>
+        </div>
+      }
+    </div>
+
+    <!-- Investment vs Revenue Visual -->
+    @if (data()!.purchase_value > 0) {
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5">
+        <h3 class="text-sm font-semibold text-[var(--text-primary)] mb-4">Investimento vs Receita</h3>
+        <div class="space-y-3">
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-[var(--text-secondary)]">Investimento</span>
+              <span class="font-medium">{{ formatCurrency(data()!.purchase_value) }}</span>
+            </div>
+            <div class="h-6 w-full rounded-lg bg-[var(--border-subtle)] overflow-hidden">
+              <div class="h-full rounded-lg bg-blue-500 w-full"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-[var(--text-secondary)]">Receita Total</span>
+              <span class="font-medium">{{ formatCurrency(data()!.total_revenue) }}</span>
+            </div>
+            <div class="h-6 w-full rounded-lg bg-[var(--border-subtle)] overflow-hidden">
+              <div
+                class="h-full rounded-lg bg-green-500 transition-all"
+                [style.width.%]="revenuePercent(data()!.total_revenue, data()!.purchase_value)"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+}

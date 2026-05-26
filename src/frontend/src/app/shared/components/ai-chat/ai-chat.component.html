@@ -1,0 +1,167 @@
+<!-- Floating button -->
+<button
+  (click)="toggle()"
+  [class.pulse-animation]="hasSuggestion() && !isOpen()"
+  class="fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-lg hover:opacity-90 transition cursor-pointer"
+  aria-label="Abrir assistente IA"
+>
+  @if (isOpen()) {
+    <ui-icon name="heroXMark" size="1.5rem" />
+  } @else {
+    <ui-icon name="heroSparkles" size="1.5rem" />
+  }
+</button>
+
+<!-- Chat panel -->
+@if (isOpen()) {
+  <!-- Backdrop (mobile) -->
+  <div
+    class="fixed inset-0 z-[9998] bg-black/30 md:bg-transparent md:pointer-events-none"
+    role="button"
+    tabindex="0"
+    aria-label="Fechar assistente"
+    (click)="close()"
+    (keydown.enter)="close()"
+  ></div>
+
+  <!-- Panel -->
+  <div
+    class="ai-panel-enter fixed bottom-0 right-0 z-[9999] flex h-full w-full flex-col md:bottom-24 md:right-6 md:h-[600px] md:w-[400px] md:rounded-2xl md:border md:border-[var(--border)] bg-[var(--surface-elevated)] shadow-2xl overflow-hidden md:backdrop-blur-xl"
+    role="dialog"
+    aria-label="Assistente IA"
+  >
+    <!-- Header -->
+    <div class="flex items-center justify-between border-b border-[var(--border)] px-4 py-3 bg-[var(--surface-elevated)]">
+      <div class="flex items-center gap-2">
+        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)]/20 text-[var(--accent)]">
+          <ui-icon name="heroSparkles" size="1rem" />
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-[var(--text-primary)]">Assistente IA</h3>
+          <p class="text-[10px] text-[var(--text-muted)]">Pergunte qualquer coisa sobre o sistema</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1">
+        @if (!isEmpty()) {
+          <button
+            (click)="clearChat()"
+            class="rounded-lg p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+            title="Limpar conversa"
+          >
+            <ui-icon name="heroTrash" size="1rem" />
+          </button>
+        }
+        <button
+          (click)="close()"
+          class="rounded-lg p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer md:hidden"
+        >
+          <ui-icon name="heroXMark" size="1.25rem" />
+        </button>
+      </div>
+    </div>
+
+    <!-- Messages area -->
+    <div #messagesContainer class="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      @if (isEmpty()) {
+        <!-- Empty state with suggestions -->
+        <div class="flex flex-col items-center justify-center h-full text-center">
+          <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)] mb-4">
+            <ui-icon name="heroSparkles" size="2rem" />
+          </div>
+          <h4 class="text-sm font-semibold text-[var(--text-primary)] mb-1">Como posso ajudar?</h4>
+          <p class="text-xs text-[var(--text-muted)] mb-6 max-w-[250px]">
+            Pergunte sobre clientes, veículos, financeiro ou qualquer operação do sistema.
+          </p>
+
+          <!-- Suggestion chips -->
+          <div class="grid grid-cols-2 gap-2 w-full max-w-[300px]">
+            @for (suggestion of suggestions; track suggestion.text) {
+              <button
+                (click)="sendSuggestion(suggestion.text)"
+                class="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] transition cursor-pointer text-left"
+              >
+                <ui-icon [name]="suggestion.icon" size="0.875rem" class="text-[var(--accent)] flex-shrink-0" />
+                <span>{{ suggestion.text }}</span>
+              </button>
+            }
+          </div>
+        </div>
+      } @else {
+        @for (msg of messages(); track msg.id) {
+          @if (msg.role === 'user') {
+            <!-- User message -->
+            <div class="flex justify-end">
+              <div class="max-w-[80%] rounded-2xl rounded-tr-sm bg-[var(--accent)] px-4 py-2.5">
+                <p class="text-sm text-white whitespace-pre-wrap">{{ msg.content }}</p>
+              </div>
+            </div>
+          } @else {
+            <!-- Assistant message -->
+            <div class="flex justify-start">
+              <div class="max-w-[85%] space-y-2">
+                <div class="rounded-2xl rounded-tl-sm border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5">
+                  @if (msg.isStreaming && !msg.content) {
+                    <div class="flex items-center gap-1 py-1">
+                      <div class="h-2 w-2 rounded-full bg-[var(--text-muted)] animate-bounce" style="animation-delay: 0ms"></div>
+                      <div class="h-2 w-2 rounded-full bg-[var(--text-muted)] animate-bounce" style="animation-delay: 150ms"></div>
+                      <div class="h-2 w-2 rounded-full bg-[var(--text-muted)] animate-bounce" style="animation-delay: 300ms"></div>
+                    </div>
+                  } @else {
+                    <p class="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{{ msg.content }}</p>
+                  }
+                </div>
+
+                <!-- Confidence badge -->
+                @if (msg.confidence && !msg.isStreaming) {
+                  <span [class]="confidenceClass(msg.confidence)" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium">
+                    Confiança: {{ confidenceLabel(msg.confidence) }}
+                  </span>
+                }
+
+                <!-- Action buttons -->
+                @if (msg.actions && msg.actions.length > 0 && !msg.isStreaming) {
+                  <div class="flex flex-wrap gap-1.5">
+                    @for (action of msg.actions; track action.label) {
+                      <button
+                        (click)="executeAction(action)"
+                        class="flex items-center gap-1 rounded-lg border border-[var(--accent)]/30 px-2.5 py-1 text-[11px] font-medium text-[var(--accent)] hover:bg-[var(--accent)]/10 transition cursor-pointer"
+                      >
+                        {{ action.label }}
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        }
+      }
+    </div>
+
+    <!-- Input area -->
+    <div class="border-t border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-3">
+      <div class="flex items-end gap-2">
+        <textarea
+          [value]="inputText()"
+          (input)="inputText.set($any($event.target).value)"
+          (keydown)="onKeydown($event)"
+          placeholder="Pergunte algo..."
+          rows="1"
+          [disabled]="isThinking()"
+          class="flex-1 resize-none rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50 disabled:opacity-50"
+        ></textarea>
+        <button
+          (click)="send()"
+          [disabled]="isThinking() || !inputText().trim()"
+          class="flex items-center justify-center rounded-xl bg-[var(--accent)] p-2.5 text-white hover:opacity-90 transition disabled:opacity-50 cursor-pointer"
+        >
+          @if (isThinking()) {
+            <div class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+          } @else {
+            <ui-icon name="heroPaperAirplane" size="1.125rem" />
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}

@@ -1,0 +1,210 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h2 class="text-xl font-semibold text-[var(--text-primary)]">Contas Bancárias</h2>
+      <p class="text-sm text-[var(--text-muted)]">Gerencie as contas bancárias da empresa para conciliação</p>
+    </div>
+    <button
+      (click)="openNewForm()"
+      class="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition"
+    >
+      <ui-icon name="heroPlus" size="1rem" />
+      Nova Conta
+    </button>
+  </div>
+
+  <!-- Error -->
+  @if (error()) {
+    <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+      {{ error() }}
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (isLoading()) {
+    <div class="flex items-center justify-center py-12">
+      <div class="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent"></div>
+    </div>
+  }
+
+  <!-- Form Modal -->
+  <app-modal [open]="showForm()" (closed)="showForm.set(false)" size="md" [title]="editingAccount() ? 'Editar Conta' : 'Nova Conta Bancária'">
+    <div class="space-y-4">
+      <!-- Name -->
+      <div>
+        <label for="bank-name-input" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+          Nome da Conta <span class="text-[var(--danger)]">*</span>
+        </label>
+        <input
+          id="bank-name-input"
+          type="text"
+          [ngModel]="formName()"
+          (ngModelChange)="formName.set($event)"
+          placeholder="Ex: Conta Principal BB"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+        />
+      </div>
+
+      <!-- Bank Name + Code -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="bank-name-field" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Banco</label>
+          <input
+            id="bank-name-field"
+            type="text"
+            [ngModel]="formBankName()"
+            (ngModelChange)="formBankName.set($event)"
+            placeholder="Banco do Brasil"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+        <div>
+          <label for="bank-code-field" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Código</label>
+          <input
+            id="bank-code-field"
+            type="text"
+            [ngModel]="formBankCode()"
+            (ngModelChange)="formBankCode.set($event)"
+            placeholder="001"
+            maxlength="5"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+      </div>
+
+      <!-- Agency + Account Number -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="bank-agency-field" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Agência</label>
+          <input
+            id="bank-agency-field"
+            type="text"
+            [ngModel]="formAgency()"
+            (ngModelChange)="formAgency.set($event)"
+            placeholder="1234"
+            maxlength="10"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+        <div>
+          <label for="bank-account-num-field" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Conta</label>
+          <input
+            id="bank-account-num-field"
+            type="text"
+            [ngModel]="formAccountNumber()"
+            (ngModelChange)="formAccountNumber.set($event)"
+            placeholder="56789-0"
+            maxlength="20"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+      </div>
+
+      <!-- Account Type -->
+      <div>
+        <label for="bank-type-field" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Tipo</label>
+        <app-select
+          id="bank-type-field"
+          [options]="accountTypeOptions"
+          [(value)]="formAccountType"
+        />
+      </div>
+    </div>
+
+    <div modal-footer class="flex justify-end gap-3 px-6 py-4 border-t border-[var(--border)]">
+      <button
+        (click)="closeForm()"
+        class="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+      >
+        Cancelar
+      </button>
+      <button
+        (click)="saveAccount()"
+        [disabled]="!formName()"
+        class="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50"
+      >
+        {{ editingAccount() ? 'Salvar' : 'Criar Conta' }}
+      </button>
+    </div>
+  </app-modal>
+
+  <!-- Accounts Table -->
+  @if (!isLoading() && accounts().length > 0) {
+    <div class="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)]">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-[var(--border)] bg-[var(--surface)]">
+            <th class="px-4 py-3 text-left font-medium text-[var(--text-muted)]">Nome</th>
+            <th class="px-4 py-3 text-left font-medium text-[var(--text-muted)] hidden sm:table-cell">Banco</th>
+            <th class="px-4 py-3 text-left font-medium text-[var(--text-muted)] hidden md:table-cell">Agência / Conta</th>
+            <th class="px-4 py-3 text-left font-medium text-[var(--text-muted)]">Tipo</th>
+            <th class="px-4 py-3 text-center font-medium text-[var(--text-muted)]">Status</th>
+            <th class="px-4 py-3 text-right font-medium text-[var(--text-muted)]">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (account of accounts(); track account.id) {
+            <tr class="border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--border-subtle)] transition">
+              <td class="px-4 py-3 font-medium text-[var(--text-primary)]">{{ account.nome }}</td>
+              <td class="px-4 py-3 text-[var(--text-secondary)] hidden sm:table-cell">
+                {{ account.nome_banco || '-' }}
+                @if (account.codigo_banco) {
+                  <span class="text-[var(--text-muted)]"> ({{ account.codigo_banco }})</span>
+                }
+              </td>
+              <td class="px-4 py-3 text-[var(--text-secondary)] hidden md:table-cell">
+                {{ account.agencia || '-' }} / {{ account.numero_conta || '-' }}
+              </td>
+              <td class="px-4 py-3 text-[var(--text-secondary)] capitalize">{{ account.tipo }}</td>
+              <td class="px-4 py-3 text-center">
+                @if (account.ativo) {
+                  <span class="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400">
+                    Ativa
+                  </span>
+                } @else {
+                  <span class="inline-flex items-center rounded-full bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-400">
+                    Inativa
+                  </span>
+                }
+              </td>
+              <td class="px-4 py-3 text-right">
+                <div class="flex items-center justify-end gap-2">
+                  <button
+                    (click)="openEditForm(account)"
+                    class="rounded-lg p-1.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--border-subtle)] transition"
+                    title="Editar"
+                  >
+                    <ui-icon name="heroPencilSquare" size="1rem" />
+                  </button>
+                  <button
+                    (click)="deleteAccount(account)"
+                    class="rounded-lg p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--border-subtle)] transition"
+                    title="Desativar"
+                  >
+                    <ui-icon name="heroTrash" size="1rem" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Empty state -->
+  @if (!isLoading() && accounts().length === 0) {
+    <div class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] py-16">
+      <ui-icon name="heroBanknotes" size="3rem" />
+      <p class="mt-4 text-sm text-[var(--text-muted)]">Nenhuma conta bancária cadastrada</p>
+      <button
+        (click)="openNewForm()"
+        class="mt-4 inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition"
+      >
+        <ui-icon name="heroPlus" size="1rem" />
+        Cadastrar Conta
+      </button>
+    </div>
+  }
+</div>

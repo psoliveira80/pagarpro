@@ -1,0 +1,88 @@
+@if (isLoading()) {
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
+    @for (i of [1,2,3,4,5,6]; track i) {
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <div class="h-3 w-16 bg-[var(--border)] rounded mb-2"></div>
+        <div class="h-6 w-24 bg-[var(--border)] rounded"></div>
+      </div>
+    }
+  </div>
+}
+
+@if (error()) {
+  <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center">
+    <p class="text-sm text-red-400">Erro ao carregar dashboard do cliente</p>
+    <button (click)="loadData()" class="mt-2 text-xs text-[var(--accent)] hover:underline">Tentar novamente</button>
+  </div>
+}
+
+@if (!isLoading() && !error() && data()) {
+  <div class="space-y-4">
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Total Contratado</p>
+        <p class="mt-1 text-xl font-bold text-[var(--text-primary)]">{{ formatCurrency(data()!.total_contracted) }}</p>
+      </div>
+
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Total Pago</p>
+        <p class="mt-1 text-xl font-bold text-green-400">{{ formatCurrency(data()!.total_paid) }}</p>
+      </div>
+
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Em Aberto</p>
+        <p class="mt-1 text-xl font-bold text-[var(--text-primary)]">{{ formatCurrency(data()!.total_open) }}</p>
+      </div>
+
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Vencido</p>
+        <p class="mt-1 text-xl font-bold text-red-400">{{ formatCurrency(data()!.total_overdue) }}</p>
+      </div>
+
+      <!-- Score Gauge -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Score</p>
+        <div class="mt-2 flex items-center gap-3">
+          <div class="relative w-14 h-14">
+            <svg viewBox="0 0 36 36" class="w-14 h-14 -rotate-90">
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--border)" stroke-width="3" />
+              <circle
+                cx="18" cy="18" r="15.5" fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                [attr.stroke-dasharray]="gaugePercent(data()!.score) + ', 100'"
+                [class]="scoreColor(data()!.score)"
+              />
+            </svg>
+            <span class="absolute inset-0 flex items-center justify-center text-sm font-bold" [class]="scoreColor(data()!.score)">
+              {{ data()!.score }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Punctuality -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Pontualidade (12m)</p>
+        <p class="mt-1 text-xl font-bold text-[var(--text-primary)]">{{ data()!.punctuality_percent }}%</p>
+        <div class="mt-2 h-2 w-full rounded-full bg-[var(--border-subtle)] overflow-hidden">
+          <div
+            class="h-full rounded-full transition-all"
+            [class.bg-green-500]="data()!.punctuality_percent >= 80"
+            [class.bg-yellow-500]="data()!.punctuality_percent >= 50 && data()!.punctuality_percent < 80"
+            [class.bg-red-500]="data()!.punctuality_percent < 50"
+            [style.width.%]="data()!.punctuality_percent"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contracts Info -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Contratos Ativos</p>
+      <p class="mt-1 text-xl font-bold text-[var(--text-primary)]">{{ data()!.active_contracts }}</p>
+    </div>
+  </div>
+}

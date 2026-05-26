@@ -1,0 +1,96 @@
+<div class="relative flex h-[calc(100vh-10rem)] gap-0 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] overflow-hidden">
+  <!-- Side panel — overlay on mobile, inline on desktop -->
+  @if (sidePanelOpen()) {
+    <div class="absolute md:relative inset-y-0 left-0 z-10 w-64 md:w-72 flex flex-col border-r border-[var(--border)] bg-[var(--surface-elevated)] shadow-lg md:shadow-none">
+      <div class="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
+        <h3 class="text-sm font-semibold text-[var(--text-primary)]">Veículos da Frota</h3>
+        <button
+          (click)="toggleSidePanel()"
+          class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+        >
+          <ui-icon name="heroXMark" size="1rem" />
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-auto">
+        @if (isLoading()) {
+          <div class="flex items-center justify-center py-8 text-[var(--text-muted)]">
+            <svg class="animate-spin h-5 w-5 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <span class="ml-2 text-xs">Carregando...</span>
+          </div>
+        } @else if (vehicles().length === 0) {
+          <div class="flex flex-col items-center justify-center py-8 text-[var(--text-muted)]">
+            <ui-icon name="heroTruck" size="2rem" />
+            <p class="mt-2 text-xs">Nenhum veículo</p>
+          </div>
+        } @else {
+          @for (vehicle of vehicles(); track vehicle.id) {
+            <button
+              (click)="selectVehicle(vehicle)"
+              class="flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-3 text-left transition cursor-pointer"
+              [class]="selectedVehicle()?.id === vehicle.id
+                ? 'bg-[var(--accent)]/10 border-l-2 border-l-[var(--accent)]'
+                : 'hover:bg-[var(--border-subtle)]'"
+            >
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-sm font-semibold text-[var(--text-primary)]">
+                    {{ formatPlate(vehicle.placa) }}
+                  </span>
+                  <span [class]="statusDotClass(vehicle.status)" class="h-2 w-2 rounded-full flex-shrink-0"></span>
+                </div>
+                <p class="text-xs text-[var(--text-muted)] truncate mt-0.5">
+                  {{ vehicle.marca }} {{ vehicle.modelo }}
+                </p>
+              </div>
+            </button>
+          }
+        }
+      </div>
+
+      <div class="border-t border-[var(--border)] px-4 py-2 text-xs text-[var(--text-muted)]">
+        {{ vehicles().length }} veículo(s)
+      </div>
+    </div>
+  }
+
+  <!-- Map area -->
+  <div class="flex-1 relative">
+    @if (!sidePanelOpen()) {
+      <button
+        (click)="toggleSidePanel()"
+        class="absolute top-3 left-3 z-[5] flex items-center gap-1.5 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer shadow-lg"
+      >
+        <ui-icon name="heroBars3" size="0.875rem" />
+        Veículos
+      </button>
+    }
+
+    <!-- Selected vehicle info -->
+    @if (selectedVehicle(); as vehicle) {
+      <div class="absolute top-3 right-3 z-[5] w-56 md:w-64 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-3 md:p-4 shadow-lg">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-mono text-sm font-bold text-[var(--text-primary)]">
+            {{ formatPlate(vehicle.placa) }}
+          </span>
+          <button
+            (click)="selectedVehicle.set(null)"
+            class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+          >
+            <ui-icon name="heroXMark" size="0.875rem" />
+          </button>
+        </div>
+        <p class="text-sm text-[var(--text-secondary)]">{{ vehicle.marca }} {{ vehicle.modelo }}</p>
+        <p class="text-xs text-[var(--text-muted)]">{{ vehicle.ano_modelo }} · {{ vehicle.cor }}</p>
+        <div class="mt-2">
+          <span [class]="statusClass(vehicle.status)" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium">
+            <span [class]="statusDotClass(vehicle.status)" class="h-1.5 w-1.5 rounded-full"></span>
+            {{ statusLabel(vehicle.status) }}
+          </span>
+        </div>
+      </div>
+    }
+
+    <div #mapContainer class="h-full w-full"></div>
+  </div>
+</div>

@@ -1,0 +1,239 @@
+@if (isLoading()) {
+  <div class="flex items-center justify-center py-24 text-[var(--text-muted)]">
+    <div class="animate-spin h-8 w-8 border-2 border-[var(--accent)] border-t-transparent rounded-full"></div>
+    <span class="ml-3">Carregando...</span>
+  </div>
+} @else if (customer(); as c) {
+  <div class="space-y-6">
+    <!-- Back + Header -->
+    <div class="flex items-start justify-between">
+      <div class="flex items-center gap-4">
+        <button
+          (click)="goBack()"
+          class="rounded-xl p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+        >
+          <ui-icon name="heroArrowLeft" size="1.25rem" />
+        </button>
+        <div>
+          <div class="flex items-center gap-3">
+            <h2 class="text-2xl font-bold text-[var(--text-primary)]">{{ c.nome_completo }}</h2>
+            <span [class]="statusClass(c.status)" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
+              {{ statusLabel(c.status) }}
+            </span>
+          </div>
+          <p class="text-sm text-[var(--text-muted)] mt-1">
+            {{ documentTypeLabel(c) }}: {{ formatDocument(c) }}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 mr-2">
+          <div class="relative flex items-center justify-center">
+            <svg class="h-12 w-12 -rotate-90" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--border)" stroke-width="2.5" />
+              <circle cx="18" cy="18" r="15.5" fill="none"
+                [attr.stroke]="c.score >= 80 ? '#22c55e' : c.score >= 50 ? '#eab308' : '#ef4444'"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                [attr.stroke-dasharray]="(c.score / 100 * 97.4) + ' 97.4'" />
+            </svg>
+            <span [class]="scoreClass(c.score)" class="absolute text-sm font-bold">{{ c.score }}</span>
+          </div>
+          <span class="text-xs text-[var(--text-muted)]">Score</span>
+        </div>
+        <button
+          (click)="editCustomer()"
+          class="flex items-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+        >
+          <ui-icon name="heroPencilSquare" size="1rem" />
+          Editar
+        </button>
+        <button
+          (click)="exportCustomerData()"
+          [disabled]="isExporting()"
+          class="flex items-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer disabled:opacity-50"
+          title="LGPD: Exportar dados do cliente"
+        >
+          @if (isExporting()) {
+            <div class="animate-spin h-4 w-4 border-2 border-[var(--accent)] border-t-transparent rounded-full"></div>
+          } @else {
+            <ui-icon name="heroArrowUpTray" size="1rem" />
+          }
+          Exportar Dados
+        </button>
+        <button
+          (click)="requestAnonymization()"
+          [disabled]="isAnonymizing()"
+          class="flex items-center gap-2 rounded-xl border border-yellow-500/30 px-4 py-2 text-sm font-medium text-yellow-400 hover:bg-yellow-500/10 transition cursor-pointer disabled:opacity-50"
+          title="LGPD: Solicitar exclusão/anonimização"
+        >
+          @if (isAnonymizing()) {
+            <div class="animate-spin h-4 w-4 border-2 border-yellow-400 border-t-transparent rounded-full"></div>
+          } @else {
+            <ui-icon name="heroExclamationTriangle" size="1rem" />
+          }
+          Solicitar Exclusão
+        </button>
+        <button
+          (click)="confirmDelete()"
+          class="flex items-center gap-2 rounded-xl border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 transition cursor-pointer"
+        >
+          <ui-icon name="heroTrash" size="1rem" />
+          Excluir
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="border-b border-[var(--border)]">
+      <nav class="flex gap-1">
+        @for (tab of [
+          { key: 'dados', label: 'Dados' },
+          { key: 'dashboard', label: 'Dashboard' },
+          { key: 'contratos', label: 'Contratos' },
+          { key: 'financeiro', label: 'Financeiro' },
+          { key: 'ativos', label: 'Ativos' },
+          { key: 'anexos', label: 'Anexos' }
+        ]; track tab.key) {
+          <button
+            (click)="setTab($any(tab.key))"
+            [class]="activeTab() === tab.key
+              ? 'border-[var(--accent)] text-[var(--accent)]'
+              : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'"
+            class="border-b-2 px-4 py-3 text-sm font-medium transition cursor-pointer"
+          >
+            {{ tab.label }}
+          </button>
+        }
+      </nav>
+    </div>
+
+    <!-- Tab content -->
+    @switch (activeTab()) {
+      @case ('dashboard') {
+        <app-customer-dashboard-tab [customerId]="c.id" />
+      }
+      @case ('dados') {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Dados Pessoais -->
+          <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5 space-y-4">
+            <h3 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Dados Pessoais</h3>
+            <div class="space-y-3">
+              <div>
+                <p class="text-xs text-[var(--text-muted)]">Nome completo</p>
+                <p class="text-sm font-medium text-[var(--text-primary)]">{{ c.nome_completo }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-muted)]">{{ documentTypeLabel(c) }}</p>
+                <p class="text-sm font-medium text-[var(--text-primary)]">{{ formatDocument(c) }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-muted)]">Email</p>
+                <p class="text-sm font-medium text-[var(--text-primary)]">{{ c.email }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-muted)]">Telefone</p>
+                <p class="text-sm font-medium text-[var(--text-primary)]">{{ formatPhone(c.telefone) }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Endereço -->
+          <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5 space-y-4">
+            <h3 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Endereço</h3>
+            <div class="space-y-3">
+              <div>
+                <p class="text-xs text-[var(--text-muted)]">Logradouro</p>
+                <p class="text-sm font-medium text-[var(--text-primary)]">
+                  {{ c.endereco?.logradouro || '-' }}@if (c.endereco?.numero) {, {{ c.endereco?.numero }}}
+                </p>
+              </div>
+              @if (c.endereco?.complemento) {
+                <div>
+                  <p class="text-xs text-[var(--text-muted)]">Complemento</p>
+                  <p class="text-sm font-medium text-[var(--text-primary)]">{{ c.endereco?.complemento }}</p>
+                </div>
+              }
+              <div>
+                <p class="text-xs text-[var(--text-muted)]">Bairro</p>
+                <p class="text-sm font-medium text-[var(--text-primary)]">{{ c.endereco?.bairro || '-' }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-muted)]">Cidade / Estado</p>
+                <p class="text-sm font-medium text-[var(--text-primary)]">
+                  {{ c.endereco?.cidade || '-' }} / {{ c.endereco?.estado || '-' }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-muted)]">CEP</p>
+                <p class="text-sm font-medium text-[var(--text-primary)]">{{ c.endereco?.cep || '-' }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Observações -->
+          @if (c.observacoes) {
+            <div class="md:col-span-2 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5 space-y-4">
+              <h3 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Observações</h3>
+              <p class="text-sm text-[var(--text-secondary)] whitespace-pre-line">{{ c.observacoes }}</p>
+            </div>
+          }
+        </div>
+      }
+      @case ('contratos') {
+        <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+          <ui-icon name="heroDocumentText" size="2.5rem" />
+          <p class="mt-3 text-sm">Contratos — em breve</p>
+        </div>
+      }
+      @case ('financeiro') {
+        <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+          <ui-icon name="heroCurrencyDollar" size="2.5rem" />
+          <p class="mt-3 text-sm">Financeiro — em breve</p>
+        </div>
+      }
+      @case ('ativos') {
+        <app-assets-list [customerId]="c.id" />
+      }
+      @case ('anexos') {
+        <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+          <ui-icon name="heroPaperClip" size="2.5rem" />
+          <p class="mt-3 text-sm">Anexos — em breve</p>
+        </div>
+      }
+    }
+  </div>
+
+  <!-- Delete confirmation modal -->
+  <app-modal [open]="showDeleteConfirm()" (closed)="showDeleteConfirm.set(false)" size="sm" title="Confirmar exclusão">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="flex items-center justify-center h-10 w-10 rounded-full bg-red-500/20">
+        <ui-icon name="heroExclamationTriangle" size="1.25rem" class="text-red-400" />
+      </div>
+    </div>
+    <p class="text-sm text-[var(--text-secondary)]">
+      Tem certeza que deseja excluir o cliente <strong>{{ c.nome_completo }}</strong>? Esta ação não pode ser desfeita.
+    </p>
+    <div modal-footer class="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border)]">
+      <button
+        (click)="cancelDelete()"
+        class="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+      >
+        Cancelar
+      </button>
+      <button
+        (click)="deleteCustomer()"
+        [disabled]="isDeleting()"
+        class="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition disabled:opacity-50 cursor-pointer"
+      >
+        @if (isDeleting()) {
+          Excluindo...
+        } @else {
+          Sim, excluir
+        }
+      </button>
+    </div>
+  </app-modal>
+
+}

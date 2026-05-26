@@ -1,0 +1,204 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div>
+    <h2 class="text-xl font-semibold text-[var(--text-primary)]">Divergências</h2>
+    <p class="text-sm text-[var(--text-muted)]">Identifique e resolva inconsistências entre o extrato bancário e o sistema</p>
+  </div>
+
+  <!-- Error -->
+  @if (error()) {
+    <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+      {{ error() }}
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (isLoading()) {
+    <div class="flex items-center justify-center py-12">
+      <div class="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent"></div>
+    </div>
+  }
+
+  @if (!isLoading() && divergences()) {
+    <!-- Tabs -->
+    <div class="flex gap-2 border-b border-[var(--border)]">
+      <button
+        (click)="setTab('orphan')"
+        class="relative px-4 py-2.5 text-sm font-medium transition"
+        [class.text-[var(--accent)]]="activeTab() === 'orphan'"
+        [class.text-[var(--text-muted)]]="activeTab() !== 'orphan'"
+      >
+        Transações Órfãs
+        @if (divergences()!.total_orfas > 0) {
+          <span class="ml-1.5 inline-flex items-center justify-center rounded-full bg-yellow-500/20 px-1.5 py-0.5 text-[10px] font-bold text-yellow-400">
+            {{ divergences()!.total_orfas }}
+          </span>
+        }
+        @if (activeTab() === 'orphan') {
+          <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent)]"></div>
+        }
+      </button>
+      <button
+        (click)="setTab('suspect')"
+        class="relative px-4 py-2.5 text-sm font-medium transition"
+        [class.text-[var(--accent)]]="activeTab() === 'suspect'"
+        [class.text-[var(--text-muted)]]="activeTab() !== 'suspect'"
+      >
+        Títulos Suspeitos
+        @if (divergences()!.total_suspeitos > 0) {
+          <span class="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-bold text-red-400">
+            {{ divergences()!.total_suspeitos }}
+          </span>
+        }
+        @if (activeTab() === 'suspect') {
+          <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent)]"></div>
+        }
+      </button>
+      <button
+        (click)="setTab('mismatch')"
+        class="relative px-4 py-2.5 text-sm font-medium transition"
+        [class.text-[var(--accent)]]="activeTab() === 'mismatch'"
+        [class.text-[var(--text-muted)]]="activeTab() !== 'mismatch'"
+      >
+        Diferenças de Valor
+        @if (divergences()!.total_divergencias > 0) {
+          <span class="ml-1.5 inline-flex items-center justify-center rounded-full bg-orange-500/20 px-1.5 py-0.5 text-[10px] font-bold text-orange-400">
+            {{ divergences()!.total_divergencias }}
+          </span>
+        }
+        @if (activeTab() === 'mismatch') {
+          <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent)]"></div>
+        }
+      </button>
+    </div>
+
+    <!-- Content -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- List -->
+      <div class="lg:col-span-2">
+        @if (currentItems().length === 0) {
+          <div class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] py-16">
+            <ui-icon name="heroClipboardDocumentCheck" size="3rem" />
+            <p class="mt-4 text-sm text-[var(--text-muted)]">
+              Nenhuma divergência nesta categoria
+            </p>
+          </div>
+        } @else {
+          <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] overflow-hidden">
+            @for (item of currentItems(); track item.entidade_id) {
+              <div
+                class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 hover:bg-[var(--border-subtle)] transition cursor-pointer"
+                [class.bg-[var(--accent)]/10]="selectedItem()?.entidade_id === item.entidade_id"
+                role="button"
+                tabindex="0"
+                (click)="selectItem(item)"
+                (keydown.enter)="selectItem(item)"
+              >
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl"
+                  [class.bg-yellow-500/10]="item.categoria === 'orphan'"
+                  [class.text-yellow-400]="item.categoria === 'orphan'"
+                  [class.bg-red-500/10]="item.categoria === 'suspect_paid'"
+                  [class.text-red-400]="item.categoria === 'suspect_paid'"
+                  [class.bg-orange-500/10]="item.categoria === 'value_mismatch'"
+                  [class.text-orange-400]="item.categoria === 'value_mismatch'"
+                >
+                  <ui-icon name="heroExclamationTriangle" size="1.25rem" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-[var(--text-primary)] truncate">{{ item.descricao }}</p>
+                  <p class="text-xs text-[var(--text-muted)]">
+                    {{ item.lancado_em || '' }}
+                    @if (item.detalhes) {
+                      &middot; {{ item.detalhes }}
+                    }
+                  </p>
+                </div>
+                @if (item.valor !== null) {
+                  <p class="text-sm font-mono font-semibold"
+                    [class.text-green-400]="item.valor > 0"
+                    [class.text-red-400]="item.valor < 0"
+                  >
+                    R$ {{ item.valor.toFixed(2) }}
+                  </p>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Detail pane -->
+      <div>
+        @if (selectedItem()) {
+          <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 space-y-4 sticky top-6">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-semibold text-[var(--text-primary)]">Detalhes</h3>
+              <button
+                (click)="closeDetail()"
+                class="rounded-lg p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+              >
+                <ui-icon name="heroXMark" size="1rem" />
+              </button>
+            </div>
+
+            <div class="space-y-3">
+              <div>
+                <p class="text-xs text-[var(--text-muted)]">Tipo</p>
+                <p class="text-sm text-[var(--text-primary)] capitalize">{{ selectedItem()!.tipo_entidade }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-[var(--text-muted)]">Descrição</p>
+                <p class="text-sm text-[var(--text-primary)]">{{ selectedItem()!.descricao }}</p>
+              </div>
+              @if (selectedItem()!.valor !== null) {
+                <div>
+                  <p class="text-xs text-[var(--text-muted)]">Valor</p>
+                  <p class="text-sm font-mono font-semibold"
+                    [class.text-green-400]="selectedItem()!.valor! > 0"
+                    [class.text-red-400]="selectedItem()!.valor! < 0"
+                  >
+                    R$ {{ selectedItem()!.valor!.toFixed(2) }}
+                  </p>
+                </div>
+              }
+              @if (selectedItem()!.lancado_em) {
+                <div>
+                  <p class="text-xs text-[var(--text-muted)]">Data</p>
+                  <p class="text-sm text-[var(--text-primary)]">{{ selectedItem()!.lancado_em }}</p>
+                </div>
+              }
+              @if (selectedItem()!.detalhes) {
+                <div>
+                  <p class="text-xs text-[var(--text-muted)]">Observação</p>
+                  <p class="text-sm text-[var(--text-secondary)]">{{ selectedItem()!.detalhes }}</p>
+                </div>
+              }
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-col gap-2 pt-2 border-t border-[var(--border)]">
+              @if (selectedItem()!.tipo_entidade === 'bank_transaction') {
+                <button
+                  (click)="ignoreItem(selectedItem()!)"
+                  class="w-full rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+                >
+                  Ignorar Transação
+                </button>
+              }
+              <button
+                class="w-full rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+              >
+                Sinalizar para Revisão
+              </button>
+            </div>
+          </div>
+        } @else {
+          <div class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] py-16 text-[var(--text-muted)]">
+            <ui-icon name="heroInformationCircle" size="2rem" />
+            <p class="mt-2 text-sm">Selecione um item para ver detalhes</p>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

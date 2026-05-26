@@ -1,0 +1,135 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div>
+    <h2 class="text-2xl font-bold text-[var(--text-primary)]">Importar Clientes</h2>
+    <p class="text-sm text-[var(--text-muted)] mt-1">Importe clientes a partir de uma planilha Excel ou CSV</p>
+  </div>
+
+  <!-- Upload area -->
+  @if (importStatus() === 'idle' || importStatus() === 'parsing') {
+    <div class="rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-elevated)] p-12">
+      <div class="flex flex-col items-center justify-center text-center">
+        <ui-icon name="heroArrowUpTray" size="2.5rem" class="text-[var(--text-muted)]" />
+        <p class="mt-4 text-sm font-medium text-[var(--text-primary)]">
+          Arraste um arquivo ou clique para selecionar
+        </p>
+        <p class="mt-1 text-xs text-[var(--text-muted)]">
+          Formatos aceitos: .xlsx, .xls, .csv
+        </p>
+        <label
+          class="mt-4 inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+        >
+          <ui-icon name="heroFolderOpen" size="1rem" />
+          Selecionar arquivo
+          <input
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            (change)="onFileSelect($event)"
+            class="hidden"
+          />
+        </label>
+
+        @if (isParsingFile()) {
+          <div class="mt-4 flex items-center gap-2 text-[var(--text-muted)]">
+            <div class="animate-spin h-4 w-4 border-2 border-[var(--accent)] border-t-transparent rounded-full"></div>
+            <span class="text-sm">Processando arquivo...</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Error -->
+  @if (errorMessage()) {
+    <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+      {{ errorMessage() }}
+    </div>
+  }
+
+  <!-- File selected + Preview -->
+  @if (importStatus() === 'ready' || importStatus() === 'importing' || importStatus() === 'done') {
+    <!-- File info -->
+    <div class="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-3">
+      <div class="flex items-center gap-3">
+        <ui-icon name="heroDocumentText" size="1.25rem" class="text-[var(--accent)]" />
+        <div>
+          <p class="text-sm font-medium text-[var(--text-primary)]">{{ selectedFile()?.name }}</p>
+          <p class="text-xs text-[var(--text-muted)]">{{ previewRows().length }} registro(s) encontrado(s)</p>
+        </div>
+      </div>
+      @if (importStatus() === 'ready') {
+        <button
+          (click)="clearFile()"
+          class="rounded-lg p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition cursor-pointer"
+        >
+          <ui-icon name="heroXMark" size="1rem" />
+        </button>
+      }
+    </div>
+
+    <!-- Preview table -->
+    @if (previewRows().length > 0) {
+      <div class="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)]">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-[var(--border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+              <th class="px-4 py-3 font-medium">Nome</th>
+              <th class="px-4 py-3 font-medium">Documento</th>
+              <th class="px-4 py-3 font-medium">Email</th>
+              <th class="px-4 py-3 font-medium">Telefone</th>
+              <th class="px-4 py-3 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of previewRows(); track $index) {
+              <tr class="border-b border-[var(--border)] last:border-0">
+                <td class="px-4 py-3 text-[var(--text-primary)]">{{ row.nome_completo }}</td>
+                <td class="px-4 py-3 text-[var(--text-secondary)]">{{ row.cpf_cnpj }}</td>
+                <td class="px-4 py-3 text-[var(--text-secondary)]">{{ row.email }}</td>
+                <td class="px-4 py-3 text-[var(--text-secondary)]">{{ row.telefone }}</td>
+                <td class="px-4 py-3 text-[var(--text-secondary)]">{{ row.status }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    <!-- Import button / Status -->
+    @if (importStatus() === 'ready') {
+      <div class="flex items-center justify-end">
+        <button
+          (click)="startImport()"
+          class="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+        >
+          <ui-icon name="heroArrowUpTray" size="1rem" />
+          Importar
+        </button>
+      </div>
+    }
+
+    @if (importStatus() === 'importing') {
+      <div class="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-3 text-[var(--text-muted)]">
+        <div class="animate-spin h-5 w-5 border-2 border-[var(--accent)] border-t-transparent rounded-full"></div>
+        <span class="text-sm">Importando registros...</span>
+      </div>
+    }
+
+    @if (importStatus() === 'done') {
+      <div class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-4 text-center">
+        <ui-icon name="heroInformationCircle" size="1.5rem" class="text-yellow-400 mx-auto" />
+        <p class="mt-2 text-sm font-medium text-yellow-400">Em breve</p>
+        <p class="mt-1 text-xs text-[var(--text-muted)]">
+          A importação em massa estará disponível em uma próxima versão.
+          Por enquanto, cadastre clientes individualmente.
+        </p>
+        <button
+          (click)="clearFile()"
+          class="mt-3 rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+        >
+          Voltar
+        </button>
+      </div>
+    }
+  }
+</div>

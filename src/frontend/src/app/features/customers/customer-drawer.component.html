@@ -1,0 +1,249 @@
+<!-- Backdrop -->
+<button
+  type="button"
+  class="fixed inset-0 z-40 bg-black/50 transition-opacity cursor-default border-none"
+  (click)="onBackdropClick()"
+  aria-label="Fechar drawer"
+></button>
+
+<!-- Drawer -->
+<div
+  class="fixed inset-y-0 right-0 z-50 w-full max-w-lg transform bg-[var(--surface-elevated)] shadow-2xl transition-transform duration-300 ease-out translate-x-0"
+>
+  <!-- Header -->
+  <div class="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
+    <h3 class="text-lg font-semibold text-[var(--text-primary)]">{{ title }}</h3>
+    <button
+      (click)="closed.emit()"
+      class="rounded-lg p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+    >
+      <ui-icon name="heroXMark" size="1.25rem" />
+    </button>
+  </div>
+
+  <!-- Form -->
+  <form
+    [formGroup]="form"
+    (ngSubmit)="onSubmit()"
+    class="flex flex-col h-[calc(100%-73px)]"
+  >
+    <div class="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+      <!-- Dados pessoais -->
+      <div class="space-y-4">
+        <h4 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Dados Pessoais</h4>
+
+        <!-- Nome -->
+        <div>
+          <label for="drawer-full-name" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Nome completo *</label>
+          <input
+            id="drawer-full-name"
+            formControlName="nome_completo"
+            type="text"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+            placeholder="Nome do cliente"
+          />
+          @if (form.controls.nome_completo.touched && form.controls.nome_completo.invalid) {
+            <p class="mt-1 text-xs text-red-400">Nome é obrigatório (mínimo 3 caracteres)</p>
+          }
+        </div>
+
+        <!-- Tipo de documento + Documento -->
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label for="drawer-doc-type" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Tipo</label>
+            <app-select
+              [options]="docTypeOptions"
+              [value]="form.controls.document_type.value"
+              (valueChange)="form.controls.document_type.setValue($any($event))"
+              placeholder="Tipo"
+            />
+          </div>
+          <div class="col-span-2">
+            <label for="drawer-doc-number" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Documento *</label>
+            <input
+              id="drawer-doc-number"
+              type="text"
+              [value]="form.controls.cpf_cnpj.value"
+              (input)="onDocumentInput($event)"
+              [placeholder]="form.controls.document_type.value === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+            />
+            @if (form.controls.cpf_cnpj.touched && form.controls.cpf_cnpj.invalid) {
+              <p class="mt-1 text-xs text-red-400">Documento é obrigatório</p>
+            }
+          </div>
+        </div>
+
+        <!-- Email -->
+        <div>
+          <label for="drawer-email" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Email *</label>
+          <input
+            id="drawer-email"
+            formControlName="email"
+            type="email"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+            placeholder="email@exemplo.com"
+          />
+          @if (form.controls.email.touched && form.controls.email.invalid) {
+            <p class="mt-1 text-xs text-red-400">Email válido é obrigatório</p>
+          }
+        </div>
+
+        <!-- Telefone -->
+        <div>
+          <label for="drawer-phone" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Telefone *</label>
+          <input
+            id="drawer-phone"
+            type="text"
+            [value]="form.controls.phone.value"
+            (input)="onPhoneInput($event)"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+            placeholder="(00) 00000-0000"
+          />
+          @if (form.controls.phone.touched && form.controls.phone.invalid) {
+            <p class="mt-1 text-xs text-red-400">Telefone é obrigatório</p>
+          }
+        </div>
+
+        <!-- Status -->
+        <div>
+          <label for="drawer-status" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Status</label>
+          <app-select
+            [options]="drawerStatusOptions"
+            [value]="form.controls.status.value"
+            (valueChange)="form.controls.status.setValue($any($event))"
+            placeholder="Selecione..."
+          />
+        </div>
+      </div>
+
+      <!-- Endereço -->
+      <div class="space-y-4">
+        <h4 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Endereço</h4>
+
+        <!-- CEP -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="drawer-zip" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">CEP</label>
+            <input
+              id="drawer-zip"
+              type="text"
+              [value]="form.controls.address_zip.value"
+              (input)="onZipInput($event)"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+              placeholder="00000-000"
+            />
+          </div>
+          <div>
+            <label for="drawer-state" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Estado</label>
+            <input
+              id="drawer-state"
+              formControlName="address_state"
+              type="text"
+              maxlength="2"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+              placeholder="UF"
+            />
+          </div>
+        </div>
+
+        <!-- Cidade + Bairro -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="drawer-city" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Cidade</label>
+            <input
+              id="drawer-city"
+              formControlName="address_city"
+              type="text"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+              placeholder="Cidade"
+            />
+          </div>
+          <div>
+            <label for="drawer-neighborhood" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Bairro</label>
+            <input
+              id="drawer-neighborhood"
+              formControlName="address_neighborhood"
+              type="text"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+              placeholder="Bairro"
+            />
+          </div>
+        </div>
+
+        <!-- Rua -->
+        <div>
+          <label for="drawer-street" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Rua</label>
+          <input
+            id="drawer-street"
+            formControlName="address_street"
+            type="text"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+            placeholder="Rua, avenida..."
+          />
+        </div>
+
+        <!-- Número + Complemento -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="drawer-number" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Número</label>
+            <input
+              id="drawer-number"
+              formControlName="address_number"
+              type="text"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+              placeholder="Nº"
+            />
+          </div>
+          <div>
+            <label for="drawer-complement" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Complemento</label>
+            <input
+              id="drawer-complement"
+              formControlName="address_complement"
+              type="text"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+              placeholder="Apto, sala..."
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Observações -->
+      <div>
+        <label for="drawer-notes" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Observações</label>
+        <textarea
+          id="drawer-notes"
+          formControlName="notes"
+          rows="3"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition resize-none"
+          placeholder="Anotações sobre o cliente..."
+        ></textarea>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="border-t border-[var(--border)] px-6 py-4 flex items-center justify-end gap-3">
+      <button
+        type="button"
+        (click)="closed.emit()"
+        class="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+      >
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        [disabled]="form.invalid || isLoading()"
+        class="rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+      >
+        @if (isLoading()) {
+          <span class="flex items-center gap-2">
+            <span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
+            Salvando...
+          </span>
+        } @else {
+          Salvar
+        }
+      </button>
+    </div>
+  </form>
+</div>

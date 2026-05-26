@@ -1,0 +1,129 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div>
+    <h2 class="text-2xl font-bold text-[var(--text-primary)]">Configurações Financeiras</h2>
+    <p class="text-sm text-[var(--text-muted)] mt-1">Taxas de juros, multas, descontos e prazos padrão</p>
+  </div>
+
+  @if (isLoading()) {
+    <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 animate-pulse space-y-4">
+      @for (i of [1, 2, 3, 4]; track i) {
+        <div class="h-10 bg-[var(--border-subtle)] rounded-xl"></div>
+      }
+    </div>
+  } @else {
+    <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 space-y-6">
+      <!-- Interest & Fine -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label for="fin-interest" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Taxa de Juros Mensal (%) <span class="text-[var(--danger)]">*</span>
+          </label>
+          <input
+            id="fin-interest"
+            type="number"
+            step="0.1"
+            min="0"
+            [value]="interestRate()"
+            (input)="interestRate.set($any($event.target).value)"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+          />
+          <p class="text-xs text-[var(--text-muted)] mt-1">Aplicada sobre parcelas em atraso, por mês</p>
+        </div>
+        <div>
+          <label for="fin-fine" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Multa por Atraso (%) <span class="text-[var(--danger)]">*</span>
+          </label>
+          <input
+            id="fin-fine"
+            type="number"
+            step="0.1"
+            min="0"
+            [value]="fineRate()"
+            (input)="fineRate.set($any($event.target).value)"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+          />
+          <p class="text-xs text-[var(--text-muted)] mt-1">Multa fixa aplicada uma vez no atraso</p>
+        </div>
+      </div>
+
+      <!-- Discount -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label for="fin-discount-pct" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Desconto para Pagamento Antecipado (%)
+          </label>
+          <input
+            id="fin-discount-pct"
+            type="number"
+            step="0.1"
+            min="0"
+            [value]="discountPercent()"
+            (input)="discountPercent.set($any($event.target).value)"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+          />
+        </div>
+        <div>
+          <label for="fin-discount-days" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Dias antes do vencimento para desconto
+          </label>
+          <input
+            id="fin-discount-days"
+            type="number"
+            min="0"
+            [value]="discountDays()"
+            (input)="discountDays.set($any($event.target).value)"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+          />
+        </div>
+      </div>
+
+      <!-- Payment + Grace -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label for="fin-payment-method" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Método de Pagamento Padrão
+          </label>
+          <select
+            id="fin-payment-method"
+            [value]="defaultPaymentMethod()"
+            (change)="defaultPaymentMethod.set($any($event.target).value)"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+          >
+            <option value="pix">PIX</option>
+            <option value="boleto">Boleto</option>
+            <option value="transferencia">Transferência</option>
+            <option value="dinheiro">Dinheiro</option>
+          </select>
+        </div>
+        <div>
+          <label for="fin-grace" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Carência (dias após vencimento sem juros)
+          </label>
+          <input
+            id="fin-grace"
+            type="number"
+            min="0"
+            [value]="gracePeriodDays()"
+            (input)="gracePeriodDays.set($any($event.target).value)"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+          />
+        </div>
+      </div>
+
+      <!-- Save -->
+      <div class="flex justify-end pt-4 border-t border-[var(--border)]">
+        <button
+          (click)="save()"
+          [disabled]="isSaving()"
+          class="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer disabled:opacity-50"
+        >
+          @if (isSaving()) {
+            <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+          }
+          Salvar
+        </button>
+      </div>
+    </div>
+  }
+</div>

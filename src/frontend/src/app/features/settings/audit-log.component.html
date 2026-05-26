@@ -1,0 +1,170 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div>
+    <h2 class="text-2xl font-bold text-[var(--text-primary)]">Log de Auditoria</h2>
+    <p class="text-sm text-[var(--text-muted)] mt-1">Histórico completo de ações no sistema</p>
+  </div>
+
+  <!-- Filters -->
+  <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <input
+        type="text"
+        [value]="filterAction()"
+        (input)="filterAction.set($any($event.target).value)"
+        placeholder="Ação (ex: customer.created)"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+      />
+      <input
+        type="text"
+        [value]="filterEntity()"
+        (input)="filterEntity.set($any($event.target).value)"
+        placeholder="Entidade (ex: customers)"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+      />
+      <input
+        type="date"
+        [value]="filterDateFrom()"
+        (input)="filterDateFrom.set($any($event.target).value)"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+      />
+      <input
+        type="date"
+        [value]="filterDateTo()"
+        (input)="filterDateTo.set($any($event.target).value)"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+      />
+      <div class="flex gap-2">
+        <button
+          (click)="applyFilters()"
+          class="flex-1 rounded-xl bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+        >
+          Filtrar
+        </button>
+        <button
+          (click)="clearFilters()"
+          class="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+        >
+          Limpar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  @if (isLoading()) {
+    <div class="space-y-2">
+      @for (i of [1, 2, 3, 4, 5]; track i) {
+        <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 animate-pulse">
+          <div class="flex gap-4">
+            <div class="h-4 w-32 bg-[var(--border-subtle)] rounded"></div>
+            <div class="h-4 w-24 bg-[var(--border-subtle)] rounded"></div>
+            <div class="h-4 w-40 bg-[var(--border-subtle)] rounded"></div>
+          </div>
+        </div>
+      }
+    </div>
+  } @else if (entries().length === 0) {
+    <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+      <ui-icon name="heroClipboardDocumentCheck" size="3rem" />
+      <p class="mt-4 text-lg font-medium text-[var(--text-primary)]">Nenhum registro encontrado</p>
+      <p class="mt-1 text-sm">Ajuste os filtros ou aguarde ações no sistema.</p>
+    </div>
+  } @else {
+    <div class="rounded-2xl border border-[var(--border)] overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-[var(--border)] bg-[var(--surface-elevated)]">
+              <th class="px-4 py-3 text-left font-medium text-[var(--text-muted)]">Data</th>
+              <th class="px-4 py-3 text-left font-medium text-[var(--text-muted)]">Ação</th>
+              <th class="px-4 py-3 text-left font-medium text-[var(--text-muted)]">Entidade</th>
+              <th class="px-4 py-3 text-left font-medium text-[var(--text-muted)]">Severidade</th>
+              <th class="px-4 py-3 text-left font-medium text-[var(--text-muted)]">HMAC</th>
+              <th class="px-4 py-3 text-left font-medium text-[var(--text-muted)]">IP</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of entries(); track entry.id) {
+              <tr
+                class="border-b border-[var(--border)] hover:bg-[var(--border-subtle)]/30 transition cursor-pointer"
+                (click)="toggleExpand(entry.id)"
+              >
+                <td class="px-4 py-3 text-[var(--text-primary)] whitespace-nowrap">
+                  {{ entry.criado_em | date:'dd/MM/yyyy HH:mm' }}
+                </td>
+                <td class="px-4 py-3 text-[var(--text-primary)] font-mono text-xs">{{ entry.action }}</td>
+                <td class="px-4 py-3 text-[var(--text-secondary)]">
+                  {{ entry.entity ?? '—' }}
+                  @if (entry.entity_id) {
+                    <span class="text-[var(--text-muted)]"> #{{ entry.entity_id | slice:0:8 }}</span>
+                  }
+                </td>
+                <td class="px-4 py-3">
+                  <span [class]="severityClass(entry.severity)" class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium">
+                    {{ entry.severity }}
+                  </span>
+                </td>
+                <td class="px-4 py-3">
+                  @if (entry.hmac_valid) {
+                    <span class="text-green-400 text-xs font-medium">OK</span>
+                  } @else {
+                    <span class="text-red-400 text-xs font-bold">ALERTA</span>
+                  }
+                </td>
+                <td class="px-4 py-3 text-[var(--text-muted)] text-xs">{{ entry.ip ?? '—' }}</td>
+                <td class="px-4 py-3">
+                  <ui-icon
+                    [name]="expandedId() === entry.id ? 'heroChevronDown' : 'heroChevronRight'"
+                    size="0.875rem"
+                  />
+                </td>
+              </tr>
+
+              <!-- Expanded detail -->
+              @if (expandedId() === entry.id) {
+                <tr>
+                  <td colspan="7" class="bg-[var(--surface)] px-6 py-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <h4 class="text-xs font-semibold text-[var(--text-muted)] uppercase mb-2">Antes</h4>
+                        <pre class="text-xs text-[var(--text-secondary)] bg-[var(--surface-elevated)] rounded-xl p-3 overflow-auto max-h-48">{{ formatJson(entry.payload_before) }}</pre>
+                      </div>
+                      <div>
+                        <h4 class="text-xs font-semibold text-[var(--text-muted)] uppercase mb-2">Depois</h4>
+                        <pre class="text-xs text-[var(--text-secondary)] bg-[var(--surface-elevated)] rounded-xl p-3 overflow-auto max-h-48">{{ formatJson(entry.payload_after) }}</pre>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex items-center justify-between text-sm text-[var(--text-muted)]">
+      <span>{{ total() }} registros encontrados</span>
+      <div class="flex items-center gap-2">
+        <button
+          (click)="goToPage(page() - 1)"
+          [disabled]="page() <= 1"
+          class="rounded-xl border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--border-subtle)] transition cursor-pointer disabled:opacity-40"
+        >
+          Anterior
+        </button>
+        <span class="text-xs">Página {{ page() }} de {{ totalPages() }}</span>
+        <button
+          (click)="goToPage(page() + 1)"
+          [disabled]="page() >= totalPages()"
+          class="rounded-xl border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--border-subtle)] transition cursor-pointer disabled:opacity-40"
+        >
+          Próxima
+        </button>
+      </div>
+    </div>
+  }
+</div>

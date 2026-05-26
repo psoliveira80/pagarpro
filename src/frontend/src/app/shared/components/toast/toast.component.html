@@ -1,0 +1,24 @@
+<div class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+  @for (toast of toasts(); track toast.id) {
+    <div
+      class="pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-sm animate-slide-in"
+      [class]="
+        toast.type === 'error' ? 'bg-[var(--danger)] text-white' :
+        toast.type === 'success' ? 'bg-[var(--success)] text-white' :
+        toast.type === 'warning' ? 'bg-[var(--warning)] text-white' :
+        'bg-[var(--info)] text-white'
+      "
+    >
+      <div class="flex items-center justify-between gap-3">
+        <span>{{ toast.message }}</span>
+        <button
+          class="opacity-70 hover:opacity-100 transition-opacity text-lg leading-none cursor-pointer"
+          (click)="toastService.dismiss(toast.id)"
+          aria-label="Fechar"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  }
+</div>

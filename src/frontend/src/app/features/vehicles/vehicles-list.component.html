@@ -1,0 +1,229 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-[var(--text-primary)]">Veículos</h2>
+      <p class="text-sm text-[var(--text-muted)] mt-1">Gerencie a frota de veículos</p>
+    </div>
+    <button
+      (click)="navigateToWizard()"
+      class="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+    >
+      <ui-icon name="heroPlus" size="1rem" />
+      Novo Veículo
+    </button>
+  </div>
+
+  <!-- KPI Strip -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <div class="flex items-center gap-3">
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20">
+          <ui-icon name="heroTruck" size="1.25rem" class="text-blue-400" />
+        </div>
+        <div>
+          <p class="text-xs text-[var(--text-muted)] uppercase tracking-wider">Total da Frota</p>
+          <p class="text-xl font-bold text-[var(--text-primary)]">{{ kpiTotal() }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <div class="flex items-center gap-3">
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/20">
+          <ui-icon name="heroTruck" size="1.25rem" class="text-green-400" />
+        </div>
+        <div>
+          <p class="text-xs text-[var(--text-muted)] uppercase tracking-wider">Ativos</p>
+          <p class="text-xl font-bold text-green-400">{{ kpiActive() }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <div class="flex items-center gap-3">
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-500/20">
+          <ui-icon name="heroTruck" size="1.25rem" class="text-yellow-400" />
+        </div>
+        <div>
+          <p class="text-xs text-[var(--text-muted)] uppercase tracking-wider">Em Manutenção</p>
+          <p class="text-xl font-bold text-yellow-400">{{ kpiMaintenance() }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters & View toggle -->
+  <div class="flex flex-col sm:flex-row gap-3">
+    <div class="relative flex-1">
+      <ui-icon
+        name="heroMagnifyingGlass"
+        size="1rem"
+        class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+      />
+      <input
+        type="text"
+        placeholder="Buscar por placa, modelo, cliente..."
+        (input)="onSearchInput($any($event.target).value)"
+        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] py-2.5 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+    <app-select
+      [options]="statusOptions"
+      [(value)]="statusFilter"
+      placeholder="Todos os status"
+      (valueChange)="onStatusChange($event)"
+    />
+    <button
+      (click)="toggleView()"
+      class="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+      [title]="viewMode() === 'table' ? 'Ver como cards' : 'Ver como tabela'"
+    >
+      <ui-icon [name]="viewMode() === 'table' ? 'heroChartBarSquare' : 'heroDocumentText'" size="1rem" />
+      {{ viewMode() === 'table' ? 'Cards' : 'Tabela' }}
+    </button>
+  </div>
+
+  <!-- Content -->
+  @if (isLoading()) {
+    <div class="flex items-center justify-center py-16 text-[var(--text-muted)]">
+      <svg class="animate-spin h-6 w-6 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span class="ml-3 text-sm">Carregando...</span>
+    </div>
+  } @else if (error()) {
+    <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)] rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)]">
+      <ui-icon name="heroExclamationTriangle" size="2.5rem" class="text-red-400" />
+      <p class="mt-3 text-sm text-red-400">{{ error() }}</p>
+      <button
+        (click)="loadVehicles()"
+        class="mt-4 flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+      >
+        Tentar novamente
+      </button>
+    </div>
+  } @else if (vehicles().length === 0) {
+    <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)] rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)]">
+      <ui-icon name="heroTruck" size="2.5rem" />
+      <p class="mt-3 text-sm">Nenhum veículo encontrado</p>
+      <button
+        (click)="navigateToWizard()"
+        class="mt-4 flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+      >
+        <ui-icon name="heroPlus" size="1rem" />
+        Cadastrar Veículo
+      </button>
+    </div>
+  } @else {
+    <!-- Table View -->
+    @if (viewMode() === 'table') {
+      <div class="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)]">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-[var(--border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+              <th class="px-4 py-3 font-medium">Placa</th>
+              <th class="px-4 py-3 font-medium">Marca/Modelo</th>
+              <th class="px-4 py-3 font-medium">Ano</th>
+              <th class="px-4 py-3 font-medium">Cor</th>
+              <th class="px-4 py-3 font-medium">Status</th>
+              <th class="px-4 py-3 font-medium">Cliente</th>
+              <th class="px-4 py-3 font-medium text-right">Valor FIPE</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (vehicle of vehicles(); track vehicle.id) {
+              <tr class="border-b border-[var(--border)] last:border-0 hover:bg-[var(--border-subtle)] transition">
+                <td class="px-4 py-3 font-mono font-semibold text-[var(--text-primary)]">
+                  {{ formatPlate(vehicle.placa) }}
+                </td>
+                <td class="px-4 py-3 text-[var(--text-secondary)]">
+                  {{ vehicle.marca }} {{ vehicle.modelo }}
+                </td>
+                <td class="px-4 py-3 text-[var(--text-secondary)]">
+                  {{ vehicle.ano_modelo }}
+                </td>
+                <td class="px-4 py-3 text-[var(--text-secondary)]">
+                  {{ vehicle.cor }}
+                </td>
+                <td class="px-4 py-3">
+                  <span [class]="statusClass(vehicle.status)" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
+                    {{ statusLabel(vehicle.status) }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-[var(--text-secondary)]">
+                  —
+                </td>
+                <td class="px-4 py-3 text-right font-medium text-[var(--text-primary)]">
+                  {{ formatCurrency(vehicle.valor_fipe) }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    <!-- Cards View -->
+    @if (viewMode() === 'cards') {
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        @for (vehicle of vehicles(); track vehicle.id) {
+          <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 hover:border-[var(--accent)] transition">
+            <div class="flex items-center justify-between mb-3">
+              <span class="font-mono text-lg font-bold text-[var(--text-primary)]">
+                {{ formatPlate(vehicle.placa) }}
+              </span>
+              <span [class]="statusClass(vehicle.status)" class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium">
+                <span [class]="statusDotClass(vehicle.status)" class="h-1.5 w-1.5 rounded-full"></span>
+                {{ statusLabel(vehicle.status) }}
+              </span>
+            </div>
+            <p class="text-sm font-medium text-[var(--text-secondary)]">
+              {{ vehicle.marca }} {{ vehicle.modelo }}
+            </p>
+            <p class="text-xs text-[var(--text-muted)] mt-0.5">
+              {{ vehicle.ano_modelo }} · {{ vehicle.cor }}
+            </p>
+            <div class="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-3">
+              <span class="text-xs text-[var(--text-muted)]">FIPE</span>
+              <span class="text-sm font-semibold text-green-400">
+                {{ formatCurrency(vehicle.valor_fipe) }}
+              </span>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- Pagination -->
+  @if (totalPages() > 1) {
+    <div class="flex items-center justify-between text-sm text-[var(--text-muted)]">
+      <span>{{ total() }} veículo(s) encontrado(s)</span>
+      <div class="flex items-center gap-1">
+        <button
+          (click)="goToPage(page() - 1)"
+          [disabled]="page() === 1"
+          class="rounded-lg px-3 py-1.5 hover:bg-[var(--border-subtle)] transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <ui-icon name="heroChevronLeft" size="1rem" />
+        </button>
+        @for (p of pages(); track p) {
+          <button
+            (click)="goToPage(p)"
+            [class]="p === page() ? 'bg-[var(--accent)] text-white' : 'hover:bg-[var(--border-subtle)]'"
+            class="rounded-lg px-3 py-1.5 transition cursor-pointer"
+          >
+            {{ p }}
+          </button>
+        }
+        <button
+          (click)="goToPage(page() + 1)"
+          [disabled]="page() === totalPages()"
+          class="rounded-lg px-3 py-1.5 hover:bg-[var(--border-subtle)] transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <ui-icon name="heroChevronRight" size="1rem" />
+        </button>
+      </div>
+    </div>
+  }
+</div>

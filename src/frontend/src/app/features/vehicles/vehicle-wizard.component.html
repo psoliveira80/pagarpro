@@ -1,0 +1,420 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center gap-4">
+    <button
+      (click)="cancel()"
+      class="flex items-center justify-center rounded-xl p-2 text-[var(--text-muted)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] transition cursor-pointer"
+    >
+      <ui-icon name="heroArrowLeft" size="1.25rem" />
+    </button>
+    <div>
+      <h2 class="text-2xl font-bold text-[var(--text-primary)]">Novo Veículo</h2>
+      <p class="text-sm text-[var(--text-muted)] mt-1">Cadastro em {{ totalSteps }} etapas</p>
+    </div>
+  </div>
+
+  <!-- Stepper -->
+  <div class="flex items-center gap-1 sm:gap-2 overflow-x-auto">
+    @for (step of steps; track step.number) {
+      <button
+        (click)="goToStep(step.number)"
+        class="flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-4 py-2 text-sm font-medium transition cursor-pointer shrink-0"
+        [class]="step.number === currentStep()
+          ? 'bg-[var(--accent)] text-white'
+          : step.number < currentStep()
+            ? 'bg-green-500/20 text-green-400'
+            : 'bg-[var(--surface-elevated)] text-[var(--text-muted)]'"
+      >
+        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
+          [class]="step.number < currentStep() ? 'bg-green-500 text-white' : 'bg-[var(--border)] text-[var(--text-secondary)]'"
+        >
+          @if (step.number < currentStep()) { ✓ } @else { {{ step.number }} }
+        </span>
+        <span class="hidden sm:inline">{{ step.label }}</span>
+      </button>
+      @if (step.number < totalSteps) {
+        <div class="h-px flex-1 min-w-4 bg-[var(--border)]"></div>
+      }
+    }
+  </div>
+
+  <!-- Step content -->
+  <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 sm:p-6">
+
+    <!-- Step 1: Tabela FIPE (was Step 2) -->
+    @if (currentStep() === 1) {
+      <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-6">Tabela FIPE</h3>
+
+      @if (fipeError()) {
+        <div class="rounded-xl border border-yellow-500/30 bg-yellow-500/5 px-4 py-3 flex items-start gap-3 mb-6">
+          <ui-icon name="heroExclamationTriangle" size="1.25rem" class="text-yellow-400 shrink-0 mt-0.5" />
+          <div>
+            <p class="text-sm font-medium text-[var(--text-primary)]">{{ fipeError() }}</p>
+            <button (click)="loadBrands()" class="text-xs text-[var(--accent)] hover:underline mt-1 cursor-pointer">Tentar novamente</button>
+          </div>
+        </div>
+      }
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label for="vw-brand" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Marca <span class="text-[var(--danger)]">*</span>
+          </label>
+          @if (loadingBrands()) {
+            <div class="flex items-center gap-2 py-2.5 text-sm text-[var(--text-muted)]">
+              <svg class="animate-spin h-4 w-4 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Carregando marcas...
+            </div>
+          } @else {
+            <app-select
+              [options]="brandOptions()"
+              [value]="selectedBrandCode()"
+              (valueChange)="onBrandChange($event)"
+              placeholder="Selecione a marca"
+            />
+            @if (stepAttempted() && !selectedBrandCode()) {
+              <p class="mt-1 text-xs text-[var(--danger)]">Selecione uma marca</p>
+            }
+          }
+        </div>
+        <div>
+          <label for="vw-model" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Modelo <span class="text-[var(--danger)]">*</span>
+          </label>
+          @if (loadingModels()) {
+            <div class="flex items-center gap-2 py-2.5 text-sm text-[var(--text-muted)]">
+              <svg class="animate-spin h-4 w-4 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Carregando modelos...
+            </div>
+          } @else {
+            <app-select
+              [options]="modelOptions()"
+              [value]="selectedModelCode()"
+              (valueChange)="onModelChange($event)"
+              [disabled]="!selectedBrandCode()"
+              placeholder="Selecione o modelo"
+            />
+            @if (stepAttempted() && !selectedModelCode()) {
+              <p class="mt-1 text-xs text-[var(--danger)]">Selecione um modelo</p>
+            }
+          }
+        </div>
+        <div>
+          <label for="vw-year" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Ano <span class="text-[var(--danger)]">*</span>
+          </label>
+          @if (loadingYears()) {
+            <div class="flex items-center gap-2 py-2.5 text-sm text-[var(--text-muted)]">
+              <svg class="animate-spin h-4 w-4 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Carregando anos...
+            </div>
+          } @else {
+            <app-select
+              [options]="yearOptions()"
+              [value]="selectedYearCode()"
+              (valueChange)="onYearChange($event)"
+              [disabled]="!selectedModelCode()"
+              placeholder="Selecione o ano"
+            />
+            @if (stepAttempted() && !selectedYearCode()) {
+              <p class="mt-1 text-xs text-[var(--danger)]">Selecione o ano</p>
+            }
+          }
+        </div>
+      </div>
+
+      <!-- FIPE result -->
+      @if (loadingPrice()) {
+        <div class="mt-6 flex items-center gap-2 text-sm text-[var(--text-muted)]">
+          <svg class="animate-spin h-4 w-4 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Consultando preço FIPE...
+        </div>
+      }
+      @if (fipeCode()) {
+        <div class="mt-6 rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <span class="text-xs text-[var(--text-muted)] uppercase tracking-wider">Código FIPE</span>
+              <p class="text-sm font-semibold text-[var(--text-primary)] mt-1">{{ fipeCode() }}</p>
+            </div>
+            <div>
+              <span class="text-xs text-[var(--text-muted)] uppercase tracking-wider">Valor FIPE</span>
+              <p class="text-lg font-bold text-green-400 mt-1">{{ formatCurrency(fipeValue()) }}</p>
+            </div>
+          </div>
+        </div>
+      }
+    }
+
+    <!-- Step 2: Identificação (was Step 1) -->
+    @if (currentStep() === 2) {
+      <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-6">Identificação do Veículo</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label for="vw-plate" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Placa (Mercosul) <span class="text-[var(--danger)]">*</span>
+          </label>
+          <input
+            id="vw-plate"
+            type="text"
+            [value]="placa()"
+            (input)="formatPlate($any($event.target).value)"
+            placeholder="AAA0A00"
+            maxlength="7"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition uppercase"
+          />
+          @if (stepAttempted() && placa().length < 7) {
+            <p class="mt-1 text-xs text-[var(--danger)]">Placa deve ter 7 caracteres (AAA0A00)</p>
+          }
+        </div>
+        <div>
+          <label for="vw-color" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Cor <span class="text-[var(--danger)]">*</span>
+          </label>
+          <input
+            id="vw-color"
+            type="text"
+            [value]="color()"
+            (input)="color.set($any($event.target).value)"
+            placeholder="Ex: Branco, Prata, Preto"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+          @if (stepAttempted() && !color().trim()) {
+            <p class="mt-1 text-xs text-[var(--danger)]">Informe a cor do veículo</p>
+          }
+        </div>
+        <div>
+          <label for="vw-chassi" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Chassi</label>
+          <input
+            id="vw-chassi"
+            type="text"
+            [value]="chassi()"
+            (input)="formatChassi($any($event.target).value)"
+            placeholder="17 caracteres"
+            maxlength="17"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition uppercase"
+          />
+          @if (chassi().length > 0 && chassi().length < 17) {
+            <p class="mt-1 text-xs text-yellow-400">{{ chassi().length }}/17 caracteres</p>
+          }
+        </div>
+        <div>
+          <label for="vw-renavam" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Renavam</label>
+          <input
+            id="vw-renavam"
+            type="text"
+            [value]="renavam()"
+            (input)="formatRenavam($any($event.target).value)"
+            placeholder="11 dígitos"
+            maxlength="11"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+          @if (renavam().length > 0 && renavam().length < 11) {
+            <p class="mt-1 text-xs text-yellow-400">{{ renavam().length }}/11 dígitos</p>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Step 3: Cliente & Acquisition -->
+    @if (currentStep() === 3) {
+      <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-6">Cliente e Aquisição</h3>
+      <div class="space-y-4">
+        <div>
+          <label for="vw-customer" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            Cliente <span class="text-[var(--danger)]">*</span>
+          </label>
+          @if (selectedCustomer(); as customer) {
+            <div class="flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3">
+              <ui-icon name="heroUsers" size="1.25rem" class="text-green-400" />
+              <div class="flex-1">
+                <p class="text-sm font-medium text-[var(--text-primary)]">{{ customer.nome_completo }}</p>
+                <p class="text-xs text-[var(--text-muted)]">{{ customer.email }}</p>
+              </div>
+              <button (click)="clearCustomer()" class="text-[var(--text-muted)] hover:text-red-400 transition cursor-pointer">
+                <ui-icon name="heroXMark" size="1rem" />
+              </button>
+            </div>
+          } @else {
+            <div class="relative">
+              <ui-icon name="heroMagnifyingGlass" size="1rem" class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+              <input
+                id="vw-customer"
+                type="text"
+                [value]="customerSearch()"
+                (input)="searchCustomers($any($event.target).value)"
+                placeholder="Buscar cliente por nome, CPF/CNPJ..."
+                class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+              />
+            </div>
+            @if (stepAttempted() && !selectedCustomer()) {
+              <p class="mt-1 text-xs text-[var(--danger)]">Selecione um cliente</p>
+            }
+            @if (customerResults().length > 0) {
+              <div class="mt-1 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-lg max-h-48 overflow-auto">
+                @for (c of customerResults(); track c.id) {
+                  <button
+                    (click)="selectCustomer(c)"
+                    class="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-[var(--border-subtle)] transition cursor-pointer"
+                  >
+                    <ui-icon name="heroUsers" size="1rem" class="text-[var(--text-muted)]" />
+                    <div>
+                      <p class="text-sm font-medium text-[var(--text-primary)]">{{ c.nome_completo }}</p>
+                      <p class="text-xs text-[var(--text-muted)]">{{ c.cpf_cnpj }}</p>
+                    </div>
+                  </button>
+                }
+              </div>
+            }
+          }
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label for="vw-acq-type" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+              Tipo de Aquisição <span class="text-[var(--danger)]">*</span>
+            </label>
+            <app-select
+              [options]="acquisitionTypeOptions"
+              [(value)]="acquisitionType"
+              placeholder="Tipo de aquisição"
+            />
+          </div>
+          <div>
+            <label for="vw-acq-price" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+              Preço de Aquisição <span class="text-[var(--danger)]">*</span>
+            </label>
+            <input
+              id="vw-acq-price"
+              type="number"
+              [value]="acquisitionPrice()"
+              (input)="acquisitionPrice.set(+$any($event.target).value)"
+              placeholder="0,00"
+              min="0"
+              step="0.01"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+            />
+            @if (stepAttempted() && acquisitionPrice() <= 0) {
+              <p class="mt-1 text-xs text-[var(--danger)]">Informe o preço de aquisição</p>
+            }
+          </div>
+          <div>
+            <label for="vw-acq-date" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+              Data de Aquisição <span class="text-[var(--danger)]">*</span>
+            </label>
+            <input
+              id="vw-acq-date"
+              type="date"
+              [value]="acquisitionDate()"
+              (input)="acquisitionDate.set($any($event.target).value)"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+            />
+            @if (stepAttempted() && !acquisitionDate()) {
+              <p class="mt-1 text-xs text-[var(--danger)]">Informe a data de aquisição</p>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Step 4: Review -->
+    @if (currentStep() === 4) {
+      <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-6">Revisão dos Dados</h3>
+
+      @if (errorMessage()) {
+        <div class="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {{ errorMessage() }}
+        </div>
+      }
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- FIPE -->
+        <div class="rounded-xl border border-[var(--border)] p-4">
+          <h4 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Tabela FIPE</h4>
+          <dl class="space-y-2 text-sm">
+            <div class="flex justify-between"><dt class="text-[var(--text-muted)]">Marca</dt><dd class="font-medium text-[var(--text-primary)]">{{ selectedBrandName() }}</dd></div>
+            <div class="flex justify-between"><dt class="text-[var(--text-muted)]">Modelo</dt><dd class="font-medium text-[var(--text-primary)]">{{ selectedModelName() }}</dd></div>
+            <div class="flex justify-between"><dt class="text-[var(--text-muted)]">Ano</dt><dd class="font-medium text-[var(--text-primary)]">{{ selectedYearName() }}</dd></div>
+            <div class="flex justify-between"><dt class="text-[var(--text-muted)]">Código FIPE</dt><dd class="font-medium text-[var(--text-primary)]">{{ fipeCode() }}</dd></div>
+            <div class="flex justify-between"><dt class="text-[var(--text-muted)]">Valor FIPE</dt><dd class="font-bold text-green-400">{{ formatCurrency(fipeValue()) }}</dd></div>
+          </dl>
+        </div>
+
+        <!-- Identificação -->
+        <div class="rounded-xl border border-[var(--border)] p-4">
+          <h4 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Identificação</h4>
+          <dl class="space-y-2 text-sm">
+            <div class="flex justify-between"><dt class="text-[var(--text-muted)]">Placa</dt><dd class="font-medium text-[var(--text-primary)]">{{ displayPlate() }}</dd></div>
+            <div class="flex justify-between"><dt class="text-[var(--text-muted)]">Cor</dt><dd class="font-medium text-[var(--text-primary)]">{{ color() }}</dd></div>
+            @if (chassi()) {
+              <div class="flex justify-between"><dt class="text-[var(--text-muted)]">Chassi</dt><dd class="font-medium text-[var(--text-primary)]">{{ chassi() }}</dd></div>
+            }
+            @if (renavam()) {
+              <div class="flex justify-between"><dt class="text-[var(--text-muted)]">Renavam</dt><dd class="font-medium text-[var(--text-primary)]">{{ renavam() }}</dd></div>
+            }
+          </dl>
+        </div>
+
+        <!-- Cliente & Aquisição -->
+        <div class="md:col-span-2 rounded-xl border border-[var(--border)] p-4">
+          <h4 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Cliente e Aquisição</h4>
+          <dl class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div><dt class="text-[var(--text-muted)]">Cliente</dt><dd class="font-medium text-[var(--text-primary)] mt-1">{{ selectedCustomer()?.nome_completo }}</dd></div>
+            <div><dt class="text-[var(--text-muted)]">Tipo</dt><dd class="font-medium text-[var(--text-primary)] mt-1 capitalize">{{ acquisitionType() }}</dd></div>
+            <div><dt class="text-[var(--text-muted)]">Preço</dt><dd class="font-medium text-[var(--text-primary)] mt-1">{{ formatCurrency(acquisitionPrice()) }}</dd></div>
+            <div><dt class="text-[var(--text-muted)]">Data</dt><dd class="font-medium text-[var(--text-primary)] mt-1">{{ acquisitionDate() }}</dd></div>
+          </dl>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Navigation buttons -->
+  <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
+    <button
+      (click)="currentStep() === 1 ? cancel() : prevStep()"
+      class="flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-6 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+    >
+      <ui-icon name="heroChevronLeft" size="1rem" />
+      {{ currentStep() === 1 ? 'Cancelar' : 'Voltar' }}
+    </button>
+
+    @if (currentStep() < totalSteps) {
+      <button
+        (click)="nextStep()"
+        class="flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+      >
+        Próximo
+        <ui-icon name="heroChevronRight" size="1rem" />
+      </button>
+    } @else {
+      <button
+        (click)="confirm()"
+        [disabled]="isSaving()"
+        class="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        @if (isSaving()) {
+          <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Salvando...
+        } @else {
+          Cadastrar Veículo
+        }
+      </button>
+    }
+  </div>
+</div>

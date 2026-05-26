@@ -1,0 +1,148 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div>
+    <h2 class="text-2xl font-bold text-[var(--text-primary)]">Módulos</h2>
+    <p class="text-sm text-[var(--text-muted)] mt-1">Ative, desative e configure módulos verticais do sistema</p>
+  </div>
+
+  <!-- Loading -->
+  @if (isLoading()) {
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      @for (i of [1, 2]; track i) {
+        <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 animate-pulse">
+          <div class="h-5 w-32 bg-[var(--border-subtle)] rounded mb-3"></div>
+          <div class="h-4 w-24 bg-[var(--border-subtle)] rounded"></div>
+        </div>
+      }
+    </div>
+  } @else if (modules().length === 0) {
+    <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+      <ui-icon name="heroCog6Tooth" size="3rem" />
+      <p class="mt-4 text-lg font-medium text-[var(--text-primary)]">Nenhum módulo registrado</p>
+      <p class="mt-1 text-sm">Módulos são registrados automaticamente ao iniciar o sistema.</p>
+    </div>
+  } @else {
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      @for (mod of modules(); track mod.module_id) {
+        <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-lg font-semibold text-[var(--text-primary)]">{{ moduleLabel(mod.module_id) }}</h3>
+              <p class="text-xs text-[var(--text-muted)]">ID: {{ mod.module_id }}</p>
+            </div>
+            <!-- Toggle Switch -->
+            <button
+              (click)="toggleModule(mod)"
+              [class.bg-[var(--accent)]]="mod.is_active"
+              [class.bg-[var(--border)]]="!mod.is_active"
+              class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer"
+            >
+              <span
+                [class.translate-x-6]="mod.is_active"
+                [class.translate-x-1]="!mod.is_active"
+                class="inline-block h-4 w-4 rounded-full bg-white transition-transform"
+              ></span>
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2 text-xs text-[var(--text-muted)] mb-4">
+            <span>Registrado em {{ mod.registered_at | date:'dd/MM/yyyy' }}</span>
+            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+              [class.bg-green-500/15]="mod.is_active" [class.text-green-400]="mod.is_active"
+              [class.bg-red-500/15]="!mod.is_active" [class.text-red-400]="!mod.is_active"
+            >
+              {{ mod.is_active ? 'Ativo' : 'Inativo' }}
+            </span>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex items-center gap-2 pt-4 border-t border-[var(--border)]">
+            <button
+              (click)="openConfig(mod)"
+              class="flex items-center gap-1.5 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+            >
+              <ui-icon name="heroCog6Tooth" size="0.875rem" />
+              Configurar
+            </button>
+            <button
+              (click)="viewHooks(mod.module_id)"
+              class="flex items-center gap-1.5 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+            >
+              <ui-icon name="heroArrowPath" size="0.875rem" />
+              Hooks
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Hooks panel -->
+    @if (selectedModuleId() && !showConfigModal()) {
+      <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6">
+        <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-4">
+          Hooks: {{ moduleLabel(selectedModuleId()!) }}
+        </h3>
+        @if (hooksLoading()) {
+          <div class="animate-pulse space-y-2">
+            <div class="h-4 w-48 bg-[var(--border-subtle)] rounded"></div>
+            <div class="h-4 w-36 bg-[var(--border-subtle)] rounded"></div>
+          </div>
+        } @else if (hooks().length === 0) {
+          <p class="text-sm text-[var(--text-muted)]">Nenhum hook configurado para este módulo.</p>
+        } @else {
+          <div class="space-y-2">
+            @for (hook of hooks(); track hook.id) {
+              <div class="flex items-center justify-between rounded-xl border border-[var(--border)] p-3">
+                <div>
+                  <span class="text-sm font-medium text-[var(--text-primary)]">{{ hook.event_type }}</span>
+                  <span [class.bg-green-500/15]="hook.is_active" [class.text-green-400]="hook.is_active"
+                    [class.bg-red-500/15]="!hook.is_active" [class.text-red-400]="!hook.is_active"
+                    class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium">
+                    {{ hook.is_active ? 'Ativo' : 'Inativo' }}
+                  </span>
+                </div>
+                @if (hook.policy) {
+                  <span class="text-xs text-[var(--text-muted)] font-mono">{{ hook.policy | json }}</span>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+</div>
+
+<!-- Config Modal -->
+@if (showConfigModal()) {
+  <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60">
+    <div class="w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-2xl">
+      <div class="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
+        <h3 class="text-lg font-semibold text-[var(--text-primary)]">
+          Configurar: {{ moduleLabel(selectedModuleId()!) }}
+        </h3>
+        <button (click)="closeConfigModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer">
+          <ui-icon name="heroXMark" size="1.25rem" />
+        </button>
+      </div>
+      <div class="p-6">
+        <label for="mod-config-json" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Configuração (JSON)</label>
+        <textarea
+          id="mod-config-json"
+          [value]="configJson()"
+          (input)="configJson.set($any($event.target).value)"
+          rows="10"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+        ></textarea>
+      </div>
+      <div class="flex items-center justify-end gap-3 border-t border-[var(--border)] px-6 py-4">
+        <button (click)="closeConfigModal()" class="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer">
+          Cancelar
+        </button>
+        <button (click)="saveConfig()" class="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer">
+          Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+}

@@ -1,0 +1,129 @@
+name: API CI
+
+on:
+  pull_request:
+    paths:
+      - "src/backend-api/**"
+      - ".github/workflows/api-ci.yml"
+
+env:
+  WORKING_DIR: src/backend-api
+  PYTHON_VERSION: "3.12"
+  APP_ENV: dev
+  PRODUCT_NAME: MyProduct
+  SECRET_KEY: ci-test-secret-key
+  DATABASE_URL: postgresql+asyncpg://app:app@localhost:5433/app
+  REDIS_URL: redis://localhost:6380/0
+  S3_ENDPOINT_URL: http://localhost:9000
+  S3_ACCESS_KEY: minio
+  S3_SECRET_KEY: miniominio
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install uv
+        run: pip install uv
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('src/backend-api/pyproject.toml') }}
+      - name: Install dependencies
+        run: uv venv .venv && . .venv/bin/activate && uv pip install ".[dev]"
+      - name: Ruff check
+        run: . .venv/bin/activate && ruff check app/
+      - name: Ruff format check
+        run: . .venv/bin/activate && ruff format --check app/
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install uv
+        run: pip install uv
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('src/backend-api/pyproject.toml') }}
+      - name: Install dependencies
+        run: uv venv .venv && . .venv/bin/activate && uv pip install ".[dev]"
+      - name: Mypy
+        run: . .venv/bin/activate && mypy app/ --strict
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install uv
+        run: pip install uv
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('src/backend-api/pyproject.toml') }}
+      - name: Install dependencies
+        run: uv venv .venv && . .venv/bin/activate && uv pip install ".[dev]"
+      - name: Run migrations
+        run: . .venv/bin/activate && alembic upgrade head
+      - name: Run tests
+        run: . .venv/bin/activate && pytest --cov=app --cov-report=xml --cov-fail-under=70
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: src/backend-api
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

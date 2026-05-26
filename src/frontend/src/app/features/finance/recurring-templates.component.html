@@ -1,0 +1,198 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-[var(--text-primary)]">Modelos Recorrentes</h2>
+      <p class="text-sm text-[var(--text-muted)] mt-1">Gerencie despesas que se repetem automaticamente</p>
+    </div>
+    <button
+      (click)="openCreate()"
+      class="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+    >
+      <ui-icon name="heroPlus" size="1rem" />
+      Novo Modelo
+    </button>
+  </div>
+
+  <!-- List -->
+  @if (isLoading()) {
+    <div class="flex items-center justify-center py-16 text-[var(--text-muted)]">
+      <svg class="animate-spin h-6 w-6 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span class="ml-3 text-sm">Carregando...</span>
+    </div>
+  } @else if (error()) {
+    <div class="flex flex-col items-center justify-center py-16 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] text-[var(--text-muted)]">
+      <ui-icon name="heroExclamationTriangle" size="2.5rem" class="text-red-400" />
+      <p class="mt-3 text-sm text-red-400">{{ error() }}</p>
+      <button
+        (click)="loadTemplates()"
+        class="mt-4 flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+      >
+        Tentar novamente
+      </button>
+    </div>
+  } @else if (templates().length === 0) {
+    <div class="flex flex-col items-center justify-center py-16 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] text-[var(--text-muted)]">
+      <ui-icon name="heroDocumentText" size="2.5rem" />
+      <p class="mt-3 text-sm">Nenhum modelo recorrente criado</p>
+      <button
+        (click)="openCreate()"
+        class="mt-4 flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+      >
+        <ui-icon name="heroPlus" size="1rem" />
+        Novo Modelo
+      </button>
+    </div>
+  } @else {
+    <div class="space-y-3">
+      @for (template of templates(); track template.id) {
+        <div class="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+          <div class="flex-1">
+            <div class="flex items-center gap-3">
+              <h4 class="text-sm font-medium text-[var(--text-primary)]">{{ template.descricao }}</h4>
+              <span
+                [class]="template.ativo ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'"
+                class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+              >
+                {{ template.ativo ? 'Ativo' : 'Inativo' }}
+              </span>
+            </div>
+            <div class="mt-1 flex items-center gap-4 text-xs text-[var(--text-muted)]">
+              <span>{{ frequencyLabel(template.periodicidade) }}</span>
+              <span>Dia {{ template.dia_do_mes }}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">{{ formatCurrency(template.valor) }}</span>
+            <div class="flex items-center gap-1">
+              <button
+                (click)="toggleActive(template)"
+                [class]="template.ativo ? 'bg-green-600' : 'bg-gray-500'"
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition cursor-pointer"
+              >
+                <span
+                  [class]="template.ativo ? 'translate-x-6' : 'translate-x-1'"
+                  class="inline-block h-4 w-4 rounded-full bg-white transition"
+                ></span>
+              </button>
+              <button
+                (click)="openEdit(template)"
+                class="rounded-lg p-1.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+              >
+                <ui-icon name="heroPencilSquare" size="1rem" />
+              </button>
+              <button
+                (click)="deleteTemplate(template)"
+                class="rounded-lg p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition cursor-pointer"
+              >
+                <ui-icon name="heroTrash" size="1rem" />
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<!-- Form Modal -->
+<app-modal [open]="formOpen()" (closed)="formOpen.set(false)" size="md" [title]="editingTemplate() ? 'Editar Modelo' : 'Novo Modelo Recorrente'">
+  <div class="space-y-4">
+    <div>
+      <label for="rec-description" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Descrição</label>
+      <input
+        id="rec-description"
+        type="text"
+        [value]="description()"
+        (input)="description.set($any($event.target).value)"
+        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+    <div>
+      <label for="rec-supplier" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Fornecedor</label>
+      <div class="relative">
+        <input
+          id="rec-supplier"
+          type="text"
+          [value]="supplierSearch()"
+          (input)="searchSuppliers($any($event.target).value)"
+          placeholder="Buscar..."
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+        />
+        @if (supplierResults().length > 0) {
+          <div class="absolute z-10 mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-lg">
+            @for (s of supplierResults(); track s.id) {
+              <button
+                (click)="selectSupplier(s)"
+                class="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--border-subtle)] first:rounded-t-xl last:rounded-b-xl transition cursor-pointer"
+              >
+                {{ s.nome }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </div>
+    <div>
+      <label for="rec-category" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Categoria</label>
+      <app-select
+        [options]="categoryOptions()"
+        [(value)]="categoryId"
+        placeholder="Selecione..."
+      />
+    </div>
+    <div class="grid grid-cols-3 gap-4">
+      <div>
+        <label for="rec-amount" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Valor (R$)</label>
+        <input
+          id="rec-amount"
+          type="number"
+          [value]="amount()"
+          (input)="amount.set(+$any($event.target).value)"
+          min="0"
+          step="0.01"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+        />
+      </div>
+      <div>
+        <label for="rec-frequency" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Frequência</label>
+        <app-select
+          [options]="frequencyOptions"
+          [(value)]="frequency"
+          placeholder="Frequência"
+        />
+      </div>
+      <div>
+        <label for="rec-day" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Dia</label>
+        <input
+          id="rec-day"
+          type="number"
+          [value]="dayOfMonth()"
+          (input)="dayOfMonth.set(+$any($event.target).value)"
+          min="1"
+          max="31"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+        />
+      </div>
+    </div>
+  </div>
+  <div modal-footer class="flex items-center justify-end gap-3 border-t border-[var(--border)] px-6 py-4">
+    <button (click)="closeForm()" class="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer">
+      Cancelar
+    </button>
+    <button
+      (click)="submit()"
+      [disabled]="isSaving()"
+      class="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-40 cursor-pointer"
+    >
+      @if (isSaving()) {
+        Salvando...
+      } @else {
+        {{ editingTemplate() ? 'Salvar' : 'Criar' }}
+      }
+    </button>
+  </div>
+</app-modal>

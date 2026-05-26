@@ -1,0 +1,221 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-[var(--text-primary)]">Contas a Pagar</h2>
+      <p class="text-sm text-[var(--text-muted)] mt-1">Gerencie suas despesas e pagamentos</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <button
+        (click)="openQuickPay()"
+        class="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+      >
+        <ui-icon name="heroCurrencyDollar" size="1rem" />
+        Pagamento Rápido
+      </button>
+      <button
+        (click)="openCreateDrawer()"
+        class="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+      >
+        <ui-icon name="heroPlus" size="1rem" />
+        Novo
+      </button>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="flex flex-col sm:flex-row gap-3">
+    <div class="relative flex-1">
+      <ui-icon
+        name="heroMagnifyingGlass"
+        size="1rem"
+        class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+      />
+      <input
+        type="text"
+        placeholder="Buscar por descrição, fornecedor..."
+        (input)="onSearchInput($any($event.target).value)"
+        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] py-2.5 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+    <app-select
+      [options]="statusOptions"
+      [(value)]="statusFilter"
+      placeholder="Todos os status"
+      (valueChange)="onStatusChange($event)"
+    />
+  </div>
+
+  <!-- Table -->
+  <div class="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)]">
+    @if (isLoading()) {
+      <div class="flex items-center justify-center py-16 text-[var(--text-muted)]">
+        <svg class="animate-spin h-6 w-6 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span class="ml-3 text-sm">Carregando...</span>
+      </div>
+    } @else if (error()) {
+      <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+        <ui-icon name="heroExclamationTriangle" size="2.5rem" class="text-red-400" />
+        <p class="mt-3 text-sm text-red-400">{{ error() }}</p>
+        <button
+          (click)="loadPayables()"
+          class="mt-4 flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    } @else if (payables().length === 0) {
+      <div class="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+        <ui-icon name="heroCurrencyDollar" size="2.5rem" />
+        <p class="mt-3 text-sm">Nenhuma conta a pagar encontrada</p>
+        <button
+          (click)="openCreateDrawer()"
+          class="mt-4 flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+        >
+          <ui-icon name="heroPlus" size="1rem" />
+          Nova Conta
+        </button>
+      </div>
+    } @else {
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-[var(--border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+            <th class="px-4 py-3 font-medium">Descrição</th>
+            <th class="px-4 py-3 font-medium">Vencimento</th>
+            <th class="px-4 py-3 font-medium text-right">Valor</th>
+            <th class="px-4 py-3 font-medium">Status</th>
+            <th class="px-4 py-3 font-medium text-right">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (payable of payables(); track payable.id) {
+            <tr class="border-b border-[var(--border)] last:border-0 hover:bg-[var(--border-subtle)] transition">
+              <td class="px-4 py-3 font-medium text-[var(--text-primary)]">{{ payable.descricao }}</td>
+              <td class="px-4 py-3 text-[var(--text-secondary)]">{{ formatDate(payable.data_vencimento) }}</td>
+              <td class="px-4 py-3 text-right text-[var(--text-primary)] font-medium">{{ formatCurrency(payable.valor) }}</td>
+              <td class="px-4 py-3">
+                <span [class]="statusClass(payable.status)" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
+                  {{ statusLabel(payable.status) }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-right">
+                <div class="flex items-center justify-end gap-1">
+                  @if (payable.status === 'pendente' || payable.status === 'vencido') {
+                    <button
+                      (click)="openPayModal(payable); $event.stopPropagation()"
+                      class="rounded-lg px-2.5 py-1 text-xs font-medium text-green-400 hover:bg-green-500/10 transition cursor-pointer"
+                    >
+                      Pagar
+                    </button>
+                  }
+                  <button
+                    (click)="openEditDrawer(payable); $event.stopPropagation()"
+                    class="rounded-lg p-1.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+                  >
+                    <ui-icon name="heroPencilSquare" size="1rem" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+
+  <!-- Pagination -->
+  @if (totalPages() > 1) {
+    <div class="flex items-center justify-between text-sm text-[var(--text-muted)]">
+      <span>{{ total() }} conta(s) encontrada(s)</span>
+      <div class="flex items-center gap-1">
+        <button
+          (click)="goToPage(page() - 1)"
+          [disabled]="page() === 1"
+          class="rounded-lg px-3 py-1.5 hover:bg-[var(--border-subtle)] transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <ui-icon name="heroChevronLeft" size="1rem" />
+        </button>
+        @for (p of pages(); track p) {
+          <button
+            (click)="goToPage(p)"
+            [class]="p === page() ? 'bg-[var(--accent)] text-white' : 'hover:bg-[var(--border-subtle)]'"
+            class="rounded-lg px-3 py-1.5 transition cursor-pointer"
+          >
+            {{ p }}
+          </button>
+        }
+        <button
+          (click)="goToPage(page() + 1)"
+          [disabled]="page() === totalPages()"
+          class="rounded-lg px-3 py-1.5 hover:bg-[var(--border-subtle)] transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <ui-icon name="heroChevronRight" size="1rem" />
+        </button>
+      </div>
+    </div>
+  }
+</div>
+
+<app-modal [open]="drawerOpen()" (closed)="closeDrawer()" size="md" [title]="editingPayable() ? 'Editar Conta' : 'Nova Conta a Pagar'">
+  <app-payable-form-drawer
+    [payable]="editingPayable()"
+    (saved)="onDrawerSaved()"
+    (closed)="closeDrawer()"
+  />
+</app-modal>
+
+@if (quickPayOpen()) {
+  <app-quick-pay-modal
+    (saved)="onQuickPaySaved()"
+    (closed)="closeQuickPay()"
+  />
+}
+
+<!-- Pay confirmation modal -->
+<app-modal [open]="!!payingPayable()" (closed)="closePayModal()" size="sm" title="Confirmar Pagamento">
+  @if (payingPayable(); as p) {
+    <div class="space-y-4">
+      <div class="rounded-xl bg-[var(--border-subtle)] p-3">
+        <p class="text-sm text-[var(--text-secondary)]">{{ p.descricao }}</p>
+        <p class="mt-1 text-lg font-semibold text-[var(--text-primary)]">{{ formatCurrency(p.valor) }}</p>
+      </div>
+      <div>
+        <label for="pay-date" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Data</label>
+        <input
+          id="pay-date"
+          type="date"
+          [value]="payDate()"
+          (input)="payDate.set($any($event.target).value)"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+        />
+      </div>
+      <div>
+        <label for="pay-method" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Método</label>
+        <app-select
+          [options]="payMethodOptions"
+          [(value)]="payMethod"
+          placeholder="Método"
+        />
+      </div>
+    </div>
+  }
+  <div modal-footer class="flex items-center justify-end gap-3 border-t border-[var(--border)] px-6 py-4">
+    <button (click)="closePayModal()" class="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer">
+      Cancelar
+    </button>
+    <button
+      (click)="confirmPay()"
+      [disabled]="isPaying()"
+      class="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-40 cursor-pointer"
+    >
+      @if (isPaying()) {
+        Pagando...
+      } @else {
+        Confirmar
+      }
+    </button>
+  </div>
+</app-modal>

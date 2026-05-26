@@ -1,0 +1,14 @@
+:host {
+  display: block;
+}
+
+/* Contain Leaflet z-indexes within the map container */
+:host ::ng-deep .leaflet-pane,
+:host ::ng-deep .leaflet-control {
+  z-index: auto !important;
+}
+
+:host ::ng-deep .leaflet-top,
+:host ::ng-deep .leaflet-bottom {
+  z-index: 2 !important;
+}

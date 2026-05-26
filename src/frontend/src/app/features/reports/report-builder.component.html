@@ -1,0 +1,186 @@
+<div class="space-y-5">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <button
+        (click)="goBack()"
+        class="rounded-xl p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+      >
+        <ui-icon name="heroArrowLeft" size="1.25rem" />
+      </button>
+      <h2 class="text-xl font-semibold">Relatório Personalizado</h2>
+    </div>
+    <div class="flex gap-2">
+      <button
+        (click)="openSaveDialog()"
+        [disabled]="selectedDimensions().length === 0"
+        class="flex items-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition disabled:opacity-50 cursor-pointer"
+      >
+        Salvar Como
+      </button>
+      <button
+        (click)="runPreview()"
+        [disabled]="isLoading()"
+        class="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50 cursor-pointer"
+      >
+        @if (isLoading()) {
+          Gerando...
+        } @else {
+          Gerar Relatório
+        }
+      </button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+    <!-- Left: Dimensions -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+      <h3 class="text-sm font-semibold text-[var(--text-primary)] mb-3">Dimensões <span class="text-xs text-[var(--text-muted)] font-normal">(máx 3)</span></h3>
+      <div class="space-y-2">
+        @for (dim of availableDimensions; track dim.key) {
+          <button
+            (click)="toggleDimension(dim.key)"
+            [class.border-[var(--accent)]]="isDimensionSelected(dim.key)"
+            [class.bg-[var(--accent)]/10]="isDimensionSelected(dim.key)"
+            class="w-full text-left rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-primary)] hover:border-[var(--accent)] transition cursor-pointer"
+          >
+            {{ dim.label }}
+            @if (isDimensionSelected(dim.key)) {
+              <span class="float-right text-[var(--accent)]">&#10003;</span>
+            }
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- Middle: Measures + Filters -->
+    <div class="space-y-4">
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <h3 class="text-sm font-semibold text-[var(--text-primary)] mb-3">Medidas</h3>
+        <div class="space-y-2">
+          @for (measure of measures(); track measure.key) {
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                [checked]="measure.selected"
+                (change)="toggleMeasure(measure.key)"
+                class="rounded border-[var(--border)]"
+              />
+              <span class="text-sm text-[var(--text-primary)]">{{ measure.label }}</span>
+            </label>
+          }
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <h3 class="text-sm font-semibold text-[var(--text-primary)] mb-3">Filtros</h3>
+        <div class="space-y-3">
+          <div class="flex flex-col gap-1">
+            <label for="rb-date-from" class="text-xs font-medium text-[var(--text-muted)]">Data Início</label>
+            <input
+              id="rb-date-from"
+              type="date"
+              [ngModel]="dateFrom()"
+              (ngModelChange)="dateFrom.set($event)"
+              class="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)]"
+            />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label for="rb-date-to" class="text-xs font-medium text-[var(--text-muted)]">Data Fim</label>
+            <input
+              id="rb-date-to"
+              type="date"
+              [ngModel]="dateTo()"
+              (ngModelChange)="dateTo.set($event)"
+              class="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)]"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Preview -->
+    <div class="lg:col-span-1">
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 min-h-[300px]">
+        <h3 class="text-sm font-semibold text-[var(--text-primary)] mb-3">Preview</h3>
+        @if (isLoading()) {
+          <div class="flex items-center justify-center py-12 text-[var(--text-muted)]">
+            <div class="animate-spin h-6 w-6 border-2 border-[var(--accent)] border-t-transparent rounded-full"></div>
+          </div>
+        } @else if (rows().length > 0) {
+          <div class="overflow-x-auto text-xs">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-[var(--border)]">
+                  @for (col of columns(); track col.key) {
+                    <th class="text-left py-1.5 px-2 font-medium text-[var(--text-muted)] whitespace-nowrap">{{ col.label }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of rows(); track $index) {
+                  <tr class="border-b border-[var(--border-subtle)]">
+                    @for (col of columns(); track col.key) {
+                      <td class="py-1.5 px-2 text-[var(--text-primary)] whitespace-nowrap">
+                        {{ formatCell(row.values[col.key], col.format) }}
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="flex flex-col items-center justify-center py-12 text-[var(--text-muted)]">
+            <p class="text-sm">Selecione dimensões e medidas, depois clique em "Gerar Relatório"</p>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Save Dialog -->
+<app-modal [open]="showSaveDialog()" (closed)="showSaveDialog.set(false)" size="sm" title="Salvar Relatório">
+  <div class="space-y-3">
+    <div class="flex flex-col gap-1">
+      <label for="rb-save-name" class="text-xs font-medium text-[var(--text-muted)]">Nome <span class="text-[var(--danger)]">*</span></label>
+      <input
+        id="rb-save-name"
+        type="text"
+        [ngModel]="saveName()"
+        (ngModelChange)="saveName.set($event)"
+        placeholder="Nome do relatório"
+        class="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)]"
+      />
+    </div>
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        [checked]="saveShared()"
+        (change)="saveShared.set(!saveShared())"
+        class="rounded border-[var(--border)]"
+      />
+      <span class="text-sm text-[var(--text-primary)]">Compartilhar com a equipe</span>
+    </label>
+  </div>
+  <div modal-footer class="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border)]">
+    <button
+      (click)="closeSaveDialog()"
+      class="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+    >
+      Cancelar
+    </button>
+    <button
+      (click)="saveReport()"
+      [disabled]="isSaving() || !saveName()"
+      class="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50 cursor-pointer"
+    >
+      @if (isSaving()) {
+        Salvando...
+      } @else {
+        Salvar
+      }
+    </button>
+  </div>
+</app-modal>

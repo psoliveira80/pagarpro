@@ -1,0 +1,16 @@
+@media (prefers-reduced-motion: no-preference) {
+  .palette-enter {
+    animation: palette-slide-in 0.15s ease-out;
+  }
+
+  @keyframes palette-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(-10px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}

@@ -1,0 +1,226 @@
+<div class="space-y-6">
+  <!-- Header with period selector -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <h2 class="text-2xl font-semibold">Dashboard</h2>
+    <div class="flex gap-1 rounded-xl bg-[var(--surface-elevated)] p-1 border border-[var(--border)]">
+      <button
+        (click)="setPeriod('month')"
+        [class.bg-[var(--accent)]]="period() === 'month'"
+        [class.text-white]="period() === 'month'"
+        class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+      >
+        Este Mês
+      </button>
+      <button
+        (click)="setPeriod('3months')"
+        [class.bg-[var(--accent)]]="period() === '3months'"
+        [class.text-white]="period() === '3months'"
+        class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+      >
+        3 Meses
+      </button>
+      <button
+        (click)="setPeriod('year')"
+        [class.bg-[var(--accent)]]="period() === 'year'"
+        [class.text-white]="period() === 'year'"
+        class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+      >
+        Este Ano
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  @if (isLoading()) {
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      @for (i of [1,2,3,4,5]; track i) {
+        <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 animate-pulse">
+          <div class="h-4 w-20 bg-[var(--border)] rounded mb-3"></div>
+          <div class="h-8 w-32 bg-[var(--border)] rounded"></div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (!isLoading() && summary()) {
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <!-- Total a Receber -->
+      <button
+        (click)="navigateTo('/system/finance/receivables')"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left hover:border-[var(--accent)] transition cursor-pointer"
+      >
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Total a Receber</p>
+        <p class="mt-1 text-2xl font-bold text-[var(--text-primary)]">{{ formatCurrency(summary()!.total_receivable) }}</p>
+      </button>
+
+      <!-- Vencido -->
+      <button
+        (click)="navigateTo('/system/finance/receivables')"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left hover:border-red-500 transition cursor-pointer"
+      >
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Vencido</p>
+        <p class="mt-1 text-2xl font-bold text-red-400">{{ formatCurrency(summary()!.total_overdue) }}</p>
+        <p class="text-xs text-red-400/70 mt-0.5">{{ summary()!.overdue_percent | number:'1.1-1' }}% da carteira</p>
+      </button>
+
+      <!-- Recebido Mês -->
+      <button
+        (click)="navigateTo('/system/finance/receivables')"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left hover:border-green-500 transition cursor-pointer"
+      >
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Recebido no Mês</p>
+        <p class="mt-1 text-2xl font-bold text-green-400">{{ formatCurrency(summary()!.received_this_month) }}</p>
+      </button>
+
+      <!-- Contratos Ativos -->
+      <button
+        (click)="navigateTo('/system/contracts')"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left hover:border-[var(--accent)] transition cursor-pointer"
+      >
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Contratos Ativos</p>
+        <p class="mt-1 text-2xl font-bold text-[var(--text-primary)]">{{ summary()!.active_contracts }}</p>
+      </button>
+
+      <!-- Valor da Frota -->
+      <button
+        (click)="navigateTo('/system/vehicles')"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left hover:border-[var(--accent)] transition cursor-pointer"
+      >
+        <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Valor da Frota</p>
+        <p class="mt-1 text-2xl font-bold text-[var(--text-primary)]">{{ formatCurrency(summary()!.fleet_value) }}</p>
+      </button>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Receivables Trend (Bar Chart) -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5">
+        <h3 class="text-sm font-semibold text-[var(--text-primary)] mb-4">Recebíveis - Últimos 12 Meses</h3>
+        @if (trend().length > 0) {
+          <div class="flex items-end gap-1 h-48">
+            @for (point of trend(); track point.period) {
+              <div class="flex-1 flex flex-col items-center gap-0.5 group relative">
+                <!-- Due bar -->
+                <div
+                  class="w-full rounded-t bg-blue-500/30 transition-all"
+                  [style.height.%]="barHeight(point.total_due, trendMax())"
+                ></div>
+                <!-- Received bar overlay -->
+                <div
+                  class="w-full rounded-t bg-green-500 absolute bottom-6 transition-all"
+                  [style.height.%]="barHeight(point.total_received, trendMax())"
+                  style="max-height: calc(100% - 1.5rem)"
+                ></div>
+                <!-- Label -->
+                <span class="text-[9px] text-[var(--text-muted)] mt-auto leading-none">
+                  {{ point.period.substring(5) }}
+                </span>
+                <!-- Tooltip -->
+                <div class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block z-10 whitespace-nowrap rounded-lg bg-[var(--surface)] border border-[var(--border)] px-2 py-1 text-xs shadow-lg">
+                  <div>Devido: {{ formatCurrency(point.total_due) }}</div>
+                  <div>Recebido: {{ formatCurrency(point.total_received) }}</div>
+                </div>
+              </div>
+            }
+          </div>
+          <div class="flex items-center gap-4 mt-3 text-xs text-[var(--text-muted)]">
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-blue-500/30"></span> Devido</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-green-500"></span> Recebido</span>
+          </div>
+        } @else {
+          <div class="h-48 flex items-center justify-center text-[var(--text-muted)] text-sm">
+            Sem dados para o período
+          </div>
+        }
+      </div>
+
+      <!-- Overdue Aging (Bar Chart) -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5">
+        <h3 class="text-sm font-semibold text-[var(--text-primary)] mb-4">Aging de Inadimplência</h3>
+        @if (aging().length > 0) {
+          <div class="space-y-3">
+            @for (bucket of aging(); track bucket.bucket) {
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-[var(--text-secondary)]">{{ bucket.bucket }}</span>
+                  <span class="font-medium text-[var(--text-primary)]">{{ formatCurrency(bucket.amount) }} ({{ bucket.count }})</span>
+                </div>
+                <div class="h-6 w-full rounded-lg bg-[var(--border-subtle)] overflow-hidden">
+                  <div
+                    class="h-full rounded-lg transition-all"
+                    [class.bg-yellow-500]="bucket.bucket === '1-15 dias'"
+                    [class.bg-orange-500]="bucket.bucket === '16-30 dias'"
+                    [class.bg-red-500]="bucket.bucket === '31-60 dias'"
+                    [class.bg-red-700]="bucket.bucket === '60+ dias'"
+                    [style.width.%]="barHeight(bucket.amount, agingMax())"
+                  ></div>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="h-48 flex items-center justify-center text-[var(--text-muted)] text-sm">
+            Nenhum título vencido
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Top Defaulters Table -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-semibold text-[var(--text-primary)]">Top 10 Inadimplentes</h3>
+        <button
+          (click)="navigateTo('/system/reports/customers')"
+          class="text-xs text-[var(--accent)] hover:underline"
+        >
+          Ver relatório completo
+        </button>
+      </div>
+      @if (defaulters().length > 0) {
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-[var(--border)]">
+                <th class="text-left py-2 pr-4 text-xs font-medium text-[var(--text-muted)] uppercase">Cliente</th>
+                <th class="text-right py-2 px-4 text-xs font-medium text-[var(--text-muted)] uppercase">Valor Vencido</th>
+                <th class="text-right py-2 px-4 text-xs font-medium text-[var(--text-muted)] uppercase">Qtd</th>
+                <th class="text-right py-2 pl-4 text-xs font-medium text-[var(--text-muted)] uppercase">Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (d of defaulters(); track d.customer_id) {
+                <tr
+                  class="border-b border-[var(--border-subtle)] hover:bg-[var(--border-subtle)] cursor-pointer transition"
+                  (click)="navigateToCustomer(d.customer_id)"
+                >
+                  <td class="py-2.5 pr-4 font-medium text-[var(--text-primary)]">{{ d.customer_name }}</td>
+                  <td class="py-2.5 px-4 text-right text-red-400 font-medium">{{ formatCurrency(d.overdue_amount) }}</td>
+                  <td class="py-2.5 px-4 text-right text-[var(--text-secondary)]">{{ d.overdue_count }}</td>
+                  <td class="py-2.5 pl-4 text-right">
+                    <span
+                      class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold"
+                      [class.bg-green-500/20]="d.score >= 80"
+                      [class.text-green-400]="d.score >= 80"
+                      [class.bg-yellow-500/20]="d.score >= 50 && d.score < 80"
+                      [class.text-yellow-400]="d.score >= 50 && d.score < 80"
+                      [class.bg-red-500/20]="d.score < 50"
+                      [class.text-red-400]="d.score < 50"
+                    >
+                      {{ d.score }}
+                    </span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="py-8 text-center text-[var(--text-muted)] text-sm">
+          Nenhum inadimplente encontrado
+        </div>
+      }
+    </div>
+  }
+</div>

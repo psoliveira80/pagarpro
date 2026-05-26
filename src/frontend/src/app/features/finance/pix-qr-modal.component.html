@@ -1,0 +1,52 @@
+<app-modal [open]="open()" (closed)="closed.emit()" size="sm" title="Pix QR Code">
+  <!-- Body -->
+  <div class="flex flex-col items-center space-y-4">
+    @if (isLoading()) {
+      <div class="flex items-center justify-center py-12 text-[var(--text-muted)]">
+        <div class="animate-spin h-8 w-8 border-2 border-[var(--accent)] border-t-transparent rounded-full"></div>
+      </div>
+    } @else if (pixData(); as data) {
+      <!-- QR Image -->
+      <div class="rounded-xl border border-[var(--border)] bg-white p-4">
+        <img
+          [src]="'data:image/png;base64,' + data.qr_imagem_base64"
+          alt="QR Code Pix"
+          class="h-48 w-48"
+        />
+      </div>
+
+      <!-- BR Code -->
+      <div class="w-full">
+        <label for="pix-brcode" class="block text-xs font-medium text-[var(--text-muted)] mb-1">Código Pix (copia e cola)</label>
+        <div class="flex items-center gap-2">
+          <input
+            id="pix-brcode"
+            type="text"
+            [value]="data.brcode"
+            readonly
+            class="flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-secondary)] truncate"
+          />
+          <button
+            (click)="copyBrCode()"
+            class="flex items-center gap-1 rounded-xl bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+          >
+            @if (copied()) {
+              Copiado!
+            } @else {
+              Copiar
+            }
+          </button>
+        </div>
+      </div>
+
+      <p class="text-xs text-[var(--text-muted)]">
+        Pix dinâmico — pague o valor exibido
+      </p>
+    } @else {
+      <div class="flex flex-col items-center py-8 text-[var(--text-muted)]">
+        <ui-icon name="heroExclamationTriangle" size="2rem" />
+        <p class="mt-2 text-sm">Erro ao gerar QR Code</p>
+      </div>
+    }
+  </div>
+</app-modal>

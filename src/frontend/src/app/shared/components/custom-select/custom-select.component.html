@@ -1,0 +1,115 @@
+<!-- Trigger button -->
+<button
+  #triggerBtn
+  type="button"
+  cdkOverlayOrigin
+  #trigger="cdkOverlayOrigin"
+  (click)="toggle()"
+  (keydown)="isOpen() ? onKeydown($event) : null"
+  [disabled]="disabled()"
+  class="flex w-full items-center justify-between rounded-xl border bg-[var(--surface)] px-4 py-2.5 text-sm transition cursor-pointer
+         border-[var(--border)] text-[var(--text-primary)]
+         hover:border-[var(--accent)] focus:border-[var(--accent)] focus:outline-none
+         disabled:opacity-50 disabled:cursor-not-allowed"
+>
+  <span [class]="selectedOption() ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'">
+    {{ displayLabel() }}
+  </span>
+  <ui-icon
+    name="heroChevronDown"
+    size="1rem"
+    class="text-[var(--text-muted)] transition-transform duration-200"
+    [class.rotate-180]="isOpen()"
+  />
+</button>
+
+<!-- Dropdown overlay -->
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="trigger"
+  [cdkConnectedOverlayOpen]="isOpen()"
+  [cdkConnectedOverlayPositions]="dropdownPositions"
+  [cdkConnectedOverlayWidth]="triggerWidth()"
+  [cdkConnectedOverlayHasBackdrop]="true"
+  cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+  (backdropClick)="onBackdropClick()"
+  (keydown)="onKeydown($event)"
+>
+  <div
+    [style.width.px]="triggerWidth()"
+    class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-lg overflow-hidden animate-dropdown"
+  >
+    <!-- Search (only when > 6 options) -->
+    @if (showSearch()) {
+      <div class="p-2 border-b border-[var(--border)]">
+        <input
+          #searchInput
+          type="text"
+          placeholder="Buscar..."
+          [value]="searchQuery()"
+          (input)="onSearchInput($event)"
+          (keydown)="onKeydown($event)"
+          class="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
+      </div>
+    }
+
+    <!-- Options list -->
+    <div class="max-h-56 overflow-auto py-1">
+      @if (filteredOptions().length === 0) {
+        <div class="px-4 py-3 text-sm text-[var(--text-muted)] text-center">
+          Nenhuma opção encontrada
+        </div>
+      } @else if (hasGroups()) {
+        <!-- Grouped options -->
+        @for (entry of groups() | keyvalue; track entry.key) {
+          @if (entry.key) {
+            <div class="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              {{ entry.key }}
+            </div>
+          }
+          @for (opt of entry.value; track opt.value) {
+            <button
+              type="button"
+              (click)="select(opt)"
+              [disabled]="opt.disabled"
+              class="flex w-full items-center gap-2 px-4 py-2 text-sm text-left transition cursor-pointer
+                     disabled:opacity-40 disabled:cursor-not-allowed"
+              [class]="isSelected(opt)
+                ? 'bg-[var(--accent)]/10 text-[var(--accent)] font-medium'
+                : isHighlighted(opt)
+                  ? 'bg-[var(--border-subtle)] text-[var(--text-primary)]'
+                  : 'text-[var(--text-primary)] hover:bg-[var(--border-subtle)]'"
+            >
+              {{ opt.label }}
+              @if (isSelected(opt)) {
+                <span class="ml-auto text-[var(--accent)]">✓</span>
+              }
+            </button>
+          }
+        }
+      } @else {
+        <!-- Flat options -->
+        @for (opt of filteredOptions(); track opt.value) {
+          <button
+            type="button"
+            (click)="select(opt)"
+            [disabled]="opt.disabled"
+            class="flex w-full items-center gap-2 px-4 py-2 text-sm text-left transition cursor-pointer
+                   disabled:opacity-40 disabled:cursor-not-allowed"
+            [class]="isSelected(opt)
+              ? 'bg-[var(--accent)]/10 text-[var(--accent)] font-medium'
+              : isHighlighted(opt)
+                ? 'bg-[var(--border-subtle)] text-[var(--text-primary)]'
+                : 'text-[var(--text-primary)] hover:bg-[var(--border-subtle)]'"
+          >
+            {{ opt.label }}
+            @if (isSelected(opt)) {
+              <span class="ml-auto text-[var(--accent)]">✓</span>
+            }
+          </button>
+        }
+      }
+    </div>
+  </div>
+</ng-template>

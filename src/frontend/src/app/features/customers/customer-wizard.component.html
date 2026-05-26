@@ -1,0 +1,332 @@
+<div class="space-y-6">
+  <app-toast />
+
+  <!-- Header -->
+  <div class="flex items-center gap-4">
+    <button
+      (click)="cancel()"
+      class="flex items-center justify-center rounded-xl p-2 text-[var(--text-muted)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] transition cursor-pointer"
+    >
+      <ui-icon name="heroArrowLeft" size="1.25rem" />
+    </button>
+    <div>
+      <h2 class="text-2xl font-bold text-[var(--text-primary)]">{{ isEditing() ? 'Editar Cliente' : 'Novo Cliente' }}</h2>
+      <p class="text-sm text-[var(--text-muted)] mt-1">Cadastro em {{ totalSteps }} etapas</p>
+    </div>
+  </div>
+
+  <!-- Stepper -->
+  <div class="flex items-center gap-1 sm:gap-2 overflow-x-auto">
+    @for (step of steps; track step.number) {
+      <button
+        (click)="goToStep(step.number)"
+        class="flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-4 py-2 text-sm font-medium transition cursor-pointer shrink-0"
+        [class]="step.number === currentStep()
+          ? 'bg-[var(--accent)] text-white'
+          : step.number < currentStep()
+            ? 'bg-green-500/20 text-green-400'
+            : 'bg-[var(--surface-elevated)] text-[var(--text-muted)]'"
+      >
+        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
+          [class]="step.number < currentStep() ? 'bg-green-500 text-white' : 'bg-[var(--border)] text-[var(--text-secondary)]'"
+        >
+          @if (step.number < currentStep()) { ✓ } @else { {{ step.number }} }
+        </span>
+        <span class="hidden sm:inline">{{ step.label }}</span>
+      </button>
+      @if (step.number < totalSteps) {
+        <div class="h-px flex-1 min-w-4 bg-[var(--border)]"></div>
+      }
+    }
+  </div>
+
+  <!-- Step Content -->
+  <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 sm:p-6">
+
+    <!-- Step 1: Dados Pessoais -->
+    @if (currentStep() === 1) {
+      <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-4">Dados Pessoais</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="md:col-span-2">
+          <label for="cw-fullname" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Nome Completo <span class="text-[var(--danger)]">*</span></label>
+          <input
+            id="cw-fullname"
+            [formControl]="nome_completo"
+            type="text"
+            placeholder="Nome completo do cliente"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+          @if (nome_completo.touched && nome_completo.errors) {
+            <p class="text-xs text-[var(--danger)] mt-1">Nome é obrigatório (mínimo 3 caracteres)</p>
+          }
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label for="cw-cpfcnpj" class="text-sm font-medium text-[var(--text-secondary)]">{{ document_type() === 'cpf' ? 'CPF' : 'CNPJ' }} <span class="text-[var(--danger)]">*</span></label>
+            <button (click)="toggleDocType()" class="text-xs text-[var(--accent)] hover:underline cursor-pointer">
+              Usar {{ document_type() === 'cpf' ? 'CNPJ' : 'CPF' }}
+            </button>
+          </div>
+          <input
+            id="cw-cpfcnpj"
+            [formControl]="cpf_cnpj"
+            type="text"
+            [placeholder]="document_type() === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'"
+            (input)="onDocumentInput($event)"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+          @if (cpf_cnpj.touched && cpf_cnpj.errors) {
+            <p class="text-xs text-[var(--danger)] mt-1">Documento é obrigatório</p>
+          }
+        </div>
+        <div>
+          <label for="cw-birthdate" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Data de Nascimento</label>
+          <input
+            id="cw-birthdate"
+            [formControl]="data_nascimento"
+            type="date"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+        <div>
+          <label for="cw-status" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Status</label>
+          <app-select
+            [options]="cwStatusOptions"
+            [value]="status.value"
+            (valueChange)="status.setValue($any($event))"
+            placeholder="Selecione..."
+          />
+        </div>
+      </div>
+    }
+
+    <!-- Step 2: Contato -->
+    @if (currentStep() === 2) {
+      <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-4">Informações de Contato</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="cw-email" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">E-mail</label>
+          <input
+            id="cw-email"
+            [formControl]="email"
+            type="email"
+            placeholder="email@exemplo.com"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+          @if (email.touched && email.errors) {
+            <p class="text-xs text-[var(--danger)] mt-1">E-mail inválido</p>
+          }
+        </div>
+        <div>
+          <label for="cw-phone" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Telefone</label>
+          <input
+            id="cw-phone"
+            [formControl]="phone"
+            type="text"
+            placeholder="(00) 00000-0000"
+            (input)="onPhoneInput($event)"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+        <div class="md:col-span-2">
+          <label for="cw-notes" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Observações</label>
+          <textarea
+            id="cw-notes"
+            [formControl]="notes"
+            rows="3"
+            placeholder="Observações sobre o cliente..."
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition resize-none"
+          ></textarea>
+        </div>
+      </div>
+    }
+
+    <!-- Step 3: Endereço -->
+    @if (currentStep() === 3) {
+      <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-4">Endereço</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="cw-zip" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">CEP</label>
+          <input
+            id="cw-zip"
+            [formControl]="address_zip"
+            type="text"
+            placeholder="00000-000"
+            (input)="onZipInput($event)"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+        <div class="md:col-span-2">
+          <label for="cw-street" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Rua</label>
+          <input
+            id="cw-street"
+            [formControl]="address_street"
+            type="text"
+            placeholder="Rua, Avenida..."
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+        <div>
+          <label for="cw-number" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Número</label>
+          <input
+            id="cw-number"
+            [formControl]="address_number"
+            type="text"
+            placeholder="Nº"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+        <div>
+          <label for="cw-complement" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Complemento</label>
+          <input
+            id="cw-complement"
+            [formControl]="address_complement"
+            type="text"
+            placeholder="Apto, Sala..."
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+        <div>
+          <label for="cw-neighborhood" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Bairro</label>
+          <input
+            id="cw-neighborhood"
+            [formControl]="address_neighborhood"
+            type="text"
+            placeholder="Bairro"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+        <div>
+          <label for="cw-city" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Cidade</label>
+          <input
+            id="cw-city"
+            [formControl]="address_city"
+            type="text"
+            placeholder="Cidade"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+          />
+        </div>
+        <div>
+          <label for="cw-state" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Estado</label>
+          <app-select
+            [options]="stateOptions"
+            [value]="address_state.value"
+            (valueChange)="address_state.setValue($event)"
+            placeholder="Selecione"
+          />
+        </div>
+      </div>
+    }
+
+    <!-- Step 4: Revisão -->
+    @if (currentStep() === 4) {
+      <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-4">Revisão do Cadastro</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Dados Pessoais -->
+        <div class="rounded-xl border border-[var(--border)] p-4">
+          <h4 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Dados Pessoais</h4>
+          <dl class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <dt class="text-[var(--text-muted)]">Nome</dt>
+              <dd class="font-medium text-[var(--text-primary)]">{{ nome_completo.value }}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-[var(--text-muted)]">{{ document_type() === 'cpf' ? 'CPF' : 'CNPJ' }}</dt>
+              <dd class="font-medium text-[var(--text-primary)]">{{ cpfCnpjFormatted() }}</dd>
+            </div>
+            @if (data_nascimento.value) {
+              <div class="flex justify-between">
+                <dt class="text-[var(--text-muted)]">Nascimento</dt>
+                <dd class="font-medium text-[var(--text-primary)]">{{ data_nascimento.value }}</dd>
+              </div>
+            }
+            <div class="flex justify-between">
+              <dt class="text-[var(--text-muted)]">Status</dt>
+              <dd class="font-medium text-[var(--text-primary)]">{{ status.value === 'ativo' ? 'Ativo' : 'Inativo' }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <!-- Contato -->
+        <div class="rounded-xl border border-[var(--border)] p-4">
+          <h4 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Contato</h4>
+          <dl class="space-y-2 text-sm">
+            @if (email.value) {
+              <div class="flex justify-between">
+                <dt class="text-[var(--text-muted)]">E-mail</dt>
+                <dd class="font-medium text-[var(--text-primary)]">{{ email.value }}</dd>
+              </div>
+            }
+            @if (phone.value) {
+              <div class="flex justify-between">
+                <dt class="text-[var(--text-muted)]">Telefone</dt>
+                <dd class="font-medium text-[var(--text-primary)]">{{ phone.value }}</dd>
+              </div>
+            }
+            @if (notes.value) {
+              <div>
+                <dt class="text-[var(--text-muted)]">Observações</dt>
+                <dd class="font-medium text-[var(--text-primary)] mt-1">{{ notes.value }}</dd>
+              </div>
+            }
+            @if (!email.value && !phone.value && !notes.value) {
+              <p class="text-[var(--text-muted)] italic">Nenhum contato informado</p>
+            }
+          </dl>
+        </div>
+
+        <!-- Endereço -->
+        <div class="md:col-span-2 rounded-xl border border-[var(--border)] p-4">
+          <h4 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Endereço</h4>
+          @if (address_street.value || address_city.value) {
+            <p class="text-sm text-[var(--text-primary)]">
+              {{ address_street.value }}{{ address_number.value ? ', ' + address_number.value : '' }}{{ address_complement.value ? ' - ' + address_complement.value : '' }}
+            </p>
+            <p class="text-sm text-[var(--text-secondary)]">
+              {{ address_neighborhood.value }}{{ address_city.value ? ' — ' + address_city.value : '' }}{{ address_state.value ? '/' + address_state.value : '' }}{{ address_zip.value ? ' • CEP ' + address_zip.value : '' }}
+            </p>
+          } @else {
+            <p class="text-[var(--text-muted)] italic text-sm">Nenhum endereço informado</p>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Navigation -->
+  <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
+    <button
+      (click)="currentStep() === 1 ? cancel() : prevStep()"
+      class="flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-6 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+    >
+      <ui-icon name="heroChevronLeft" size="1rem" />
+      {{ currentStep() === 1 ? 'Cancelar' : 'Voltar' }}
+    </button>
+
+    @if (currentStep() < totalSteps) {
+      <button
+        (click)="nextStep()"
+        class="flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+      >
+        Próximo
+        <ui-icon name="heroChevronRight" size="1rem" />
+      </button>
+    } @else {
+      <button
+        (click)="onSubmit()"
+        [disabled]="isSaving()"
+        class="flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+      >
+        @if (isSaving()) {
+          <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Salvando...
+        } @else {
+          {{ isEditing() ? 'Atualizar Cliente' : 'Cadastrar Cliente' }}
+        }
+      </button>
+    }
+  </div>
+</div>

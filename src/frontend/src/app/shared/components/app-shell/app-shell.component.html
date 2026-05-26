@@ -1,0 +1,396 @@
+<div class="flex h-screen bg-[var(--surface)] text-[var(--text-primary)]">
+
+  <!-- Mobile backdrop -->
+  @if (mobileSidebarOpen()) {
+    <div
+      class="fixed inset-0 z-30 bg-black/50 md:hidden"
+      role="button"
+      tabindex="0"
+      aria-label="Fechar menu"
+      (click)="closeMobileSidebar()"
+      (keydown.enter)="closeMobileSidebar()"
+    ></div>
+  }
+
+  <!-- Sidebar -->
+  <aside
+    [class.w-16]="sidebarCollapsed() && !mobileSidebarOpen()"
+    [class.w-64]="!sidebarCollapsed() || mobileSidebarOpen()"
+    [class.-translate-x-full]="!mobileSidebarOpen()"
+    [class.translate-x-0]="mobileSidebarOpen()"
+    class="fixed inset-y-0 left-0 z-40 flex flex-col border-r border-[var(--border)] bg-[var(--surface-elevated)] transition-all duration-200 -translate-x-full md:translate-x-0 md:static md:z-auto"
+  >
+    <!-- Logo / Brand + Collapse toggle -->
+    <div class="flex h-16 items-center justify-between border-b border-[var(--border)] px-4">
+      @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+        <span class="text-lg font-semibold tracking-tight truncate">{{ productName }}</span>
+      }
+      <!-- Collapse toggle (desktop only) -->
+      <button
+        (click)="toggleSidebar()"
+        class="hidden md:flex items-center justify-center rounded-lg p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+        title="Recolher menu"
+      >
+        <ui-icon [name]="sidebarCollapsed() ? 'heroChevronRight' : 'heroChevronLeft'" size="1rem" />
+      </button>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 space-y-1 overflow-y-auto p-2">
+      <a
+        routerLink="/system/dashboard"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroHome" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Dashboard</span>
+        }
+      </a>
+      <a
+        routerLink="/system/customers"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroUsers" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Clientes</span>
+        }
+      </a>
+      <a
+        routerLink="/system/vehicles"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroTruck" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Veículos</span>
+        }
+      </a>
+      <a
+        routerLink="/system/map"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroMap" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Mapa da Frota</span>
+        }
+      </a>
+      <a
+        routerLink="/system/contracts"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroDocumentText" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Contratos</span>
+        }
+      </a>
+      <a
+        routerLink="/system/inbox"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroChatBubbleLeftRight" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Inbox</span>
+        }
+      </a>
+
+      @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+        <div class="pt-4 pb-1 px-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Financeiro</span>
+        </div>
+      }
+      <a
+        routerLink="/system/finance/receivables"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroCurrencyDollar" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Recebíveis</span>
+        }
+      </a>
+      <a
+        routerLink="/system/finance/payables"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroBanknotes" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Contas a Pagar</span>
+        }
+      </a>
+      <a
+        routerLink="/system/finance/dre"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroChartBarSquare" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>DRE</span>
+        }
+      </a>
+      <a
+        routerLink="/system/reports"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroDocumentText" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Relatórios</span>
+        }
+      </a>
+
+      @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+        <div class="pt-4 pb-1 px-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Conciliação</span>
+        </div>
+      }
+      <a
+        routerLink="/system/finance/reconciliation"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroArrowPath" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Conciliação</span>
+        }
+      </a>
+      <a
+        routerLink="/system/finance/bank-accounts"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroBanknotes" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Contas Bancárias</span>
+        }
+      </a>
+      <a
+        routerLink="/system/finance/divergences"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroExclamationTriangle" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Divergências</span>
+        }
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Settings sidebar (sidebar2) — slides over main sidebar, no backdrop blocking content -->
+  @if (settingsSidebarOpen()) {
+    <aside
+      class="fixed inset-y-0 left-0 z-[1200] w-56 md:w-64 flex flex-col bg-[var(--surface-elevated)] border-r border-[var(--border)] shadow-xl settings-sidebar-enter"
+    >
+      <!-- Settings header -->
+      <div class="flex h-16 items-center justify-between border-b border-[var(--border)] px-4">
+        <span class="text-lg font-semibold tracking-tight">Configurações</span>
+        <button
+          (click)="closeSettingsSidebar()"
+          class="flex items-center justify-center rounded-lg p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+        >
+          <ui-icon name="heroXMark" size="1.25rem" />
+        </button>
+      </div>
+
+      <!-- Settings navigation -->
+      <nav class="flex-1 overflow-y-auto p-3 space-y-4">
+        @for (group of settingsMenuItems; track group.section) {
+          <div>
+            <div class="px-3 pb-1">
+              <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">{{ group.section }}</span>
+            </div>
+            <div class="space-y-0.5">
+              @for (item of group.items; track item.route) {
+                <a
+                  [routerLink]="item.route"
+                  [class.bg-[var(--border-subtle)]]="isSettingsRouteActive(item.route)"
+                  [class.text-[var(--accent)]]="isSettingsRouteActive(item.route)"
+                  class="flex items-center rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+                >
+                  {{ item.label }}
+                </a>
+              }
+            </div>
+          </div>
+        }
+      </nav>
+    </aside>
+  }
+
+  <!-- Profile sidebar (same pattern as settings sidebar2) -->
+  @if (profileSidebarOpen()) {
+    <aside
+      class="fixed inset-y-0 left-0 z-[1200] w-56 md:w-64 flex flex-col bg-[var(--surface-elevated)] border-r border-[var(--border)] shadow-xl settings-sidebar-enter"
+    >
+      <div class="flex h-16 items-center justify-between border-b border-[var(--border)] px-4">
+        <span class="text-lg font-semibold tracking-tight">Minha Conta</span>
+        <button
+          (click)="closeProfileSidebar()"
+          class="flex items-center justify-center rounded-lg p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+        >
+          <ui-icon name="heroXMark" size="1.25rem" />
+        </button>
+      </div>
+      <nav class="flex-1 overflow-y-auto p-3 space-y-4">
+        @for (group of profileMenuItems; track group.section) {
+          <div>
+            <div class="px-3 pb-1">
+              <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">{{ group.section }}</span>
+            </div>
+            <div class="space-y-0.5">
+              @for (item of group.items; track item.route) {
+                <a
+                  [routerLink]="item.route"
+                  [class.bg-[var(--border-subtle)]]="isProfileRouteActive(item.route)"
+                  [class.text-[var(--accent)]]="isProfileRouteActive(item.route)"
+                  class="flex items-center rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+                >
+                  {{ item.label }}
+                </a>
+              }
+            </div>
+          </div>
+        }
+      </nav>
+    </aside>
+  }
+
+  <!-- Main content -->
+  <div class="flex flex-1 flex-col overflow-hidden">
+    <!-- Header -->
+    <header class="relative z-[1000] flex h-16 items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-4 md:px-6">
+      <!-- Left side: hamburger (mobile) + title -->
+      <div class="flex items-center gap-3">
+        <!-- Hamburger menu (mobile only) -->
+        <button
+          (click)="toggleMobileSidebar()"
+          class="flex items-center justify-center rounded-xl p-2 text-[var(--text-muted)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] transition md:hidden"
+          aria-label="Abrir menu"
+        >
+          <ui-icon name="heroBars3" />
+        </button>
+        <h1 class="text-lg font-semibold">{{ productName }}</h1>
+      </div>
+
+      <!-- Right side: search + theme + settings + user -->
+      <div class="flex items-center gap-2">
+        <!-- Search (command palette trigger) -->
+        <button
+          (click)="paletteService.open()"
+          class="hidden sm:flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-muted)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] transition cursor-pointer"
+        >
+          <ui-icon name="heroMagnifyingGlass" size="0.875rem" />
+          <span>Buscar...</span>
+          <kbd class="ml-2 rounded border border-[var(--border)] px-1 py-0.5 text-xs">Ctrl+K</kbd>
+        </button>
+        <button
+          (click)="paletteService.open()"
+          class="flex sm:hidden items-center justify-center rounded-xl p-2 text-[var(--text-muted)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] transition cursor-pointer"
+          aria-label="Buscar"
+        >
+          <ui-icon name="heroMagnifyingGlass" />
+        </button>
+
+        <!-- Theme toggle -->
+        <button
+          (click)="toggleTheme()"
+          class="flex items-center justify-center rounded-xl p-2 text-[var(--text-muted)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] transition"
+          [attr.aria-label]="'Tema atual: ' + currentTheme()"
+        >
+          <ui-icon [name]="themeIcon()" />
+        </button>
+
+        <!-- Admin settings gear -->
+        @if (isAdmin()) {
+          <button
+            (click)="toggleSettingsSidebar()"
+            class="flex items-center justify-center rounded-xl p-2 text-[var(--text-muted)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] transition"
+            aria-label="Configurações"
+          >
+            <ui-icon name="heroCog6Tooth" />
+          </button>
+        }
+
+        <!-- User profile -->
+        <div class="relative" data-user-menu>
+          <button
+            (click)="toggleUserMenu()"
+            class="flex items-center justify-center rounded-xl p-2 text-[var(--text-muted)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] transition"
+            aria-label="Menu do usuário"
+          >
+            @if (currentUser()) {
+              <span class="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--accent)] text-white text-xs font-semibold">
+                {{ userInitials() }}
+              </span>
+            } @else {
+              <ui-icon name="heroUserCircle" size="1.5rem" />
+            }
+          </button>
+
+          <!-- User dropdown -->
+          @if (userMenuOpen()) {
+            <div class="absolute right-0 top-full mt-2 w-64 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-lg py-1 z-50">
+              <!-- User info -->
+              @if (currentUser()) {
+                <div class="px-4 py-3 border-b border-[var(--border)]">
+                  <p class="text-sm font-medium text-[var(--text-primary)] truncate">{{ currentUser()!.nome_completo }}</p>
+                  <p class="text-xs text-[var(--text-muted)] truncate">{{ currentUser()!.email }}</p>
+                </div>
+              }
+
+              <!-- Menu items -->
+              <button
+                (click)="openProfileSidebar()"
+                class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+              >
+                Meu Perfil e Preferências
+              </button>
+
+              <!-- Divider -->
+              <div class="border-t border-[var(--border)] my-1"></div>
+
+              <!-- Logout -->
+              <button
+                (click)="logout(); userMenuOpen.set(false)"
+                class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-[var(--border-subtle)] transition cursor-pointer"
+              >
+                <ui-icon name="heroArrowRightOnRectangle" size="1rem" />
+                Sair
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    </header>
+
+    <!-- Content area -->
+    <main class="flex-1 overflow-auto p-4 md:p-6">
+      <router-outlet />
+    </main>
+  </div>
+</div>
+
+<!-- AI Chat (always present) -->
+<app-ai-chat />
+
+<!-- Command Palette (Ctrl+K / Cmd+K) -->
+<app-command-palette />

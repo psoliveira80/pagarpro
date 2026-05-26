@@ -1,0 +1,165 @@
+<app-toast />
+<div class="space-y-6">
+  <div>
+    <h2 class="text-2xl font-bold text-[var(--text-primary)]">Integrações</h2>
+    <p class="text-sm text-[var(--text-muted)] mt-1">Conecte provedores externos ao sistema</p>
+  </div>
+
+  <!-- Category Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    @for (cat of categories; track cat.id) {
+      <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5 hover:shadow-lg transition-shadow">
+        <!-- Header -->
+        <div class="flex items-center gap-3 mb-3">
+          <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--accent)]/10">
+            <ui-icon [name]="cat.icon" size="1.25rem" class="text-[var(--accent)]" />
+          </div>
+          <div class="flex-1">
+            <h3 class="text-sm font-semibold text-[var(--text-primary)]">{{ cat.label }}</h3>
+            <p class="text-xs text-[var(--text-muted)]">{{ cat.providers.length }} provedor(es)</p>
+          </div>
+        </div>
+
+        <!-- Connected status -->
+        @if (connectedProvider(cat.id); as intg) {
+          <div class="rounded-xl bg-green-500/5 border border-green-500/20 px-3 py-2.5 mb-3">
+            <div class="flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-green-400"></span>
+              <span class="text-xs font-medium text-green-400">Conectado</span>
+            </div>
+            <p class="text-sm font-medium text-[var(--text-primary)] mt-1">{{ intg.provider }}</p>
+            @if (intg.last_health_check) {
+              <p class="text-xs text-[var(--text-muted)] mt-0.5">Verificado: {{ intg.last_health_check | date:'dd/MM HH:mm' }}</p>
+            }
+          </div>
+          <div class="flex gap-2">
+            <button
+              (click)="testConnection(intg.id)"
+              [disabled]="testingId() === intg.id"
+              class="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer disabled:opacity-50"
+            >
+              @if (testingId() === intg.id) {
+                <svg class="animate-spin h-3 w-3 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Testando...
+              } @else {
+                Testar
+              }
+            </button>
+            <button
+              (click)="openEditModal(intg)"
+              class="flex items-center justify-center rounded-xl border border-[var(--border)] px-3 py-2 text-xs text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+            >
+              <ui-icon name="heroPencilSquare" size="0.875rem" />
+            </button>
+            <button
+              (click)="deleteIntegration(intg.id)"
+              class="flex items-center justify-center rounded-xl border border-red-500/30 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 transition cursor-pointer"
+            >
+              <ui-icon name="heroTrash" size="0.875rem" />
+            </button>
+          </div>
+        } @else {
+          <div class="rounded-xl bg-[var(--surface)] border border-[var(--border)] px-3 py-2.5 mb-3">
+            <div class="flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-[var(--text-muted)]"></span>
+              <span class="text-xs text-[var(--text-muted)]">Não configurado</span>
+            </div>
+          </div>
+          <button
+            (click)="openAddModal(cat.id)"
+            class="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-[var(--accent)]/40 px-3 py-2 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent)]/5 transition cursor-pointer"
+          >
+            <ui-icon name="heroPlus" size="0.75rem" />
+            Configurar
+          </button>
+        }
+      </div>
+    }
+  </div>
+</div>
+
+<!-- Modal -->
+<app-modal [open]="showModal()" (closed)="closeModal()" size="md" [title]="editingIntegration() ? 'Editar Integração' : 'Nova Integração'">
+  <div class="space-y-4">
+    <!-- Category selector -->
+    <div>
+      <!-- eslint-disable-next-line @angular-eslint/template/label-has-associated-control -->
+      <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+        Categoria <span class="text-[var(--danger)]">*</span>
+      </label>
+      @if (editingIntegration()) {
+        <div class="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-muted)]">
+          {{ selectedCategory()?.label ?? formCategory() }}
+        </div>
+      } @else {
+        <app-select
+          [options]="categoryOptions()"
+          [value]="formCategory()"
+          (valueChange)="onCategoryChange($event)"
+          placeholder="Selecione a categoria"
+        />
+      }
+    </div>
+
+    <!-- Provider selector -->
+    @if (formCategory()) {
+      <div>
+        <!-- eslint-disable-next-line @angular-eslint/template/label-has-associated-control -->
+        <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+          Provedor <span class="text-[var(--danger)]">*</span>
+        </label>
+        <app-select
+          [options]="providerOptions()"
+          [value]="formProvider()"
+          (valueChange)="onProviderChange($event)"
+          placeholder="Selecione o provedor"
+        />
+      </div>
+    }
+
+    <!-- Provider-specific fields -->
+    @if (selectedProvider(); as provider) {
+      @if (provider.helpText) {
+        <div class="rounded-xl bg-[var(--accent)]/5 border border-[var(--accent)]/20 px-4 py-3 text-xs text-[var(--accent)]">
+          {{ provider.helpText }}
+        </div>
+      }
+
+      @if (provider.fields.length === 0) {
+        <div class="rounded-xl bg-green-500/5 border border-green-500/20 px-4 py-3 text-xs text-green-400">
+          Este provedor não requer configuração — funciona automaticamente.
+        </div>
+      }
+
+      @for (field of provider.fields; track field.key) {
+        <div>
+          <label [for]="'field-' + field.key" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+            {{ field.label }}
+            @if (field.required) { <span class="text-[var(--danger)]">*</span> }
+          </label>
+          <input
+            [id]="'field-' + field.key"
+            [type]="field.type"
+            [value]="getField(field.key)"
+            (input)="setField(field.key, $any($event.target).value)"
+            [placeholder]="field.placeholder"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+          />
+        </div>
+      }
+    }
+  </div>
+
+  <div modal-footer class="flex justify-end gap-3 px-6 py-4 border-t border-[var(--border)]">
+    <button (click)="closeModal()" class="px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] rounded-xl transition cursor-pointer">
+      Cancelar
+    </button>
+    <button
+      (click)="saveIntegration()"
+      [disabled]="!canSave"
+      class="px-4 py-2 text-sm font-medium text-white bg-[var(--accent)] rounded-xl hover:opacity-90 transition cursor-pointer disabled:opacity-50"
+    >
+      Salvar
+    </button>
+  </div>
+</app-modal>

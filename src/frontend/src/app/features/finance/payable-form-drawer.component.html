@@ -1,0 +1,113 @@
+<div class="space-y-4">
+  <div>
+    <label for="pfd-description" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+      Descrição <span class="text-[var(--danger)]">*</span>
+    </label>
+    <input
+      id="pfd-description"
+      type="text"
+      [value]="description()"
+      (input)="description.set($any($event.target).value)"
+      placeholder="Ex: Aluguel do escritório"
+      class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+    />
+  </div>
+
+  <div>
+    <label for="pfd-supplier" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Fornecedor</label>
+    <div class="relative">
+      <input
+        id="pfd-supplier"
+        type="text"
+        [value]="supplierSearch()"
+        (input)="searchSuppliers($any($event.target).value)"
+        placeholder="Buscar fornecedor..."
+        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+      @if (supplierResults().length > 0) {
+        <div class="absolute z-10 mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-lg max-h-40 overflow-auto">
+          @for (s of supplierResults(); track s.id) {
+            <button
+              (click)="selectSupplier(s)"
+              class="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--border-subtle)] first:rounded-t-xl last:rounded-b-xl transition cursor-pointer"
+            >
+              {{ s.nome }}
+            </button>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div>
+      <label for="pfd-category" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Categoria</label>
+      <app-select
+        [options]="categoryOptions()"
+        [(value)]="categoryId"
+        placeholder="Selecione..."
+      />
+    </div>
+    <div>
+      <label for="pfd-amount" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+        Valor (R$) <span class="text-[var(--danger)]">*</span>
+      </label>
+      <input
+        id="pfd-amount"
+        type="number"
+        [value]="amount()"
+        (input)="amount.set(+$any($event.target).value)"
+        min="0"
+        step="0.01"
+        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div>
+      <label for="pfd-due-date" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+        Vencimento <span class="text-[var(--danger)]">*</span>
+      </label>
+      <input
+        id="pfd-due-date"
+        type="date"
+        [value]="dueDate()"
+        (input)="dueDate.set($any($event.target).value)"
+        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+    <div>
+      <label for="pfd-notes" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Observações</label>
+      <input
+        id="pfd-notes"
+        type="text"
+        [value]="notes()"
+        (input)="notes.set($any($event.target).value)"
+        placeholder="Opcional..."
+        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border)]">
+    <button
+      (click)="close()"
+      class="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+    >
+      Cancelar
+    </button>
+    <button
+      (click)="submit()"
+      [disabled]="isSaving() || !description() || amount() <= 0 || !dueDate()"
+      class="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-40 cursor-pointer"
+    >
+      @if (isSaving()) {
+        Salvando...
+      } @else {
+        {{ isEditing() ? 'Salvar' : 'Criar Conta' }}
+      }
+    </button>
+  </div>
+</div>

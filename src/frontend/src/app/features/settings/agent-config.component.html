@@ -1,0 +1,207 @@
+@if (isLoading()) {
+  <div class="flex items-center justify-center py-24 text-[var(--text-muted)]">
+    <div class="animate-spin h-8 w-8 border-2 border-[var(--accent)] border-t-transparent rounded-full"></div>
+    <span class="ml-3">Carregando configuração...</span>
+  </div>
+} @else {
+  <div class="max-w-3xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-bold text-[var(--text-primary)]">Configuração do Agente IA</h2>
+        <p class="text-sm text-[var(--text-muted)] mt-1">Configure o modelo de linguagem, provedor WhatsApp e ferramentas</p>
+      </div>
+      <button
+        (click)="save()"
+        [disabled]="isSaving()"
+        class="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50 cursor-pointer"
+      >
+        @if (isSaving()) {
+          Salvando...
+        } @else {
+          Salvar
+        }
+      </button>
+    </div>
+
+    <!-- LLM Provider -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5 space-y-4">
+      <h3 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Modelo de Linguagem</h3>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="llmProvider" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+            Provedor LLM <span class="text-[var(--danger)]">*</span>
+          </label>
+          <app-select
+            id="llmProvider"
+            [options]="llmProviderOptions"
+            [value]="llmProvider()"
+            (valueChange)="llmProvider.set($event)"
+            placeholder="Selecione o provedor"
+          />
+        </div>
+        <div>
+          <label for="llmModel" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+            Modelo
+          </label>
+          <input
+            id="llmModel"
+            type="text"
+            [value]="llmModel()"
+            (input)="llmModel.set($any($event.target).value)"
+            placeholder="Ex: gpt-4o, claude-3-opus"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label for="temperature" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+          Temperatura: {{ temperature() }}
+        </label>
+        <input
+          id="temperature"
+          type="range"
+          min="0"
+          max="1"
+          step="0.1"
+          [value]="temperature()"
+          (input)="temperature.set(+$any($event.target).value)"
+          class="w-full accent-[var(--accent)]"
+        />
+        <div class="flex justify-between text-xs text-[var(--text-muted)] mt-1">
+          <span>Preciso (0)</span>
+          <span>Criativo (1)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- WhatsApp Provider -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5 space-y-4">
+      <h3 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Provedor WhatsApp</h3>
+      <div class="max-w-sm">
+        <label for="whatsappProvider" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+          Provedor <span class="text-[var(--danger)]">*</span>
+        </label>
+        <app-select
+          id="whatsappProvider"
+          [options]="whatsappProviderOptions"
+          [value]="whatsappProvider()"
+          (valueChange)="whatsappProvider.set($event)"
+          placeholder="Selecione o provedor"
+        />
+      </div>
+    </div>
+
+    <!-- System Prompt -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5 space-y-4">
+      <h3 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Prompt do Sistema</h3>
+      <div>
+        <label for="systemPrompt" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+          Instruções para o agente <span class="text-[var(--danger)]">*</span>
+        </label>
+        <textarea
+          id="systemPrompt"
+          [value]="systemPrompt()"
+          (input)="systemPrompt.set($any($event.target).value)"
+          placeholder="Você é um assistente especializado em gestão de frotas e cobranças..."
+          rows="8"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50 resize-y font-mono"
+        ></textarea>
+      </div>
+    </div>
+
+    <!-- Tools -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5 space-y-4">
+      <h3 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Ferramentas do Agente</h3>
+
+      @if (tools().length === 0) {
+        <p class="text-sm text-[var(--text-muted)]">Nenhuma ferramenta disponível</p>
+      } @else {
+        <div class="space-y-2">
+          @for (tool of tools(); track tool.id) {
+            <div class="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+              <div>
+                <p class="text-sm font-medium text-[var(--text-primary)]">{{ tool.name }}</p>
+                <p class="text-xs text-[var(--text-muted)]">{{ tool.description }}</p>
+              </div>
+              <button
+                (click)="toggleTool(tool.id)"
+                [class]="tool.enabled ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'"
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer"
+              >
+                <span
+                  [class]="tool.enabled ? 'translate-x-6' : 'translate-x-1'"
+                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                ></span>
+              </button>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Rate Limits & Budget -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5 space-y-4">
+      <h3 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Limites e Orçamento</h3>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="rateLimitRpm" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+            Limite de requisições (RPM)
+          </label>
+          <input
+            id="rateLimitRpm"
+            type="number"
+            [value]="rateLimitRpm()"
+            (input)="rateLimitRpm.set(+$any($event.target).value)"
+            min="1"
+            max="1000"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+          />
+        </div>
+        <div>
+          <label for="monthlyBudget" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+            Orçamento mensal (R$)
+          </label>
+          <input
+            id="monthlyBudget"
+            type="number"
+            [value]="monthlyBudget()"
+            (input)="monthlyBudget.set(+$any($event.target).value)"
+            min="0"
+            step="10"
+            class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Test section -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5 space-y-4">
+      <h3 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Testar Agente</h3>
+      <div class="flex items-center gap-3">
+        <button
+          (click)="testMessage()"
+          [disabled]="isTesting()"
+          class="flex items-center gap-2 rounded-xl border border-[var(--accent)]/30 px-4 py-2.5 text-sm font-medium text-[var(--accent)] hover:bg-[var(--accent)]/10 transition disabled:opacity-50 cursor-pointer"
+        >
+          @if (isTesting()) {
+            <div class="animate-spin h-4 w-4 border-2 border-[var(--accent)] border-t-transparent rounded-full"></div>
+            Testando...
+          } @else {
+            <ui-icon name="heroSparkles" size="1rem" />
+            Testar Mensagem
+          }
+        </button>
+      </div>
+      @if (testResult()) {
+        <div class="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <p class="text-xs text-[var(--text-muted)] mb-1">Resposta do agente:</p>
+          <p class="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{{ testResult() }}</p>
+        </div>
+      }
+    </div>
+  </div>
+}

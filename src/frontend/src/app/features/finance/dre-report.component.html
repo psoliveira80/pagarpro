@@ -1,0 +1,196 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-[var(--text-primary)]">DRE - Demonstrativo de Resultados</h2>
+      <p class="text-sm text-[var(--text-muted)] mt-1">Visão consolidada de receitas e despesas</p>
+    </div>
+    @if (report()) {
+      <button
+        (click)="exportCsv()"
+        class="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+      >
+        <ui-icon name="heroArrowUpTray" size="1rem" />
+        Exportar CSV
+      </button>
+    }
+  </div>
+
+  <!-- Period selector -->
+  <div class="flex flex-col sm:flex-row items-end gap-3">
+    <div>
+      <label for="dre-start" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Período início</label>
+      <input
+        id="dre-start"
+        type="date"
+        [value]="periodStart()"
+        (input)="periodStart.set($any($event.target).value)"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+    <div>
+      <label for="dre-end" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Período fim</label>
+      <input
+        id="dre-end"
+        type="date"
+        [value]="periodEnd()"
+        (input)="periodEnd.set($any($event.target).value)"
+        class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+      />
+    </div>
+    <button
+      (click)="loadReport()"
+      [disabled]="isLoading()"
+      class="rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-40 cursor-pointer"
+    >
+      @if (isLoading()) {
+        Carregando...
+      } @else {
+        Gerar Relatório
+      }
+    </button>
+  </div>
+
+  @if (report(); as r) {
+    <!-- Summary cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs uppercase tracking-wider text-[var(--text-muted)]">Total Receitas</p>
+        <p class="mt-1 text-xl font-bold text-green-400">{{ formatCurrency(r.receitas.total) }}</p>
+      </div>
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs uppercase tracking-wider text-[var(--text-muted)]">Total Despesas</p>
+        <p class="mt-1 text-xl font-bold text-red-400">{{ formatCurrency(r.despesas.total) }}</p>
+      </div>
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+        <p class="text-xs uppercase tracking-wider text-[var(--text-muted)]">Resultado Líquido</p>
+        <p [class]="netResultClass()" class="mt-1 text-xl font-bold">{{ formatCurrency(r.resultado_liquido) }}</p>
+      </div>
+    </div>
+
+    <!-- Revenue table -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)]">
+      <div class="border-b border-[var(--border)] px-4 py-3">
+        <h3 class="text-sm font-semibold text-green-400 uppercase tracking-wider">Receitas</h3>
+      </div>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-[var(--border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+            <th class="px-4 py-3 font-medium">Categoria</th>
+            <th class="px-4 py-3 font-medium text-right">Valor</th>
+            <th class="px-4 py-3 font-medium text-right">%</th>
+            <th class="px-4 py-3 font-medium w-48"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of r.receitas.por_categoria; track item.categoria_id) {
+            <tr class="border-b border-[var(--border)] last:border-0">
+              <td class="px-4 py-3 text-[var(--text-primary)]">{{ item.categoria_nome ?? 'Sem categoria' }}</td>
+              <td class="px-4 py-3 text-right text-[var(--text-primary)] font-medium">{{ formatCurrency(item.total) }}</td>
+              <td class="px-4 py-3 text-right text-[var(--text-muted)]">{{ barWidth(item.total, r.receitas.total) }}</td>
+              <td class="px-4 py-3">
+                <div class="h-2 rounded-full bg-[var(--border)]">
+                  <div
+                    class="h-2 rounded-full bg-green-500"
+                    [style.width]="barWidth(item.total, r.receitas.total)"
+                  ></div>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr class="bg-[var(--border-subtle)]">
+            <td class="px-4 py-3 font-semibold text-[var(--text-primary)]">Total</td>
+            <td class="px-4 py-3 text-right font-semibold text-green-400">{{ formatCurrency(r.receitas.total) }}</td>
+            <td class="px-4 py-3 text-right text-[var(--text-muted)]">100%</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Expenses table -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)]">
+      <div class="border-b border-[var(--border)] px-4 py-3">
+        <h3 class="text-sm font-semibold text-red-400 uppercase tracking-wider">Despesas</h3>
+      </div>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-[var(--border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+            <th class="px-4 py-3 font-medium">Categoria</th>
+            <th class="px-4 py-3 font-medium text-right">Valor</th>
+            <th class="px-4 py-3 font-medium text-right">%</th>
+            <th class="px-4 py-3 font-medium w-48"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of r.despesas.por_categoria; track item.categoria_id) {
+            <tr class="border-b border-[var(--border)] last:border-0">
+              <td class="px-4 py-3 text-[var(--text-primary)]">{{ item.categoria_nome ?? 'Sem categoria' }}</td>
+              <td class="px-4 py-3 text-right text-[var(--text-primary)] font-medium">{{ formatCurrency(item.total) }}</td>
+              <td class="px-4 py-3 text-right text-[var(--text-muted)]">{{ barWidth(item.total, r.despesas.total) }}</td>
+              <td class="px-4 py-3">
+                <div class="h-2 rounded-full bg-[var(--border)]">
+                  <div
+                    class="h-2 rounded-full bg-red-500"
+                    [style.width]="barWidth(item.total, r.despesas.total)"
+                  ></div>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr class="bg-[var(--border-subtle)]">
+            <td class="px-4 py-3 font-semibold text-[var(--text-primary)]">Total</td>
+            <td class="px-4 py-3 text-right font-semibold text-red-400">{{ formatCurrency(r.despesas.total) }}</td>
+            <td class="px-4 py-3 text-right text-[var(--text-muted)]">100%</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Bar chart placeholder -->
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6">
+      <h3 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">Comparativo Visual</h3>
+      <div class="flex items-end gap-4 h-40">
+        <div class="flex-1 flex flex-col items-center gap-2">
+          <div
+            class="w-full rounded-t-lg bg-green-500/30 border border-green-500/50"
+            [style.height]="r.receitas.total >= r.despesas.total
+              ? '100%'
+              : barWidth(r.receitas.total, r.despesas.total)"
+          ></div>
+          <span class="text-xs text-[var(--text-muted)]">Receitas</span>
+        </div>
+        <div class="flex-1 flex flex-col items-center gap-2">
+          <div
+            class="w-full rounded-t-lg bg-red-500/30 border border-red-500/50"
+            [style.height]="r.despesas.total >= r.receitas.total
+              ? '100%'
+              : barWidth(r.despesas.total, r.receitas.total)"
+          ></div>
+          <span class="text-xs text-[var(--text-muted)]">Despesas</span>
+        </div>
+      </div>
+    </div>
+  } @else if (error()) {
+    <div class="flex flex-col items-center justify-center py-16 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] text-[var(--text-muted)]">
+      <ui-icon name="heroExclamationTriangle" size="2.5rem" class="text-red-400" />
+      <p class="mt-3 text-sm text-red-400">{{ error() }}</p>
+      <button
+        (click)="loadReport()"
+        class="mt-4 flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+      >
+        Tentar novamente
+      </button>
+    </div>
+  } @else if (!isLoading()) {
+    <div class="flex flex-col items-center justify-center py-16 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] text-[var(--text-muted)]">
+      <ui-icon name="heroChartBarSquare" size="2.5rem" />
+      <p class="mt-3 text-sm">Selecione um período e clique em "Gerar Relatório"</p>
+    </div>
+  }
+</div>

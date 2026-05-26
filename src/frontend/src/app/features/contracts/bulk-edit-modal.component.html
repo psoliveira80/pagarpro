@@ -1,0 +1,112 @@
+<app-modal [open]="open()" (closed)="closed.emit()" size="lg" title="Edição em Lote">
+  <!-- Body -->
+  <div class="space-y-5">
+    <p class="text-sm text-[var(--text-secondary)]">
+      {{ selectedInstallments().length }} parcela(s) selecionada(s)
+    </p>
+
+    <!-- Action select -->
+    <div>
+      <label for="bulk-action" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Ação</label>
+      <app-select
+        [options]="actionOptions"
+        [(value)]="action"
+        placeholder="Ação"
+      />
+    </div>
+
+    @if (action() === 'postpone') {
+      <div>
+        <label for="bulk-days" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Dias para postergar</label>
+        <input
+          id="bulk-days"
+          type="number"
+          [value]="days()"
+          (input)="days.set(+$any($event.target).value)"
+          min="1"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+        />
+      </div>
+    }
+
+    @if (action() === 'discount') {
+      <div>
+        <label for="bulk-discount" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Percentual de desconto (%)</label>
+        <input
+          id="bulk-discount"
+          type="number"
+          [value]="discountPercent()"
+          (input)="discountPercent.set(+$any($event.target).value)"
+          min="1"
+          max="100"
+          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+        />
+      </div>
+    }
+
+    @if (action() === 'cancel') {
+      <div class="flex items-center gap-3 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3">
+        <ui-icon name="heroExclamationTriangle" size="1.25rem" class="text-red-400" />
+        <p class="text-sm text-red-400">As parcelas selecionadas serão canceladas permanentemente.</p>
+      </div>
+    }
+
+    <!-- Preview diff -->
+    @if (!showConfirm()) {
+      <button
+        (click)="toggleConfirm()"
+        class="w-full rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer"
+      >
+        Ver prévia das alterações
+      </button>
+    } @else {
+      <div class="rounded-xl border border-[var(--border)] overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-[var(--border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+              <th class="px-3 py-2 font-medium">#</th>
+              <th class="px-3 py-2 font-medium">Vencimento</th>
+              <th class="px-3 py-2 font-medium text-right">Valor</th>
+              <th class="px-3 py-2 font-medium">Alteração</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (inst of selectedInstallments(); track inst.id) {
+              <tr class="border-b border-[var(--border)] last:border-0">
+                <td class="px-3 py-2 text-[var(--text-primary)]">{{ inst.sequencia }}</td>
+                <td class="px-3 py-2 text-[var(--text-secondary)]">{{ formatDate(inst.data_vencimento) }}</td>
+                <td class="px-3 py-2 text-right text-[var(--text-primary)]">{{ formatCurrency(inst.valor) }}</td>
+                <td class="px-3 py-2">
+                  <span class="text-xs text-[var(--accent)]">{{ actionLabel(action()) }}</span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  <!-- Footer -->
+  @if (showConfirm()) {
+    <div modal-footer class="flex items-center justify-end gap-3 border-t border-[var(--border)] px-6 py-4">
+      <button
+        (click)="close()"
+        class="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+      >
+        Cancelar
+      </button>
+      <button
+        (click)="submit()"
+        [disabled]="isSaving()"
+        class="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-40 cursor-pointer"
+      >
+        @if (isSaving()) {
+          Salvando...
+        } @else {
+          Confirmar
+        }
+      </button>
+    </div>
+  }
+</app-modal>

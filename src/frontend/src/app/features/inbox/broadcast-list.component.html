@@ -1,0 +1,229 @@
+<app-toast />
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <button (click)="goBack()" class="rounded-xl p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition cursor-pointer">
+        <ui-icon name="heroArrowLeft" size="1.25rem" />
+      </button>
+      <div>
+        <h2 class="text-xl font-bold text-[var(--text-primary)]">Avisos em Massa</h2>
+        <p class="text-sm text-[var(--text-muted)]">Dispare avisos e lembretes para grupos de clientes</p>
+      </div>
+    </div>
+    <button (click)="openCreateModal()" class="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition cursor-pointer self-start sm:self-auto">
+      <ui-icon name="heroPlus" size="1rem" />
+      Novo Aviso
+    </button>
+  </div>
+
+  <!-- Channel Warning -->
+  @if (!hasConfiguredChannel()) {
+    <div class="rounded-xl border border-yellow-500/30 bg-yellow-500/5 px-4 py-3 flex items-start gap-3">
+      <ui-icon name="heroExclamationTriangle" size="1.25rem" class="text-yellow-400 shrink-0 mt-0.5" />
+      <div>
+        <p class="text-sm font-medium text-[var(--text-primary)]">Nenhum canal de envio configurado</p>
+        <p class="text-xs text-[var(--text-muted)] mt-0.5">Configure WhatsApp, E-mail ou SMS em <strong>Configurações &gt; Integrações</strong> para poder enviar avisos.</p>
+      </div>
+    </div>
+  }
+
+  <!-- List -->
+  @if (isLoading()) {
+    <div class="flex items-center justify-center py-24 text-[var(--text-muted)]">
+      <svg class="animate-spin h-6 w-6 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+      <span class="ml-3 text-sm">Carregando...</span>
+    </div>
+  } @else if (broadcasts().length === 0) {
+    <div class="flex flex-col items-center justify-center py-24 text-[var(--text-muted)]">
+      <ui-icon name="heroPaperAirplane" size="2.5rem" />
+      <p class="mt-3 text-sm">Nenhum aviso criado</p>
+      <p class="text-xs mt-1">Crie um aviso para enviar lembretes, cobranças ou comunicados</p>
+    </div>
+  } @else {
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-[var(--border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+            <th class="px-4 py-3 font-medium">Nome</th>
+            <th class="px-4 py-3 font-medium hidden sm:table-cell">Mensagem</th>
+            <th class="px-4 py-3 font-medium">Status</th>
+            <th class="px-4 py-3 font-medium hidden md:table-cell">Enviados</th>
+            <th class="px-4 py-3 font-medium hidden md:table-cell">Data</th>
+            <th class="px-4 py-3 font-medium text-right">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (b of broadcasts(); track b.id) {
+            <tr class="border-b border-[var(--border)] last:border-0 hover:bg-[var(--border-subtle)] transition">
+              <td class="px-4 py-3 font-medium text-[var(--text-primary)]">{{ b.name }}</td>
+              <td class="px-4 py-3 text-[var(--text-muted)] truncate max-w-[200px] hidden sm:table-cell">{{ b.template }}</td>
+              <td class="px-4 py-3">
+                <span [class]="statusClass(b.status)" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">{{ statusLabel(b.status) }}</span>
+              </td>
+              <td class="px-4 py-3 text-[var(--text-secondary)] hidden md:table-cell">{{ b.sent_count }} / {{ b.total_recipients }}</td>
+              <td class="px-4 py-3 text-[var(--text-muted)] hidden md:table-cell">{{ b.criado_em | date:'dd/MM/yy HH:mm' }}</td>
+              <td class="px-4 py-3 text-right">
+                @if (b.status === 'draft') {
+                  <button (click)="openSendWizard(b)" class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--accent)]/30 px-3 py-1.5 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent)]/10 transition cursor-pointer">
+                    <ui-icon name="heroPaperAirplane" size="0.75rem" />
+                    Preparar Envio
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+<!-- Create Modal -->
+<app-modal [open]="showCreateModal()" (closed)="showCreateModal.set(false)" size="md" title="Novo Aviso">
+  <div class="space-y-4">
+    <div>
+      <label for="avisoName" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Nome <span class="text-[var(--danger)]">*</span></label>
+      <input id="avisoName" type="text" [value]="formName()" (input)="formName.set($any($event.target).value)" placeholder="Ex: Lembrete de vencimento" class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]" />
+    </div>
+    <div>
+      <label for="avisoTpl" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Mensagem <span class="text-[var(--danger)]">*</span></label>
+      <textarea id="avisoTpl" [value]="formTemplate()" (input)="formTemplate.set($any($event.target).value)" [placeholder]="'Olá {nome}, sua parcela de {valor} vence em {data_vencimento}...'" rows="4" class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] resize-none"></textarea>
+      <p class="text-xs text-[var(--text-muted)] mt-1">Use {{ '{' }}nome{{ '}' }}, {{ '{' }}valor{{ '}' }}, {{ '{' }}data_vencimento{{ '}' }} como variáveis</p>
+    </div>
+  </div>
+  <div modal-footer class="flex justify-end gap-3 px-6 py-4 border-t border-[var(--border)]">
+    <button (click)="closeCreateModal()" class="px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] rounded-xl transition cursor-pointer">Cancelar</button>
+    <button (click)="saveAviso()" [disabled]="isSaving() || !formName().trim() || !formTemplate().trim()" class="px-4 py-2 text-sm font-medium text-white bg-[var(--accent)] rounded-xl hover:opacity-90 transition cursor-pointer disabled:opacity-50">
+      @if (isSaving()) { Salvando... } @else { Criar Rascunho }
+    </button>
+  </div>
+</app-modal>
+
+<!-- Send Wizard (3-step) -->
+<app-modal [open]="showSendWizard()" (closed)="showSendWizard.set(false)" size="lg" title="Preparar Envio">
+  <!-- Steps -->
+  <div class="-mx-6 -mt-6 mb-6 flex items-center gap-2 px-6 py-3 border-b border-[var(--border)] bg-[var(--surface)]">
+    @for (step of [1, 2, 3]; track step) {
+      <div class="flex items-center gap-1.5">
+        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold" [class]="step < sendStep() ? 'bg-green-500 text-white' : step === sendStep() ? 'bg-[var(--accent)] text-white' : 'bg-[var(--border)] text-[var(--text-muted)]'">
+          @if (step < sendStep()) { ✓ } @else { {{ step }} }
+        </span>
+        <span class="text-xs font-medium hidden sm:inline" [class]="step === sendStep() ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'">
+          @if (step === 1) { Destinatários } @else if (step === 2) { Canal } @else { Confirmar }
+        </span>
+      </div>
+      @if (step < 3) { <div class="h-px flex-1 bg-[var(--border)]"></div> }
+    }
+  </div>
+
+  <!-- Step 1: Recipients -->
+  @if (sendStep() === 1) {
+    <div class="space-y-4">
+      <div class="relative">
+        <ui-icon name="heroMagnifyingGlass" size="1rem" class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+        <input type="text" [value]="customerSearch()" (input)="loadCustomers($any($event.target).value)" placeholder="Buscar clientes por nome, CPF..." class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] pl-10 pr-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]" />
+      </div>
+      <div class="flex items-center justify-between text-sm">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" [checked]="selectAll()" (change)="toggleSelectAll()" class="rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)]" />
+          <span class="text-[var(--text-secondary)]">Selecionar todos com telefone</span>
+        </label>
+        <span class="text-[var(--accent)] font-medium">{{ selectedCount() }} selecionado(s)</span>
+      </div>
+      <div class="rounded-xl border border-[var(--border)] max-h-64 overflow-auto">
+        @if (isLoadingCustomers()) {
+          <div class="flex items-center justify-center py-8 text-[var(--text-muted)]">
+            <svg class="animate-spin h-5 w-5 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <span class="ml-2 text-sm">Buscando...</span>
+          </div>
+        } @else if (allCustomers().length === 0) {
+          <div class="py-8 text-center text-sm text-[var(--text-muted)]">Nenhum cliente ativo encontrado</div>
+        } @else {
+          @for (c of allCustomers(); track c.id) {
+            <label
+              class="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-0 transition"
+              [class]="c.telefone ? 'hover:bg-[var(--border-subtle)] cursor-pointer' : 'opacity-50 cursor-not-allowed'"
+            >
+              <input
+                type="checkbox"
+                [checked]="isCustomerSelected(c.id)"
+                (change)="toggleCustomer(c.id)"
+                [disabled]="!c.telefone"
+                class="rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)] disabled:opacity-30"
+              />
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-[var(--text-primary)] truncate">{{ c.nome_completo }}</p>
+                @if (c.telefone) {
+                  <p class="text-xs text-[var(--text-muted)]">{{ formatDocument(c) }} · {{ c.telefone }}</p>
+                } @else {
+                  <p class="text-xs text-[var(--danger)]">Sem telefone cadastrado</p>
+                }
+              </div>
+            </label>
+          }
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Step 2: Channel -->
+  @if (sendStep() === 2) {
+    <div class="space-y-4">
+      <p class="text-sm text-[var(--text-secondary)]">Selecione por qual canal enviar:</p>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        @for (ch of channels(); track ch.id) {
+          <button (click)="selectChannel(ch.id)" [disabled]="!ch.configured || ch.comingSoon" class="flex flex-col items-center gap-2 rounded-xl border-2 p-6 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed relative"
+            [class]="selectedChannel() === ch.id ? 'border-[var(--accent)] bg-[var(--accent)]/5' : ch.configured ? 'border-[var(--border)] hover:border-[var(--accent)]/50' : 'border-[var(--border)]'">
+            @if (ch.comingSoon) {
+              <span class="absolute top-2 right-2 text-[10px] font-semibold uppercase tracking-wider bg-[var(--border)] text-[var(--text-muted)] px-1.5 py-0.5 rounded">Em breve</span>
+            }
+            <ui-icon [name]="ch.icon" size="2rem" [class]="selectedChannel() === ch.id ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'" />
+            <span class="text-sm font-medium" [class]="selectedChannel() === ch.id ? 'text-[var(--accent)]' : 'text-[var(--text-primary)]'">{{ ch.name }}</span>
+            @if (ch.configured && ch.healthy) {
+              <span class="text-xs text-green-400 flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-green-400"></span> Operacional</span>
+            } @else if (ch.configured && !ch.healthy) {
+              <span class="text-xs text-yellow-400">Verificando...</span>
+            } @else if (ch.comingSoon) {
+              <span class="text-xs text-[var(--text-muted)]">Em desenvolvimento</span>
+            } @else {
+              <span class="text-xs text-[var(--text-muted)]">Não configurado</span>
+            }
+          </button>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Step 3: Preview + Confirm -->
+  @if (sendStep() === 3) {
+    <div class="space-y-5">
+      <div class="rounded-xl border border-[var(--border)] p-4 space-y-3">
+        <h4 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Resumo</h4>
+        <dl class="grid grid-cols-2 gap-3 text-sm">
+          <div><dt class="text-[var(--text-muted)]">Aviso</dt><dd class="font-medium text-[var(--text-primary)]">{{ sendingBroadcast()?.name }}</dd></div>
+          <div><dt class="text-[var(--text-muted)]">Canal</dt><dd class="font-medium text-[var(--text-primary)]">{{ channelLabel() }}</dd></div>
+          <div><dt class="text-[var(--text-muted)]">Destinatários</dt><dd class="font-medium text-[var(--accent)]">{{ selectedCount() }} cliente(s)</dd></div>
+        </dl>
+      </div>
+      <div class="rounded-xl border border-[var(--border)] p-4">
+        <h4 class="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">Preview</h4>
+        <div class="rounded-lg bg-[var(--surface)] p-3 text-sm text-[var(--text-primary)] whitespace-pre-wrap">{{ previewMessage() }}</div>
+        <p class="text-xs text-[var(--text-muted)] mt-2">* Preview com dados do primeiro destinatário</p>
+      </div>
+    </div>
+  }
+
+  <div modal-footer class="flex items-center justify-between px-6 py-4 border-t border-[var(--border)]">
+    <button (click)="sendStep() === 1 ? closeSendWizard() : prevSendStep()" class="px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] rounded-xl transition cursor-pointer">
+      @if (sendStep() === 1) { Cancelar } @else { Voltar }
+    </button>
+    @if (sendStep() < 3) {
+      <button (click)="nextSendStep()" [disabled]="(sendStep() === 1 && selectedCount() === 0) || (sendStep() === 2 && !selectedChannel())" class="px-5 py-2 text-sm font-medium text-white bg-[var(--accent)] rounded-xl hover:opacity-90 transition cursor-pointer disabled:opacity-50">Próximo</button>
+    } @else {
+      <button (click)="confirmSend()" [disabled]="isSending()" class="px-5 py-2 text-sm font-medium text-white bg-green-600 rounded-xl hover:bg-green-700 transition cursor-pointer disabled:opacity-50">
+        @if (isSending()) { Enviando... } @else { Enviar para {{ selectedCount() }} destinatário(s) }
+      </button>
+    }
+  </div>
+</app-modal>

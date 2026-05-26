@@ -1,0 +1,127 @@
+<div class="flex h-full items-center justify-center bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] p-4">
+
+  <!-- Toast overlay -->
+  <app-toast />
+
+  <!-- Login card -->
+  <div class="w-full max-w-md">
+    <div
+      class="backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl rounded-2xl p-8 md:p-10"
+    >
+      <!-- Product name -->
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-white tracking-tight">{{ productName }}</h1>
+        <p class="text-white/60 text-sm mt-1">Acesse sua conta</p>
+      </div>
+
+      <!-- Form -->
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-5">
+
+        <!-- Email -->
+        <div>
+          <label for="email" class="block text-sm font-medium text-white/80 mb-1.5">E-mail</label>
+          <input
+            #emailInput
+            id="email"
+            type="email"
+            formControlName="email"
+            autocomplete="email"
+            placeholder="seu@email.com"
+            class="w-full rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40
+                   px-4 py-3 text-sm outline-none transition-all duration-200
+                   focus:border-white/50 focus:ring-2 focus:ring-white/20 focus:bg-white/15"
+          />
+          @if (form.controls.email.touched && form.controls.email.errors) {
+            <p class="text-red-300 text-xs mt-1">
+              @if (form.controls.email.errors['required']) {
+                E-mail é obrigatório
+              } @else if (form.controls.email.errors['email']) {
+                E-mail inválido
+              }
+            </p>
+          }
+        </div>
+
+        <!-- Password -->
+        <div>
+          <label for="password" class="block text-sm font-medium text-white/80 mb-1.5">Senha</label>
+          <div class="relative">
+            <input
+              id="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              formControlName="password"
+              autocomplete="current-password"
+              placeholder="••••••••"
+              class="w-full rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40
+                     px-4 py-3 pr-12 text-sm outline-none transition-all duration-200
+                     focus:border-white/50 focus:ring-2 focus:ring-white/20 focus:bg-white/15"
+            />
+            <button
+              type="button"
+              (click)="togglePassword()"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/80 transition-colors cursor-pointer"
+              tabindex="-1"
+              [attr.aria-label]="showPassword() ? 'Ocultar senha' : 'Mostrar senha'"
+            >
+              @if (showPassword()) {
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" />
+                </svg>
+              } @else {
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                </svg>
+              }
+            </button>
+          </div>
+          @if (form.controls.password.touched && form.controls.password.errors) {
+            <p class="text-red-300 text-xs mt-1">
+              @if (form.controls.password.errors['required']) {
+                Senha é obrigatória
+              } @else if (form.controls.password.errors['minlength']) {
+                Mínimo de 8 caracteres
+              }
+            </p>
+          }
+        </div>
+
+        <!-- Submit -->
+        <button
+          type="submit"
+          [disabled]="form.invalid || isLoading()"
+          class="w-full rounded-xl bg-white text-[var(--accent)] font-semibold py-3 px-4 text-sm
+                 transition-all duration-200 hover:bg-white/90 active:scale-[0.98]
+                 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                 flex items-center justify-center gap-2 cursor-pointer"
+        >
+          @if (isLoading()) {
+            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Entrando...
+          } @else {
+            Entrar
+          }
+        </button>
+      </form>
+
+      <!-- Forgot password -->
+      <div class="text-center mt-6 space-y-2">
+        <a
+          routerLink="/auth/forgot-password"
+          class="block text-sm text-white/60 hover:text-white/90 transition-colors underline underline-offset-2"
+        >
+          Esqueci minha senha
+        </a>
+        <a
+          routerLink="/auth/register"
+          class="block text-sm text-white/60 hover:text-white/90 transition-colors underline underline-offset-2"
+        >
+          Criar conta
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

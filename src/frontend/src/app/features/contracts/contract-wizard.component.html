@@ -1,0 +1,278 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center gap-4">
+    <button
+      (click)="goBack()"
+      class="flex items-center justify-center rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+    >
+      <ui-icon name="heroArrowLeft" size="1.25rem" />
+    </button>
+    <div>
+      <h2 class="text-2xl font-bold text-[var(--text-primary)]">Novo Contrato</h2>
+      <p class="text-sm text-[var(--text-muted)] mt-1">Preencha os dados para criar um novo contrato</p>
+    </div>
+  </div>
+
+  <!-- Stepper -->
+  <div class="flex items-center gap-2">
+    @for (step of steps; track step.number) {
+      <button
+        (click)="goToStep(step.number)"
+        [class]="step.number === currentStep()
+          ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
+          : step.number < currentStep()
+            ? 'border-green-500 bg-green-500/10 text-green-400 cursor-pointer'
+            : 'border-[var(--border)] text-[var(--text-muted)]'"
+        class="flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition"
+      >
+        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
+          [class]="step.number <= currentStep() ? 'bg-[var(--accent)] text-white' : 'bg-[var(--border)] text-[var(--text-muted)]'"
+        >
+          {{ step.number }}
+        </span>
+        {{ step.label }}
+      </button>
+      @if (step.number < steps.length) {
+        <div class="h-px flex-1 bg-[var(--border)]"></div>
+      }
+    }
+  </div>
+
+  <!-- Step Content -->
+  <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6">
+    <!-- Step 1: Cliente & Asset -->
+    @if (currentStep() === 1) {
+      <div class="space-y-6">
+        <h3 class="text-lg font-semibold text-[var(--text-primary)]">Selecione o Cliente e o Veículo</h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <!-- eslint-disable-next-line @angular-eslint/template/label-has-associated-control -->
+            <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+              Cliente <span class="text-[var(--danger)]">*</span>
+            </label>
+            <app-searchable-select
+              [options]="customerOptions()"
+              [value]="selectedCustomer()?.id ?? ''"
+              [selectedLabel]="selectedCustomer()?.nome_completo ?? ''"
+              [loading]="customerSearching()"
+              placeholder="Buscar cliente por nome ou CPF..."
+              (searchChange)="onCustomerSearch($event)"
+              (valueChange)="onCustomerSelected($event)"
+              (cleared)="clearCustomer()"
+            />
+          </div>
+
+          <div>
+            <!-- eslint-disable-next-line @angular-eslint/template/label-has-associated-control -->
+            <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+              Veículo <span class="text-[var(--danger)]">*</span>
+            </label>
+            <app-searchable-select
+              [options]="assetOptions()"
+              [value]="selectedAsset()?.id ?? ''"
+              [selectedLabel]="selectedAsset() ? selectedAsset()!.placa + ' — ' + selectedAsset()!.marca : ''"
+              [loading]="assetSearching()"
+              placeholder="Buscar veículo por placa ou modelo..."
+              (searchChange)="onAssetSearch($event)"
+              (valueChange)="onAssetSelected($event)"
+              (cleared)="clearAsset()"
+            />
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Step 2: Terms -->
+    @if (currentStep() === 2) {
+      <div class="space-y-6">
+        <h3 class="text-lg font-semibold text-[var(--text-primary)]">Condições do Contrato</h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="wiz-start-date" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Data de Início</label>
+            <input
+              id="wiz-start-date"
+              type="date"
+              [value]="startDate()"
+              (input)="startDate.set($any($event.target).value)"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 px-4 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+            />
+          </div>
+          <div>
+            <label for="wiz-end-date" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Data de Término</label>
+            <input
+              id="wiz-end-date"
+              type="date"
+              [value]="endDate()"
+              (input)="endDate.set($any($event.target).value)"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 px-4 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+            />
+          </div>
+          <div>
+            <label for="wiz-total-value" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Valor Total (R$)</label>
+            <input
+              id="wiz-total-value"
+              type="number"
+              [value]="totalValue()"
+              (input)="totalValue.set(+$any($event.target).value)"
+              min="0"
+              step="0.01"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 px-4 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
+            />
+          </div>
+          <div class="md:col-span-2">
+            <label for="wiz-notes" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Observações</label>
+            <textarea
+              id="wiz-notes"
+              [value]="notes()"
+              (input)="notes.set($any($event.target).value)"
+              rows="3"
+              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 px-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition resize-none"
+              placeholder="Observações opcionais..."
+            ></textarea>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Step 3: Schedule -->
+    @if (currentStep() === 3) {
+      <div class="space-y-6">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-[var(--text-primary)]">Prévia das Parcelas</h3>
+          <button
+            (click)="loadSchedulePreview()"
+            class="flex items-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+          >
+            Recalcular
+          </button>
+        </div>
+
+        @if (isLoading()) {
+          <div class="flex items-center justify-center py-12 text-[var(--text-muted)]">
+            <div class="animate-spin h-6 w-6 border-2 border-[var(--accent)] border-t-transparent rounded-full"></div>
+            <span class="ml-3 text-sm">Calculando parcelas...</span>
+          </div>
+        } @else if (schedulePreview().length > 0) {
+          <div class="overflow-x-auto rounded-xl border border-[var(--border)]">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-[var(--border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                  <th class="px-4 py-3 font-medium">#</th>
+                  <th class="px-4 py-3 font-medium">Vencimento</th>
+                  <th class="px-4 py-3 font-medium text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (inst of schedulePreview(); track inst.sequencia) {
+                  <tr class="border-b border-[var(--border)] last:border-0">
+                    <td class="px-4 py-3 text-[var(--text-primary)]">{{ inst.sequencia }}</td>
+                    <td class="px-4 py-3 text-[var(--text-secondary)]">{{ formatDate(inst.data_vencimento) }}</td>
+                    <td class="px-4 py-3 text-right text-[var(--text-primary)] font-medium">{{ formatCurrency(inst.valor) }}</td>
+                  </tr>
+                }
+              </tbody>
+              <tfoot>
+                <tr class="bg-[var(--border-subtle)]">
+                  <td colspan="2" class="px-4 py-3 font-semibold text-[var(--text-primary)]">Total</td>
+                  <td class="px-4 py-3 text-right font-semibold text-[var(--text-primary)]">{{ formatCurrency(scheduleTotal()) }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        } @else {
+          <div class="flex flex-col items-center justify-center py-12 text-[var(--text-muted)]">
+            <ui-icon name="heroDocumentText" size="2rem" />
+            <p class="mt-2 text-sm">Nenhuma parcela gerada</p>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Step 4: Review -->
+    @if (currentStep() === 4) {
+      <div class="space-y-6">
+        <h3 class="text-lg font-semibold text-[var(--text-primary)]">Revisão do Contrato</h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="space-y-3">
+            <h4 class="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Cliente</h4>
+            <p class="text-[var(--text-primary)]">{{ selectedCustomer()?.nome_completo }}</p>
+          </div>
+          <div class="space-y-3">
+            <h4 class="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Ativo</h4>
+            <p class="text-[var(--text-primary)]">{{ selectedAsset()?.placa }} - {{ selectedAsset()?.marca }} {{ selectedAsset()?.modelo }}</p>
+          </div>
+          <div class="space-y-3">
+            <h4 class="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Período</h4>
+            <p class="text-[var(--text-primary)]">{{ formatDate(startDate()) }} a {{ formatDate(endDate()) }}</p>
+          </div>
+          <div class="space-y-3">
+            <h4 class="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Valor Total</h4>
+            <p class="text-[var(--text-primary)] text-lg font-semibold">{{ formatCurrency(totalValue()) }}</p>
+          </div>
+          <div class="space-y-3">
+            <h4 class="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Parcelas</h4>
+            <p class="text-[var(--text-primary)]">{{ schedulePreview().length }} parcela(s)</p>
+          </div>
+          @if (notes()) {
+            <div class="md:col-span-2 space-y-3">
+              <h4 class="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Observações</h4>
+              <p class="text-[var(--text-secondary)]">{{ notes() }}</p>
+            </div>
+          }
+        </div>
+
+        <div class="border-t border-[var(--border)] pt-4">
+          <label for="wiz-activate" class="flex items-center gap-3 cursor-pointer">
+            <input
+              id="wiz-activate"
+              type="checkbox"
+              [checked]="activateAfterCreate()"
+              (change)="activateAfterCreate.set($any($event.target).checked)"
+              class="h-4 w-4 rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)]"
+            />
+            <span class="text-sm text-[var(--text-primary)]">Ativar contrato automaticamente após criação</span>
+          </label>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Navigation buttons -->
+  <div class="flex items-center justify-between">
+    <button
+      (click)="currentStep() === 1 ? goBack() : prevStep()"
+      class="flex items-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+    >
+      <ui-icon name="heroArrowLeft" size="1rem" />
+      {{ currentStep() === 1 ? 'Cancelar' : 'Voltar' }}
+    </button>
+
+    @if (currentStep() < 4) {
+      <button
+        (click)="nextStep()"
+        [disabled]="!canAdvance()"
+        class="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+      >
+        Próximo
+        <ui-icon name="heroChevronRight" size="1rem" />
+      </button>
+    } @else {
+      <button
+        (click)="submit()"
+        [disabled]="isSaving()"
+        class="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+      >
+        @if (isSaving()) {
+          <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+          Salvando...
+        } @else {
+          <ui-icon name="heroDocumentText" size="1rem" />
+          Criar Contrato
+        }
+      </button>
+    }
+  </div>
+</div>
