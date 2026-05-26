@@ -1,4 +1,4 @@
-import {
+﻿import {
   Component,
   ChangeDetectionStrategy,
   inject,
@@ -74,9 +74,9 @@ export class AppShellComponent {
     {
       section: 'Conta',
       items: [
-        { label: 'Meu Perfil', route: '/system/profile' },
-        { label: 'Preferências', route: '/system/preferences' },
-        { label: 'Segurança', route: '/system/security' },
+        { label: 'Meu Perfil', route: '/sistema/perfil' },
+        { label: 'Preferências', route: '/sistema/preferencias' },
+        { label: 'Segurança', route: '/sistema/seguranca' },
       ],
     },
   ];
@@ -85,29 +85,29 @@ export class AppShellComponent {
     {
       section: 'Acesso',
       items: [
-        { label: 'Usuários', route: '/system/settings/users' },
-        { label: 'Roles & Permissões', route: '/system/settings/roles' },
+        { label: 'Usuários', route: '/sistema/configuracoes/usuarios' },
+        { label: 'Roles & Permissões', route: '/sistema/configuracoes/papeis' },
       ],
     },
     {
       section: 'Parâmetros',
       items: [
-        { label: 'Financeiro', route: '/system/settings/finance' },
-        { label: 'Contratos', route: '/system/settings/contracts' },
-        { label: 'Integrações', route: '/system/settings/integrations' },
-        { label: 'Módulos', route: '/system/settings/modules' },
+        { label: 'Financeiro', route: '/sistema/configuracoes/financeiro' },
+        { label: 'Contratos', route: '/sistema/configuracoes/contratos' },
+        { label: 'Integrações', route: '/sistema/configuracoes/integracoes' },
+        { label: 'Módulos', route: '/sistema/configuracoes/modulos' },
       ],
     },
     {
       section: 'Inteligência',
       items: [
-        { label: 'Agente IA', route: '/system/settings/agent' },
+        { label: 'Agente IA', route: '/sistema/configuracoes/agente' },
       ],
     },
     {
       section: 'Sistema',
       items: [
-        { label: 'Log de Auditoria', route: '/system/settings/audit-log' },
+        { label: 'Log de Auditoria', route: '/sistema/configuracoes/log-auditoria' },
       ],
     },
   ];
@@ -115,9 +115,9 @@ export class AppShellComponent {
   constructor() {
     // Auto-open correct sidebar if initial URL matches
     const initialUrl = this.router.url;
-    if (initialUrl.startsWith('/system/settings/')) {
+    if (initialUrl.startsWith('/sistema/configuracoes/')) {
       this.settingsSidebarOpen.set(true);
-    } else if (initialUrl.startsWith('/system/profile') || initialUrl.startsWith('/system/preferences') || initialUrl.startsWith('/system/security')) {
+    } else if (initialUrl.startsWith('/sistema/perfil') || initialUrl.startsWith('/sistema/preferencias') || initialUrl.startsWith('/sistema/seguranca')) {
       this.profileSidebarOpen.set(true);
     }
 
@@ -127,9 +127,9 @@ export class AppShellComponent {
         this.mobileSidebarOpen.set(false);
 
         const url = this.router.url;
-        if (url.startsWith('/system/settings/')) {
+        if (url.startsWith('/sistema/configuracoes/')) {
           this.settingsSidebarOpen.set(true);
-        } else if (url.startsWith('/system/profile') || url.startsWith('/system/preferences') || url.startsWith('/system/security')) {
+        } else if (url.startsWith('/sistema/perfil') || url.startsWith('/sistema/preferencias') || url.startsWith('/sistema/seguranca')) {
           this.profileSidebarOpen.set(true);
         }
       }
@@ -165,25 +165,25 @@ export class AppShellComponent {
     } else {
       this.profileSidebarOpen.set(false);
       this.settingsSidebarOpen.set(true);
-      this.router.navigate(['/system/settings/users']);
+      this.router.navigate(['/sistema/configuracoes/usuarios']);
     }
   }
 
   closeSettingsSidebar(): void {
     this.settingsSidebarOpen.set(false);
-    this.router.navigate(['/system/dashboard']);
+    this.router.navigate(['/sistema/dashboard']);
   }
 
   openProfileSidebar(): void {
     this.settingsSidebarOpen.set(false);
     this.userMenuOpen.set(false);
     this.profileSidebarOpen.set(true);
-    this.router.navigate(['/system/profile']);
+    this.router.navigate(['/sistema/perfil']);
   }
 
   closeProfileSidebar(): void {
     this.profileSidebarOpen.set(false);
-    this.router.navigate(['/system/dashboard']);
+    this.router.navigate(['/sistema/dashboard']);
   }
 
   toggleUserMenu(): void {

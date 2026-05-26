@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+﻿import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -261,7 +261,7 @@ export class PayableService {
       .set('period_end', params.period_end);
 
     return firstValueFrom(
-      this.http.get<DreResponse>(`${this.baseUrl}/reports/dre`, { params: httpParams }),
+      this.http.get<DreResponse>(`${this.baseUrl}/relatorios/dre`, { params: httpParams }),
     );
   }
 }

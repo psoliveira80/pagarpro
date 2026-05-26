@@ -1,18 +1,18 @@
-import { Routes } from '@angular/router';
+﻿import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'system/dashboard', pathMatch: 'full' },
+  { path: '', redirectTo: 'sistema/dashboard', pathMatch: 'full' },
   {
     path: 'auth',
     loadChildren: () =>
       import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
   },
   {
-    path: 'system',
+    path: 'sistema',
     canActivate: [authGuard],
     loadChildren: () =>
-      import('./features/system/system.routes').then((m) => m.SYSTEM_ROUTES),
+      import('./features/sistema/sistema.routes').then((m) => m.SYSTEM_ROUTES),
   },
   {
     path: '**',

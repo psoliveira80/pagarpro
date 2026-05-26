@@ -1,4 +1,4 @@
-<div class="space-y-6">
+﻿<div class="space-y-6">
   <!-- Header with period selector -->
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
     <h2 class="text-2xl font-semibold">Dashboard</h2>
@@ -47,7 +47,7 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       <!-- Total a Receber -->
       <button
-        (click)="navigateTo('/system/finance/receivables')"
+        (click)="navigateTo('/sistema/financeiro/titulos-receber')"
         class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left hover:border-[var(--accent)] transition cursor-pointer"
       >
         <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Total a Receber</p>
@@ -56,7 +56,7 @@
 
       <!-- Vencido -->
       <button
-        (click)="navigateTo('/system/finance/receivables')"
+        (click)="navigateTo('/sistema/financeiro/titulos-receber')"
         class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left hover:border-red-500 transition cursor-pointer"
       >
         <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Vencido</p>
@@ -66,7 +66,7 @@
 
       <!-- Recebido Mês -->
       <button
-        (click)="navigateTo('/system/finance/receivables')"
+        (click)="navigateTo('/sistema/financeiro/titulos-receber')"
         class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left hover:border-green-500 transition cursor-pointer"
       >
         <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Recebido no Mês</p>
@@ -75,7 +75,7 @@
 
       <!-- Contratos Ativos -->
       <button
-        (click)="navigateTo('/system/contracts')"
+        (click)="navigateTo('/sistema/contracts')"
         class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left hover:border-[var(--accent)] transition cursor-pointer"
       >
         <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Contratos Ativos</p>
@@ -84,7 +84,7 @@
 
       <!-- Valor da Frota -->
       <button
-        (click)="navigateTo('/system/vehicles')"
+        (click)="navigateTo('/sistema/vehicles')"
         class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left hover:border-[var(--accent)] transition cursor-pointer"
       >
         <p class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Valor da Frota</p>
@@ -96,7 +96,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- Receivables Trend (Bar Chart) -->
       <div class="rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5">
-        <h3 class="text-sm font-semibold text-[var(--text-primary)] mb-4">Recebíveis - Últimos 12 Meses</h3>
+        <h3 class="text-sm font-semibold text-[var(--text-primary)] mb-4">Recebíveis - Ãšltimos 12 Meses</h3>
         @if (trend().length > 0) {
           <div class="flex items-end gap-1 h-48">
             @for (point of trend(); track point.period) {
@@ -172,7 +172,7 @@
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-sm font-semibold text-[var(--text-primary)]">Top 10 Inadimplentes</h3>
         <button
-          (click)="navigateTo('/system/reports/customers')"
+          (click)="navigateTo('/sistema/relatorios/customers')"
           class="text-xs text-[var(--accent)] hover:underline"
         >
           Ver relatório completo

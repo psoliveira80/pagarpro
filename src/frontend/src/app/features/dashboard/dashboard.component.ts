@@ -1,4 +1,4 @@
-import {
+﻿import {
   Component,
   ChangeDetectionStrategy,
   inject,
@@ -19,8 +19,8 @@ import {
   selector: 'app-dashboard',
   standalone: true,
   imports: [DecimalPipe],
-  templateUrl: './dashboard.component.html',
-  styleUrl: './dashboard.component.css',
+  templateUrl: '../dashboard/dashboard.component.html',
+  styleUrl: '../dashboard/dashboard.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DashboardComponent implements OnInit {
@@ -97,6 +97,6 @@ export class DashboardComponent implements OnInit {
   }
 
   navigateToCustomer(id: string): void {
-    this.router.navigate(['/system/customers', id]);
+    this.router.navigate(['/sistema/customers', id]);
   }
 }

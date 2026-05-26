@@ -1,4 +1,4 @@
-import {
+﻿import {
   Component,
   ChangeDetectionStrategy,
   inject,
@@ -65,7 +65,7 @@ export class LoginComponent implements AfterViewInit {
         this.form.controls.email.value,
         this.form.controls.password.value,
       );
-      const redirect = this.route.snapshot.queryParamMap.get('redirect') || '/system/dashboard';
+      const redirect = this.route.snapshot.queryParamMap.get('redirect') || '/sistema/dashboard';
       await this.router.navigateByUrl(redirect);
     } catch (err) {
       if (err instanceof HttpErrorResponse && err.status === 401) {
