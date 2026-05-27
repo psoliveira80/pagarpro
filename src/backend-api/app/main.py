@@ -177,6 +177,11 @@ def create_app() -> FastAPI:
 
     app.include_router(motor_router, prefix="/api/v1")
 
+    # API v1 — análise de comprovantes PIX (Epic 13, Story 13.19)
+    from app.api.v1.comprovantes_routes import router as comprovantes_router
+
+    app.include_router(comprovantes_router, prefix="/api/v1")
+
     # SSE routes
     from app.api.sse import router as sse_router
 

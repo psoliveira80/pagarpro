@@ -60,6 +60,17 @@ CONFIGURACOES_PADRAO: list[tuple[str, str, str, str, str]] = [
      "Canal padrão de cobrança (whatsapp, email, sms)"),
     ("canal_cobranca_fallback", "comunicacao", "string", "",
      "Canal de fallback se o principal falhar (vazio = sem fallback)"),
+    # ── comprovantes (Story 13.19) ──
+    ("modo_analise", "comprovantes", "string", "nativo",
+     "Modo de análise de comprovantes: nativo | ia_como_reforco | ia_primario"),
+    ("provedor_ia", "comprovantes", "string", "",
+     "Provedor de IA Vision quando modo!=nativo: openai-vision | claude-vision | gemini"),
+    ("threshold_acionar_ia", "comprovantes", "decimal", "0.70",
+     "Quando modo=ia_como_reforco, IA é chamada se score nativo < este valor"),
+    ("threshold_notificacao_baixa_confianca", "comprovantes", "decimal", "0.70",
+     "Comprovantes com score abaixo deste valor geram notificação operacional"),
+    ("threshold_alerta_critico", "comprovantes", "decimal", "0.40",
+     "Comprovantes com score abaixo deste valor viram alerta crítico (revisão urgente)"),
 ]
 
 

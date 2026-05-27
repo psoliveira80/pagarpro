@@ -26,9 +26,20 @@ dependencies = [
     "jinja2>=3.1",
     "qrcode[pil]>=7.4",
     "Pillow>=10.0",
+    # Story 13.19 — análise de comprovantes PIX (sem IA por padrão)
+    "pyzbar>=0.1.9",
+    "pdfplumber>=0.11",
+    "pytesseract>=0.3.10",
+    "opencv-python-headless>=4.10",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
+# Engine OCR premium (opt-in — ~600MB, mais preciso em imagens degradadas)
+ocr-premium = [
+    "paddleocr>=2.7",
+    "paddlepaddle>=2.6",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
