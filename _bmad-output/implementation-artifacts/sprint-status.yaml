@@ -195,6 +195,8 @@ development_status:
   13-7-motor-alertar-vencimentos-proximos: review  # 2026-05-27: implementada por Amelia. Worker novo + cron 08:00 UTC + fan-out por empresa. Lê config (dias_antecedencia + canal). Renderiza template. Idempotência tripla (Redis lock + dia + skip). 5 testes.
   13-8-motor-processar-titulos-vencidos: review  # 2026-05-27: implementada por Amelia. Função pura calcular_encargos + worker que aplica encargos, escalona cobrança/suspensão/encerramento. Itera por contrato (não por título). 8 testes (3 unit + 5 integração).
   13-9-motor-conciliar-pagamentos-recebidos: review  # 2026-05-27: implementada por Amelia. decidir_conciliacao (função pura) + ServicoTituloPago (handler central). Fusão/separação por threshold. Opção de compra delega para ServicoOpcaoCompra. Worker que polling pagamentos bancários adiado (sem integração Pluggy/Asaas em dev). 11 testes.
+  13-19-analise-comprovante-pix: ready-for-dev  # 2026-05-27: NOVA. Pipeline multi-camada (BR Code → PDF texto → PaddleOCR + heurística). Sem IA por padrão (IA como opt-in configurável: nativo/ia_como_reforco/ia_primario). Notificação por baixa confiança.
+  13-20-conciliacao-bancaria-ofx-pdf: ready-for-dev  # 2026-05-27: NOVA. UX visual de 2 colunas (extrato × títulos) com matches coloridos por score. Importa OFX/PDF/CSV. Reusa OCR da 13.19. Co-autoria Sally UX.
   13-10-renderizador-templates-mensagem: review  # 2026-05-27: implementada por Amelia. Migration 0022 cria comunicacao.templates_mensagem. Jinja2 SandboxedEnvironment + StrictUndefined. CRUD + preview admin. 5 templates seedados. 11 novos testes (205 total).
   13-11-ledger-passivo-inoperante: ready-for-dev  # 2026-05-27
   13-12-heroi-financeiro-detalhe-contrato: ready-for-dev  # 2026-05-27
