@@ -124,6 +124,71 @@
 - **"score"** em crédito/risco = **score** (mantém).
 - **"hook" / "hooks"** = **hook** (não "gancho" — termo técnico consagrado).
 
+## Domínio Financeiro — Tabela de Renames EN→PT-BR (Story 13.1)
+
+Convenção de nomes para código **novo** do Epic 13 em diante. Nomes EN listados aqui ainda existem como **aliases backward-compat** em `app/core/events/domain_events.py` para preservar serialização de eventos persistidos (Redis Streams + `audit_log`). Migração completa para PT-BR canonical fica como débito técnico — exige replay/reescrita de eventos antigos.
+
+### Workers Celery (tasks)
+
+| Nome antigo (EN) | Nome novo (PT-BR) | Status |
+|---|---|---|
+| `generate_monthly_installments` | `gerar_titulos_mensais` | ✅ aplicado (Story 12.6) |
+| `check_overdue_installments` | `processar_titulos_vencidos` | ✅ aplicado |
+| `check_upcoming_due_dates` | `alertar_vencimentos_proximos` | 🔵 a criar (Story 13.7) |
+| `check_paid_installments` | `conciliar_pagamentos_recebidos` | 🔵 a criar (Story 13.9) |
+| `calculate_customer_scores` | `atualizar_scores_clientes` | ✅ aplicado |
+| `generate_recurring_payables` | `gerar_contas_pagar_recorrentes` | ⚠️ parcial (atual: `gerar_despesas_recorrentes`) |
+| `check_channel_health` | `monitorar_saude_canais` | ⚠️ parcial (atual: `verificar_saude_canais`) |
+| `refresh_materialized_views` | `atualizar_visoes_materializadas` | ⚠️ parcial (atual: `atualizar_views`) |
+
+### Hooks de Domínio (event handlers)
+
+| Nome antigo (EN) | Nome novo (PT-BR) | Status |
+|---|---|---|
+| `on_installment_paid` | `quando_titulo_pago` | 🔵 a renomear (interface IAssetModule — story arquitetural própria) |
+| `on_installment_overdue` | `quando_titulo_vencido` | 🔵 a renomear |
+| `on_contract_created` | `quando_contrato_ativado` | 🔵 a renomear |
+| `on_contract_terminated` | `quando_contrato_encerrado` | 🔵 a renomear |
+
+### Eventos de Domínio (`app/core/events/domain_events.py`)
+
+| Nome canonical (EN, mantém) | Alias preferencial para código novo (PT-BR) |
+|---|---|
+| `ContractCreatedEvent` | `EventoContratoAtivado` |
+| `ContractTerminatedEvent` | `EventoContratoEncerrado` |
+| `InstallmentOverdueEvent` | `EventoTituloVencido` |
+| `InstallmentPaidEvent` | `EventoTituloPago` |
+| `PaymentPartiallyReceivedEvent` | `EventoPagamentoParcialRecebido` |
+| `ReconciliationCompletedEvent` | `EventoConciliacaoCompletada` |
+| `CustomerScoreChangedEvent` | `EventoScoreClienteAlterado` |
+
+**Regra:** em código novo, importar pelo alias PT-BR. Em código existente que faz `to_dict()` para persistência, o nome EN é preservado em `_type` (preserva replay de eventos antigos).
+
+### Políticas e Renderizadores
+
+| Nome antigo (EN) | Nome novo (PT-BR) | Status |
+|---|---|---|
+| `collection_policy` | `politica_cobranca` | 🔵 a aplicar |
+| `template_renderer` | `renderizador_template` | 🔵 a criar (Story 13.10) |
+
+### Interfaces (Ports do Hexagonal)
+
+| Nome antigo (EN) | Nome novo (PT-BR) | Status |
+|---|---|---|
+| `IAssetModule` | `IModuloVertical` | 🔵 débito (interface arquitetural — rename invalida ~30 imports + Protocol type checking; demanda story própria) |
+| `IMessageChannel` | `ICanalMensagem` | 🔵 débito (mesma justificativa) |
+| `IPaymentGateway` | `IGatewayPagamento` | 🔵 débito |
+| `ITrackerGateway` | `IGatewayRastreador` | 🔵 débito |
+
+### Legenda
+
+- ✅ **aplicado** — rename já feito em sessão anterior, código consistente.
+- ⚠️ **parcial** — nome em uso é PT-BR mas difere ligeiramente do alvo formal acima (ex.: `verificar_` em vez de `monitorar_`); ajuste cosmético.
+- 🔵 **a aplicar/criar** — nome ainda em inglês ou função ainda não existe; será renomeado/criado nas stories indicadas.
+- 🔵 **débito** — rename adiado para story arquitetural dedicada (blast radius cross-cutting).
+
+---
+
 ## Padrões para títulos de documentos
 
 - Seções de PRD/ARCHITECTURE/épicos: títulos em PT-BR (`Visão Geral`, `Requisitos Funcionais`, `Decisões Arquiteturais`).

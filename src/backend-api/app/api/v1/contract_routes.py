@@ -427,7 +427,7 @@ async def terminate_contract(
             )
             await repo.add_adjustment(adj)
 
-    contract.status = "encerrado"
+    contract.status = "encerrado_sem_pendencia"
 
     await repo.add_event(ContractEvent(
         empresa_id=current_user.empresa_id,
@@ -474,7 +474,7 @@ async def terminate_contract(
         total_pago=summary.paid_total,
         valor_multa=summary.fine_amount,
         saldo_final=summary.final_balance,
-        status="encerrado",
+        status="encerrado_sem_pendencia",
     )
 
 

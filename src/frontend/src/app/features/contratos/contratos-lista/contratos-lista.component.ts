@@ -95,7 +95,7 @@ export class ContratosListaComponent implements OnInit, OnDestroy {
   }
 
   viewContract(contract: Contrato): void {
-    this.router.navigate(['/sistema/contracts', contract.id]);
+    this.router.navigate(['/sistema/contratos', contract.id]);
   }
 
   openSimulation(): void {

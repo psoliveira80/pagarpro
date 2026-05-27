@@ -394,7 +394,7 @@ async def test_task_skips_inactive_contracts():
         next_gen=date.today(),
         base_value=Decimal("500.00"),
         index="ipca",
-        status="encerrado",
+        status="encerrado_sem_pendencia",
     )
 
     provider = _StubProvider()

@@ -474,15 +474,39 @@ async def get_settings_all(
     session: SessionDep,
     current_user: CurrentUserDep,
 ) -> list[SystemSettingOut]:
+    """Endpoint legado — adapta `configuracoes_sistema` (Story 13.4) ao formato
+    antigo key/value JSON. Mapeia `slug` → `key` e desserializa `valor` (TEXT)
+    para o `value` antigo (JSONB-like dict).
+
+    Para a UI nova de configurações, use `/api/v1/configuracoes` (tipado).
+    """
     result = await session.execute(
         select(SystemSetting)
         .where(SystemSetting.empresa_id == current_user.empresa_id)
-        .order_by(SystemSetting.chave)
+        .order_by(SystemSetting.slug)
     )
-    return [
-        SystemSettingOut(key=r.chave, value=r.valor, updated_at=r.atualizado_em)
-        for r in result.scalars().all()
-    ]
+    items: list[SystemSettingOut] = []
+    for r in result.scalars().all():
+        # Schema legado exige `value: dict`. Para tipos escalares novos
+        # (inteiro/decimal/booleano/string), embrulha em `{"valor": ..., "tipo": ...}`
+        # para manter o contrato sem perder informação.
+        value: dict
+        if r.tipo_valor == "json":
+            try:
+                parsed = json.loads(r.valor)
+                value = parsed if isinstance(parsed, dict) else {"valor": parsed, "tipo": "json"}
+            except json.JSONDecodeError:
+                value = {"raw": r.valor, "tipo": "json"}
+        elif r.tipo_valor == "inteiro":
+            value = {"valor": int(r.valor), "tipo": "inteiro"}
+        elif r.tipo_valor == "decimal":
+            value = {"valor": float(r.valor), "tipo": "decimal"}
+        elif r.tipo_valor == "booleano":
+            value = {"valor": r.valor == "true", "tipo": "booleano"}
+        else:
+            value = {"valor": r.valor, "tipo": "string"}
+        items.append(SystemSettingOut(key=r.slug, value=value, updated_at=r.atualizado_em))
+    return items
 
 
 @router.put("/settings", response_model=list[SystemSettingOut])
@@ -491,51 +515,16 @@ async def update_settings(
     session: SessionDep,
     current_user: CurrentUserDep,
 ) -> list[SystemSettingOut]:
-    for key, value in body.settings.items():
-        result = await session.execute(
-            select(SystemSetting).where(
-                SystemSetting.empresa_id == current_user.empresa_id,
-                SystemSetting.chave == key,
-            )
-        )
-        existing = result.scalar_one_or_none()
+    """Endpoint legado de update — desativado em favor do tipado `/configuracoes`.
 
-        before_val = existing.valor if existing else None
-
-        if existing:
-            existing.valor = value
-            existing.atualizado_em = datetime.now(timezone.utc)
-            existing.atualizado_por_id = current_user.id
-        else:
-            setting = SystemSetting(
-                empresa_id=current_user.empresa_id,
-                chave=key,
-                valor=value,
-                atualizado_em=datetime.now(timezone.utc),
-                atualizado_por_id=current_user.id,
-            )
-            session.add(setting)
-
-        audit = AuditLogger(session)
-        await audit.record(
-            action="settings.updated",
-            user_id=str(current_user.id),
-            entity="system_settings",
-            entity_id=key,
-            payload_before={"value": before_val} if before_val else None,
-            payload_after={"value": value},
-            ip=None,
-            correlation_id=get_correlation_id(),
-        )
-
-    await session.commit()
-
-    result = await session.execute(
-        select(SystemSetting)
-        .where(SystemSetting.empresa_id == current_user.empresa_id)
-        .order_by(SystemSetting.chave)
+    Story 13.4 introduziu `tipo_valor` obrigatório; o payload antigo (apenas
+    key/value JSON) não consegue determinar o tipo do valor de forma segura.
+    A UI nova consome `/api/v1/configuracoes/{slug}`.
+    """
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "Endpoint /admin/settings (PUT) substituído por /api/v1/configuracoes/{slug} "
+            "a partir da Story 13.4 (configurações tipadas)."
+        ),
     )
-    return [
-        SystemSettingOut(key=r.chave, value=r.valor, updated_at=r.atualizado_em)
-        for r in result.scalars().all()
-    ]

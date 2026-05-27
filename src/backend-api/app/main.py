@@ -162,6 +162,16 @@ def create_app() -> FastAPI:
 
     app.include_router(customer_data_router, prefix="/api/v1")
 
+    # API v1 — configurações tipadas (Epic 13, Story 13.4)
+    from app.api.v1.configuracoes_routes import router as configuracoes_router
+
+    app.include_router(configuracoes_router, prefix="/api/v1")
+
+    # API v1 — templates de mensagem (Epic 13, Story 13.10)
+    from app.api.v1.templates_mensagem_routes import router as templates_mensagem_router
+
+    app.include_router(templates_mensagem_router, prefix="/api/v1")
+
     # SSE routes
     from app.api.sse import router as sse_router
 

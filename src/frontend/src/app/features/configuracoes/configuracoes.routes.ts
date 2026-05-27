@@ -2,6 +2,11 @@ import { Routes } from '@angular/router';
 
 export const CONFIGURACOES_ROUTES: Routes = [
   {
+    path: 'parametros',
+    loadComponent: () =>
+      import('./parametros-motor/parametros-motor.component').then((m) => m.ParametrosMotorComponent),
+  },
+  {
     path: 'agente',
     loadComponent: () =>
       import('./agente-config/agente-config.component').then((m) => m.AgenteConfigComponent),

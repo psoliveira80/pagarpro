@@ -111,15 +111,7 @@
           </div>
           <div>
             <label for="wiz-total-value" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Valor Total (R$)</label>
-            <input
-              id="wiz-total-value"
-              type="number"
-              [value]="totalValue()"
-              (input)="totalValue.set(+$any($event.target).value)"
-              min="0"
-              step="0.01"
-              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 px-4 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
-            />
+            <app-input-moeda id="wiz-total-value" [(value)]="totalValue" />
           </div>
           <div class="md:col-span-2">
             <label for="wiz-notes" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Observações</label>

@@ -10,6 +10,7 @@
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CustomSelectComponent, SelectOption } from '../../../shared/components/custom-select/custom-select.component';
+import { InputMoedaComponent } from '../../../shared/components/input-moeda/input-moeda.component';
 import {
   PayableService,
   TituloPagar,
@@ -21,7 +22,7 @@ import {
 @Component({
   selector: 'app-titulo-pagar-form',
   standalone: true,
-  imports: [FormsModule, CustomSelectComponent],
+  imports: [FormsModule, CustomSelectComponent, InputMoedaComponent],
   templateUrl: './titulo-pagar-form.component.html',
   styleUrl: './titulo-pagar-form.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

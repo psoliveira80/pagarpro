@@ -2,8 +2,8 @@
 
 > **Método:** BMAD (Breakthrough Method for Agile AI-Driven Development)
 > **Tipo de Projeto:** Greenfield Fullstack (Web Responsivo)
-> **Versão do Documento:** 3.0
-> **Data:** 22/05/2026
+> **Versão do Documento:** 3.1
+> **Data:** 27/05/2026
 > **Autor (Agente PM):** John (BMAD)
 > **Stakeholder Principal:** Gestor de Negócios (Cliente Final)
 > **Nome do Produto:** `{{product_name}}` (configurável no deploy)
@@ -64,6 +64,7 @@ O primeiro deployment target opera no modelo de **locação com opção de compr
 | 07/05/2026 | 1.0    | Criação inicial do PRD a partir do brief                                  | John (PM) |
 | 07/05/2026 | 2.0    | Reescrita como plataforma genérica com Asset Abstraction Layer + Vehicle Module | John (PM) |
 | 22/05/2026 | 3.0    | Clarificação do modelo de negócio (locação com opção de compra); especificação do Motor de Cobrança Autônomo (32 tasks, 7 filas, paralelismo coordinator + fan-out em lotes de 50 + 3 camadas de idempotência); novos requisitos FR-CORE-COB-11 a 16 e FR-CORE-CR-12; introdução do enum `tipo_titulo` (`parcela`, `opcao_compra`, `multa`, `taxa`, `ajuste`); passivos inoperantes; máquina de estados do contrato expandida (7 estados: `rascunho`, `ativo`, `suspenso`, `encerrado_sem_pendencia`, `encerrado_com_pendencia`, `encerrado_compra`, `rescindido`); convenção PT-BR consolidada para termos técnicos. | John (PM) |
+| 27/05/2026 | 3.1    | Refinamento do construtor de parcelamento pós-smoke-test (FR-CORE-CTR-2 expandido com tipo de intervalo + sub-campos condicionais, multa/juros, parcela final, toggle de correção — Story 13.16); regra explícita de geração N+1 títulos quando há opção de compra (FR-CORE-CTR-3); novo FR-CORE-CTR-11 (boleto proporcional ao suspender/cancelar) com fórmula, parâmetros e regras; novo FR-CORE-CR-13 (multa/juros por contrato); novo FR-CORE-INT-4 (índices de correção plugáveis via `IIndiceCorrecao`). | John (PM) + Amelia (dev) |
 
 ---
 
@@ -143,7 +144,19 @@ O primeiro deployment target opera no modelo de **locação com opção de compr
   - **Parcelas extras semestrais ou anuais** (ex.: 13a parcela em dezembro).
   - **Carência inicial** (X dias sem cobrança após assinatura).
   - **Custom Schedule**: tabela editável onde o usuário pode arrastar, adicionar, remover ou alterar qualquer linha individualmente antes de salvar.
-- **FR-CORE-CTR-3.** Ao finalizar o contrato (status `ativo`), o sistema deve gerar automaticamente os **Títulos a Receber** com status inicial `em_aberto`, vinculados ao contrato. A tabela `titulos` deve distinguir o tipo de título via campo `tipo` (enum `tipo_titulo`): `parcela` (mensalidade regular de locação), `opcao_compra` (parcela única final que, se paga, transfere a propriedade do ativo ao cliente), `multa`, `taxa`, `ajuste`. O sistema gera N títulos `tipo = 'parcela'` + 1 título `tipo = 'opcao_compra'` (somente se `valor_opcao_compra` estiver configurado no contrato). O pagamento do título `opcao_compra` dispara o evento `ContractPurchaseOptionExercised`, que muda a `situacao` do contrato para `encerrado_compra` e notifica o módulo vertical para executar a transferência de propriedade do ativo. Alterações contratuais que afetam parcelas devem cancelar títulos em aberto antigos e gerar novos (reemissão).
+
+  **Detalhamento operacional (Story 13.16 — pós-feedback de smoke-test):** O construtor opera primariamente com **valor por parcela + quantidade** (o valor total é derivado: `valor_total = valor_parcela × quantidade + valor_parcela_final`), e expõe os seguintes campos no wizard:
+  - **Tipo de intervalo** (select obrigatório com sub-campos condicionais):
+    - `semanal` → sub-campo "Dia da semana" (Seg..Dom).
+    - `mensal` → sub-campo "Dia do mês" (1..31, com fallback para último dia útil em meses curtos).
+    - `personalizado_dias` → sub-campo "Número de dias" (inteiro ≥ 1).
+    - Arquitetura extensível para tipos futuros (`diaria`, `quinzenal`, `datas_customizadas`) sem refator.
+  - **Multa e juros por atraso** (decimais, 2 casas, % a.m.) — armazenados **por contrato** (ver FR-CORE-CR-13).
+  - **Valor da parcela final ("opção de compra")** — opcional; quando preenchido, gera 1 título extra do tipo `opcao_compra` na data seguinte à última parcela regular.
+  - **Toggle de aplicação de índice de correção** — quando ligado, exibe seletor com índices de correção `ativo=true` em `config.credenciais_integracao` (ver FR-CORE-INT-4). Espelho de parcelas e total geral refletem valores corrigidos.
+
+  Especificação UX completa em `docs/wizard-contrato-detalhamento-ux.md`.
+- **FR-CORE-CTR-3.** Ao finalizar o contrato (status `ativo`), o sistema deve gerar automaticamente os **Títulos a Receber** com status inicial `em_aberto`, vinculados ao contrato. A tabela `titulos` deve distinguir o tipo de título via campo `tipo` (enum `tipo_titulo`): `parcela` (mensalidade regular de locação), `opcao_compra` (parcela única final que, se paga, transfere a propriedade do ativo ao cliente), `multa`, `taxa`, `ajuste`. **Regra de geração:** quando `contrato.valor_parcela_final > 0` (ou `valor_opcao_compra IS NOT NULL`), o sistema gera **N+1 títulos** — N do tipo `parcela` com `numero_parcela` sequencial + 1 do tipo `opcao_compra` na data seguinte à última parcela (respeitando o `tipo_intervalo` do contrato). Quando `valor_parcela_final` é nulo ou zero, gera apenas N parcelas regulares. O pagamento do título `opcao_compra` dispara o evento `ContractPurchaseOptionExercised`, que muda a `situacao` do contrato para `encerrado_compra` e notifica o módulo vertical para executar a transferência de propriedade do ativo. Alterações contratuais que afetam parcelas devem cancelar títulos em aberto antigos e gerar novos (reemissão).
 - **FR-CORE-CTR-4.** O sistema deve gerar uma **versão renderizada do contrato em PDF** usando template Jinja2 + WeasyPrint, com placeholders preenchidos (dados do cliente, ativo, parcelas, cláusulas, assinaturas), e armazenar no S3-compatível com hash SHA-256.
 - **FR-CORE-CTR-5.** O sistema deve permitir **assinatura digital** do contrato (anexo de PDF assinado eletronicamente OU integração futura com D4Sign/Clicksign — ponto de extensão).
 - **FR-CORE-CTR-6.** O sistema deve permitir **edição em lote** de títulos em aberto (ex.: postergar todas as parcelas em aberto em 7 dias; aplicar desconto de 10%; mudar valor padrão a partir da próxima). Operações sempre dentro de uma **transação atômica** com gravação de evento de auditoria.
@@ -151,6 +164,30 @@ O primeiro deployment target opera no modelo de **locação com opção de compr
 - **FR-CORE-CTR-8.** O sistema deve permitir **rescisão de contrato** com cálculo de saldo (multa rescisória parametrizável, soma dos abertos x percentual), gerando título de cobrança final ou crédito a favor do cliente. Ao rescindir, emite evento `ContractTerminated` para que o módulo vertical execute ações de domínio (ex.: Vehicle Module libera veículo para `disponivel`).
 - **FR-CORE-CTR-9.** O sistema deve manter **versionamento de contrato**: alterações relevantes (ex.: alteração do valor da parcela em lote) criam uma nova revisão visível em timeline.
 - **FR-CORE-CTR-10.** O sistema deve permitir **simulação de contrato** sem persistir, com preview de todas as parcelas e do valor total — útil antes de fechar.
+- **FR-CORE-CTR-11.** O sistema deve gerar **boleto proporcional** quando contrato com pagamento periódico (semanal, mensal, `personalizado_dias`) é **suspenso** ou **cancelado** dentro de um ciclo de cobrança (entre dois vencimentos consecutivos).
+
+  **Fórmula:**
+  ```
+  valor_proporcional = valor_parcela × (dias_usados_no_ciclo / dias_totais_do_ciclo)
+  ```
+
+  **Exemplo (semanal, parcela R$200, quarta a quarta):**
+  - Cliente paga parcela na quarta-feira.
+  - Pede cancelamento na sexta-feira (2 dias usados).
+  - Boleto proporcional = R$200 × (2/7) = R$57,14.
+
+  **Parâmetros configuráveis em `config.configuracoes_sistema` (módulo `financeiro`):**
+  - `cobrar_proporcional_ao_suspender` (booleano, default `true`)
+  - `cobrar_proporcional_ao_cancelar` (booleano, default `true`)
+  - `dia_base_calculo_proporcional` (string: `data_pagamento` | `data_vencimento_anterior`, default `data_vencimento_anterior`)
+
+  **Regras:**
+  - Se a última parcela do ciclo ainda **NÃO** foi paga: o título proporcional **substitui** a parcela em aberto (cancela a parcela cheia, gera a proporcional do tipo `taxa` com referência ao título original).
+  - Se a última parcela **JÁ** foi paga (cliente pagou adiantado): gera um **crédito** de devolução do valor não usado (`tipo='ajuste'` com valor negativo).
+  - **Hooks de domínio:** `quando_contrato_suspenso` e `quando_contrato_encerrado` chamam `ServicoBoletoProporcional.gerar(contrato_id, data_interrupcao)`.
+  - Audit log obrigatório com `categoria='financeiro'` registrando data de interrupção, dias usados, valor calculado.
+
+  **Stories que implementam:** 13.17 (`ServicoBoletoProporcional` — domínio + application service + 3 configs) é o coração da regra. Hooks `quando_contrato_suspenso` (Story 13.2) e `quando_contrato_encerrado` (Story 13.8 e rescisão manual) invocam o serviço.
 
 ---
 
@@ -167,6 +204,8 @@ O primeiro deployment target opera no modelo de **locação com opção de compr
 - **FR-CORE-CR-9.** O sistema deve gerar **PIX QR Code estático/dinâmico** (BR Code) por título usando a biblioteca `pix-utils` ou similar, sem custo de transação. O QR Code é exibido para envio via WhatsApp ou impressão.
 - **FR-CORE-CR-10.** O sistema deve permitir **integração opcional** com gateway Pix (Asaas, Efi, PagBank, Stripe) via adapter — desabilitada por padrão para evitar custo, mas habilitável a qualquer momento. Plugins de pagamento adicionais (boleto, cartão de crédito) podem ser ativados como conveniência.
 - **FR-CORE-CR-11.** O sistema deve permitir **acordos de renegociação**: agrupar títulos vencidos, recalcular com desconto/parcelamento, gerar novos títulos e marcar os antigos como `renegociado`.
+
+- **FR-CORE-CR-13.** **Multa e juros por atraso são fields do contrato, não constantes globais.** O cálculo de valor atualizado de título em atraso usa `contrato.multa_atraso_pct` e `contrato.juros_atraso_pct` (decimais, % a.m., armazenados na tabela `contratos`), com fallback para configurações globais via `ServicoConfiguracao` (`percentual_multa` e `percentual_juros_dia` em `config.configuracoes_sistema` módulo `financeiro`) quando o contrato não define valor próprio. Esta granularidade por contrato permite acordos comerciais individuais sem alterar a política padrão.
 
 - **FR-CORE-CR-12.** O sistema deve registrar automaticamente como **`passivo_inoperante`** todos os títulos `tipo = 'parcela'` em atraso pertencentes a contratos com situação `encerrado_com_pendencia`, vinculando o passivo ao CPF/CNPJ do cliente na tabela `passivos_inoperantes` (campos: `cliente_id`, `contrato_id`, `valor_original`, `valor_atualizado`, `data_encerramento`, `status` — enum: `ativo`, `baixado_perda`, `recuperado`). O gestor pode: (a) consultar todos os passivos ativos com filtros por cliente, faixa de valor e data; (b) **baixar como perda** (move status para `baixado_perda`, registra justificativa e gera evento de auditoria); (c) **marcar como recuperado** (após recebimento extrajudicial, move para `recuperado` e cria título de entrada avulso). O passivo inoperante de um cliente deve ser exibido em destaque — com valor total e data de origem — na tela de seleção de cliente durante a criação de novo contrato, permitindo ao gestor tomar decisão informada antes de fechar o negócio.
 
@@ -275,6 +314,7 @@ O primeiro deployment target opera no modelo de **locação com opção de compr
 - **FR-CORE-INT-1.** O sistema deve expor **interfaces (Protocols/Ports)** para todos os fornecedores externos, com adapters intercambiáveis: `IWhatsAppGateway`, `IBankReconciliationProvider`, `IPaymentGateway`, `ILLMProvider`, `IStorageProvider`, `IOcrProvider`, `IPdfRenderer`, `IAudioTranscriber`. Módulos verticais podem definir ports adicionais (ex.: Vehicle Module define `IFipeProvider`, `ITrackerGateway`).
 - **FR-CORE-INT-2.** O sistema deve oferecer **tela administrativa de Integrações** onde o Admin pode: ativar/desativar adapters, inserir credenciais (encriptadas em repouso), testar conexão (botão "Testar"), ver status (saudável / degradado / offline).
 - **FR-CORE-INT-3.** O sistema deve consumir **webhooks** de todos os provedores (Evolution API, Pluggy, gateway de pagamento se ativo, etc.) com validação de assinatura, idempotência (chave única por evento) e fila de processamento via Redis Streams ou Celery.
+- **FR-CORE-INT-4.** O sistema deve suportar **índices de correção monetária plugáveis** via padrão `IIndiceCorrecao`. Listagem dinâmica segue o esquema de `config.credenciais_integracao` (categoria=`correction_index`). Apenas providers com `ativo=true` aparecem no wizard de contrato (FR-CORE-CTR-2) e são consumíveis pelo motor de geração de títulos. Adapter default: `BCBCorrectionAdapter` (IGPM, IPCA, INPC via API do Banco Central do Brasil). A taxa do índice é resolvida **no momento da geração de cada título** (snapshot por competência), não no momento da assinatura do contrato.
 
 ---
 

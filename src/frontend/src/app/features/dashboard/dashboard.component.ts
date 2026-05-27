@@ -97,6 +97,6 @@ export class DashboardComponent implements OnInit {
   }
 
   navigateToCustomer(id: string): void {
-    this.router.navigate(['/sistema/customers', id]);
+    this.router.navigate(['/sistema/clientes', id]);
   }
 }

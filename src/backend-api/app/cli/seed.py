@@ -1,4 +1,4 @@
-"""Seed script: creates default roles and admin user.
+"""Seed script: creates default roles, admin user, and default system configs.
 
 Usage: python -m app.cli.seed
 """
@@ -11,6 +11,8 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.db.session import get_sessionmaker
+from app.infrastructure.db.models.config import ConfiguracaoSistema
+from app.infrastructure.db.models.template_mensagem import TemplateMensagem
 from app.infrastructure.db.models.user import User, Role, UserRole
 from app.infrastructure.security.password_hasher import hash_password
 
@@ -20,6 +22,84 @@ ROLES = ["Admin", "Operador", "Validador", "Auditor"]
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@example.com")
 ADMIN_PASSWORD = os.environ.get("ADMIN_INITIAL_PASSWORD", "Admin@123")
 ADMIN_FULL_NAME = "Administrador"
+
+
+# Configurações padrão do sistema (Story 13.4). empresa_id = NULL → global.
+# (slug, modulo, tipo_valor, valor, descricao)
+CONFIGURACOES_PADRAO: list[tuple[str, str, str, str, str]] = [
+    # ── financeiro ──
+    ("dias_antecedencia_lembrete", "financeiro", "inteiro", "3",
+     "Dias antes do vencimento para enviar lembrete"),
+    ("dias_carencia", "financeiro", "inteiro", "0",
+     "Dias de tolerância após vencimento antes de considerar atrasado"),
+    ("percentual_multa", "financeiro", "decimal", "2.00",
+     "Percentual de multa aplicado em títulos vencidos (% sobre o valor)"),
+    ("percentual_juros_dia", "financeiro", "decimal", "0.0333",
+     "Percentual de juros ao dia (default ≈ 1% ao mês)"),
+    ("limite_tentativas_cobranca", "financeiro", "inteiro", "3",
+     "Máximo de mensagens automáticas de cobrança por título"),
+    ("intervalo_tentativas_horas", "financeiro", "inteiro", "24",
+     "Horas entre tentativas consecutivas de cobrança"),
+    ("limite_dias_suspensao", "financeiro", "inteiro", "15",
+     "Dias de atraso para suspender contrato automaticamente"),
+    ("limite_dias_encerramento", "financeiro", "inteiro", "60",
+     "Dias de atraso para encerrar contrato com pendência"),
+    ("permite_pagamento_parcial", "financeiro", "booleano", "false",
+     "Aceita pagamentos parciais que abatem parcialmente o título"),
+    ("limite_fusao_parcial_pct", "financeiro", "decimal", "20.00",
+     "Pagamento abaixo deste percentual do valor da parcela funde com a próxima"),
+    # ── frota (desbloqueio em confiança) ──
+    ("desbloqueio_confianca_dias", "frota", "inteiro", "3",
+     "Validade em dias do desbloqueio em confiança"),
+    ("desbloqueio_confianca_min_meses_historico", "frota", "inteiro", "3",
+     "Mínimo de meses de relacionamento para elegibilidade"),
+    ("desbloqueio_confianca_max_atrasos_historico", "frota", "inteiro", "1",
+     "Máximo de ocorrências de atraso no histórico para elegibilidade"),
+    # ── comunicacao ──
+    ("canal_cobranca_principal", "comunicacao", "string", "whatsapp",
+     "Canal padrão de cobrança (whatsapp, email, sms)"),
+    ("canal_cobranca_fallback", "comunicacao", "string", "",
+     "Canal de fallback se o principal falhar (vazio = sem fallback)"),
+]
+
+
+# Templates padrão de mensagem (Story 13.10). empresa_id = NULL → global.
+# (nome, canal, conteudo, descricao)
+TEMPLATES_PADRAO: list[tuple[str, str, str, str]] = [
+    (
+        "lembrete_vencimento", "whatsapp",
+        "Olá {{cliente.primeiro_nome}}! Sua parcela de {{titulo.valor}} "
+        "vence em {{titulo.data_vencimento}}. Veículo: {{veiculo.placa}}.",
+        "Lembrete enviado N dias antes do vencimento",
+    ),
+    (
+        "cobranca_vencida", "whatsapp",
+        "Olá {{cliente.primeiro_nome}}, sua parcela do contrato {{contrato.id}} "
+        "está vencida há {{titulo.dias_atraso}} dia(s). Valor original: {{titulo.valor}} "
+        "— valor atualizado com multa e juros: {{titulo.valor_atualizado}}.",
+        "Mensagem de cobrança após vencimento",
+    ),
+    (
+        "aviso_suspensao", "whatsapp",
+        "{{cliente.primeiro_nome}}, seu contrato {{contrato.id}} foi suspenso "
+        "por inadimplência. Veículo {{veiculo.placa}} indisponível até regularização. "
+        "Entre em contato: {{empresa.telefone}}.",
+        "Notificação de suspensão de contrato",
+    ),
+    (
+        "pagamento_confirmado", "whatsapp",
+        "{{cliente.primeiro_nome}}, recebemos seu pagamento de {{titulo.valor}}. "
+        "Obrigado! — {{empresa.nome}}",
+        "Confirmação de pagamento recebido",
+    ),
+    (
+        "opcao_compra_exercida", "whatsapp",
+        "Parabéns {{cliente.primeiro_nome}}! Sua opção de compra do veículo "
+        "{{veiculo.placa}} ({{veiculo.modelo}}) foi confirmada. Em breve nossa "
+        "equipe entrará em contato para a transferência.",
+        "Confirmação do exercício da opção de compra (parcela final)",
+    ),
+]
 
 
 async def _get_empresa_id(session: AsyncSession) -> UUID:
@@ -34,9 +114,14 @@ async def seed() -> None:
     session_factory = get_sessionmaker()
     async with session_factory() as session:
         async with session.begin():
+            # Migrations rodam com row_security = off; ao seedar fora de migration,
+            # forçamos o mesmo aqui para inserir configs globais (empresa_id NULL).
+            await session.execute(text("SET LOCAL row_security = off"))
             empresa_id = await _get_empresa_id(session)
             await _seed_roles(session, empresa_id)
             await _seed_admin(session, empresa_id)
+            await _seed_configuracoes(session)
+            await _seed_templates_mensagem(session)
     print("Seed completed successfully.")
 
 
@@ -50,6 +135,61 @@ async def _seed_roles(session: AsyncSession, empresa_id: UUID) -> None:
             print(f"  Created role: {role_name}")
         else:
             print(f"  Role exists: {role_name}")
+
+
+async def _seed_configuracoes(session: AsyncSession) -> None:
+    """Seed das 15 configurações default (escopo global, empresa_id NULL).
+
+    Idempotente — só insere o que ainda não existe. Ignora overrides por
+    tenant que possam ter sido criados manualmente.
+    """
+    for slug, modulo, tipo_valor, valor, descricao in CONFIGURACOES_PADRAO:
+        existing = await session.execute(
+            select(ConfiguracaoSistema).where(
+                ConfiguracaoSistema.empresa_id.is_(None),
+                ConfiguracaoSistema.slug == slug,
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            print(f"  Config exists: {slug}")
+            continue
+        session.add(
+            ConfiguracaoSistema(
+                empresa_id=None,
+                modulo=modulo,
+                slug=slug,
+                tipo_valor=tipo_valor,
+                valor=valor,
+                descricao=descricao,
+            )
+        )
+        print(f"  Created config: {slug} = {valor} ({tipo_valor}, {modulo})")
+
+
+async def _seed_templates_mensagem(session: AsyncSession) -> None:
+    """Seed dos 5 templates padrão globais (Story 13.10). Idempotente."""
+    for nome, canal, conteudo, descricao in TEMPLATES_PADRAO:
+        existing = await session.execute(
+            select(TemplateMensagem).where(
+                TemplateMensagem.empresa_id.is_(None),
+                TemplateMensagem.nome == nome,
+                TemplateMensagem.canal == canal,
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            print(f"  Template exists: {nome} ({canal})")
+            continue
+        session.add(
+            TemplateMensagem(
+                empresa_id=None,
+                nome=nome,
+                canal=canal,
+                conteudo=conteudo,
+                descricao=descricao,
+                ativo=True,
+            )
+        )
+        print(f"  Created template: {nome} ({canal})")
 
 
 async def _seed_admin(session: AsyncSession, empresa_id: UUID) -> None:

@@ -6,6 +6,7 @@
   computed,
 } from '@angular/core';
 import { CustomSelectComponent, SelectOption } from '../../../shared/components/custom-select/custom-select.component';
+import { InputMoedaComponent } from '../../../shared/components/input-moeda/input-moeda.component';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { UiIconComponent } from '../../../shared/components/icon/icon.component';
@@ -24,7 +25,7 @@ import {
 @Component({
   selector: 'app-veiculo-wizard',
   standalone: true,
-  imports: [FormsModule, UiIconComponent, CustomSelectComponent],
+  imports: [FormsModule, UiIconComponent, CustomSelectComponent, InputMoedaComponent],
   templateUrl: './veiculo-wizard.component.html',
   styleUrl: './veiculo-wizard.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -344,7 +345,7 @@ export class VeiculoWizardComponent {
 
     try {
       await this.vehicleService.create(payload);
-      await this.router.navigate(['/sistema/vehicles']);
+      await this.router.navigate(['/sistema/veiculos']);
     } catch {
       this.errorMessage.set('Erro ao cadastrar veículo. Verifique os dados e tente novamente.');
     } finally {
@@ -353,6 +354,6 @@ export class VeiculoWizardComponent {
   }
 
   cancel(): void {
-    this.router.navigate(['/sistema/vehicles']);
+    this.router.navigate(['/sistema/veiculos']);
   }
 }

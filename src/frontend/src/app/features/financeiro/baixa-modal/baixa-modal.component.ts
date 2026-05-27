@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { UiIconComponent } from '../../../shared/components/icon/icon.component';
 import { ModalComponent } from '../../../shared/components/modal/modal.component';
 import { CustomSelectComponent, SelectOption } from '../../../shared/components/custom-select/custom-select.component';
+import { InputMoedaComponent } from '../../../shared/components/input-moeda/input-moeda.component';
 import {
   ReceivableService,
   TituloReceber,
@@ -19,7 +20,7 @@ import {
 @Component({
   selector: 'app-baixa-modal',
   standalone: true,
-  imports: [FormsModule, UiIconComponent, CustomSelectComponent, ModalComponent],
+  imports: [FormsModule, UiIconComponent, CustomSelectComponent, ModalComponent, InputMoedaComponent],
   templateUrl: './baixa-modal.component.html',
   styleUrl: './baixa-modal.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

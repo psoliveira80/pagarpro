@@ -541,13 +541,22 @@ async def fipe_price(
 ) -> FipePrecoResponse:
     svc = await _get_fipe_service(session)
     data = await svc.get_price(vehicle_type, brand_code, model_code, year_code)
+
+    _TIPO_VEICULO_INT = {"carros": 1, "motos": 2, "caminhoes": 3}
+
+    def _as_int(value: object, default: int = 0) -> int:
+        try:
+            return int(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return _TIPO_VEICULO_INT.get(str(value), default)
+
     return FipePrecoResponse(
         preco=data.get("valor", data.get("price", "")),
         marca=data.get("marca", data.get("brand", "")),
         modelo=data.get("modelo", data.get("model", "")),
-        ano_modelo=int(data.get("anoModelo", data.get("model_year", 0))),
+        ano_modelo=_as_int(data.get("anoModelo", data.get("model_year", 0))),
         combustivel=data.get("combustivel", data.get("fuel", "")),
         codigo_fipe=data.get("codigoFipe", data.get("fipe_code", "")),
         mes_referencia=data.get("mesReferencia", data.get("reference_month", "")),
-        tipo_veiculo=int(data.get("tipoVeiculo", data.get("vehicle_type", 1))),
+        tipo_veiculo=_as_int(data.get("tipoVeiculo", data.get("vehicle_type", 1)), default=1),
     )

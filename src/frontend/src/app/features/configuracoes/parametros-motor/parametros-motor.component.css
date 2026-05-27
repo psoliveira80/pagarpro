@@ -1,0 +1,373 @@
+:host {
+  display: block;
+}
+
+.page {
+  padding: 1rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .page {
+    padding: 1.5rem 2rem;
+  }
+}
+
+.page-header {
+  margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem 0;
+}
+
+@media (min-width: 768px) {
+  .page-header h1 {
+    font-size: 1.875rem;
+  }
+}
+
+.subtitulo {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.badge-readonly {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.125rem 0.5rem;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  color: var(--warning);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Estados */
+.estado-carregando,
+.estado-erro {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-secondary);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  animation: spin 1s linear infinite;
+  color: var(--accent);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-primario {
+  margin-top: 1rem;
+  padding: 0.625rem 1.5rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-primario:hover {
+  opacity: 0.9;
+}
+
+/* Layout: mobile = empilhado, desktop = tabs verticais + conteúdo */
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    flex-direction: row;
+    gap: 2rem;
+  }
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+@media (min-width: 1024px) {
+  .tabs {
+    flex-direction: column;
+    overflow-x: visible;
+    border-bottom: none;
+    width: 240px;
+    flex-shrink: 0;
+    padding: 0;
+  }
+}
+
+.tabs button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+@media (min-width: 1024px) {
+  .tabs button {
+    width: 100%;
+  }
+}
+
+.tabs button:hover {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+
+.tabs button.ativa {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.tabs .icone {
+  font-size: 1.125rem;
+}
+
+.tabs .rotulo {
+  flex: 1;
+}
+
+.tabs .contador {
+  font-size: 0.75rem;
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+}
+
+/* Conteúdo */
+.conteudo {
+  flex: 1;
+  min-width: 0;
+}
+
+.secao-titulo {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 1rem 0;
+}
+
+.vazio {
+  color: var(--text-muted);
+  padding: 2rem;
+  text-align: center;
+  background: var(--surface);
+  border-radius: 0.75rem;
+  border: 1px dashed var(--border);
+}
+
+/* Campo */
+.campo {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  transition: border-color 0.15s;
+}
+
+.campo:focus-within {
+  border-color: var(--accent);
+}
+
+.campo.erro {
+  border-color: var(--danger);
+}
+
+.campo-cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.campo-rotulo {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.ajuda {
+  font-size: 0.875rem;
+  cursor: help;
+  opacity: 0.7;
+}
+
+.badge-padrao {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--surface-elevated);
+  color: var(--text-muted);
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 500;
+}
+
+.campo-controle {
+  margin-bottom: 0.5rem;
+}
+
+/* Input grupo (com prefixo/sufixo) */
+.input-grupo {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.input-grupo input {
+  flex: 1;
+  min-width: 0;
+}
+
+.prefixo,
+.sufixo {
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.campo input[type="text"],
+.campo input[type="number"] {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.campo input[type="text"]:focus,
+.campo input[type="number"]:focus {
+  border-color: var(--accent);
+}
+
+.campo input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Toggle switch (booleano) */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggle .slider {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  transition: background 0.2s;
+}
+
+.toggle .slider::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.toggle input:checked + .slider {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle input:checked + .slider::after {
+  transform: translateX(18px);
+  background: white;
+}
+
+.toggle input:disabled + .slider {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.toggle-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Rodapé do campo (status save / erro / ajuda) */
+.campo-rodape {
+  min-height: 1rem;
+  font-size: 0.75rem;
+}
+
+.msg-erro {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.msg-ok {
+  color: var(--success);
+}
+
+.msg-ajuda {
+  color: var(--text-muted);
+}

@@ -140,7 +140,7 @@ export class IntegracoesComponent implements OnInit {
       ],
     },
     {
-      id: 'correction_index', label: 'Ãndice de Correção', icon: 'heroChartBarSquare',
+      id: 'correction_index', label: 'Índice de Correção', icon: 'heroChartBarSquare',
       providers: [
         { id: 'bcb', label: 'Banco Central do Brasil', helpText: 'API pública do BCB (IGPM, IPCA, INPC). Já conectada.', fields: [] },
       ],

@@ -112,7 +112,7 @@ export class ClienteWizardComponent implements OnInit {
       this.updateFormattedDoc();
     } catch {
       this.toastService.show({ message: 'Erro ao carregar cliente', type: 'error' });
-      this.router.navigate(['/sistema/customers']);
+      this.router.navigate(['/sistema/clientes']);
     }
   }
 
@@ -135,7 +135,7 @@ export class ClienteWizardComponent implements OnInit {
   }
 
   cancel(): void {
-    this.router.navigate(['/sistema/customers']);
+    this.router.navigate(['/sistema/clientes']);
   }
 
   validateCurrentStep(): boolean {
@@ -239,7 +239,7 @@ export class ClienteWizardComponent implements OnInit {
         await this.customerService.create(payload);
         this.toastService.show({ message: 'Cliente criado com sucesso', type: 'success' });
       }
-      this.router.navigate(['/sistema/customers']);
+      this.router.navigate(['/sistema/clientes']);
     } catch {
       this.toastService.show({ message: 'Erro ao salvar cliente', type: 'error' });
     } finally {

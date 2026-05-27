@@ -11,6 +11,7 @@
 import { FormsModule } from '@angular/forms';
 import { ModalComponent } from '../../../shared/components/modal/modal.component';
 import { CustomSelectComponent, SelectOption } from '../../../shared/components/custom-select/custom-select.component';
+import { InputMoedaComponent } from '../../../shared/components/input-moeda/input-moeda.component';
 import {
   PayableService,
   CategoriaDespesa,
@@ -20,7 +21,7 @@ import {
 @Component({
   selector: 'app-pagamento-rapido-modal',
   standalone: true,
-  imports: [FormsModule, CustomSelectComponent, ModalComponent],
+  imports: [FormsModule, CustomSelectComponent, ModalComponent, InputMoedaComponent],
   templateUrl: './pagamento-rapido-modal.component.html',
   styleUrl: './pagamento-rapido-modal.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

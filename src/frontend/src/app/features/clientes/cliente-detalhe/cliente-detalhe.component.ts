@@ -54,7 +54,7 @@ export class ClienteDetalheComponent implements OnInit {
       this.customer.set(c);
     } catch {
       this.toastService.show({ message: 'Erro ao carregar cliente', type: 'error' });
-      this.router.navigate(['/sistema/customers']);
+      this.router.navigate(['/sistema/clientes']);
     } finally {
       this.isLoading.set(false);
     }
@@ -67,7 +67,7 @@ export class ClienteDetalheComponent implements OnInit {
   editCustomer(): void {
     const c = this.customer();
     if (c) {
-      this.router.navigate(['/sistema/customers', c.id, 'edit']);
+      this.router.navigate(['/sistema/clientes', c.id, 'edit']);
     }
   }
 
@@ -87,7 +87,7 @@ export class ClienteDetalheComponent implements OnInit {
     try {
       await this.customerService.delete(c.id);
       this.toastService.show({ message: 'Cliente removido com sucesso', type: 'success' });
-      this.router.navigate(['/sistema/customers']);
+      this.router.navigate(['/sistema/clientes']);
     } catch {
       this.toastService.show({ message: 'Erro ao remover cliente', type: 'error' });
     } finally {
@@ -97,7 +97,7 @@ export class ClienteDetalheComponent implements OnInit {
   }
 
   goBack(): void {
-    this.router.navigate(['/sistema/customers']);
+    this.router.navigate(['/sistema/clientes']);
   }
 
   // â”€â”€ LGPD (Story 9-10) â”€â”€

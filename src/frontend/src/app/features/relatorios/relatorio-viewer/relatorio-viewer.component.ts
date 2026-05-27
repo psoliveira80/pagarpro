@@ -101,7 +101,7 @@ export class RelatorioViewerComponent implements OnInit {
   }
 
   goBack(): void {
-    this.router.navigate(['/sistema/reports']);
+    this.router.navigate(['/sistema/relatorios']);
   }
 
   formatCell(value: string, format: string): string {

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, ForeignKey, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -9,23 +9,35 @@ from app.infrastructure.db.base import Base, UUIDPrimaryKeyMixin, TimestampMixin
 
 
 class ConfiguracaoSistema(UUIDPrimaryKeyMixin, Base):
+    """Configuração tipada do sistema (Story 13.4).
+
+    empresa_id NULL  → configuração global (default de fábrica).
+    empresa_id !NULL → override por tenant.
+
+    A combinação `tipo_valor` + `valor` é validada por CHECK constraint no
+    banco — então a aplicação pode confiar que `valor` sempre case com
+    `tipo_valor` ao ler.
+    """
+
     __tablename__ = "configuracoes_sistema"
     __table_args__ = (
-        UniqueConstraint("empresa_id", "chave", name="uq_configuracoes_empresa_chave"),
+        UniqueConstraint("empresa_id", "slug", name="uniq_config_empresa_slug"),
         {"schema": "config"},
     )
 
-    empresa_id: Mapped[UUID] = mapped_column(
-        ForeignKey("comercial.empresas.id"), nullable=False
+    empresa_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("comercial.empresas.id", ondelete="CASCADE"), nullable=True
     )
-    chave: Mapped[str] = mapped_column(Text, nullable=False)
-    valor: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    modulo: Mapped[str] = mapped_column(String(50), nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False)
+    tipo_valor: Mapped[str] = mapped_column(String(20), nullable=False)
+    valor: Mapped[str] = mapped_column(Text, nullable=False)
     descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
-    atualizado_por_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("acesso.usuarios.id"), nullable=True
-    )
     atualizado_em: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    atualizado_por_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("acesso.usuarios.id"), nullable=True
     )
 
 

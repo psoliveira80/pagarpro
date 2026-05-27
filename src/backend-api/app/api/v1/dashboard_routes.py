@@ -112,9 +112,11 @@ async def get_receivables_trend(
     empresa_id = current_user.empresa_id
     cutoff = date.today().replace(day=1) - timedelta(days=months * 31)
 
+    period_expr = func.date_trunc("month", Installment.due_date)
+
     q = (
         select(
-            func.date_trunc("month", Installment.due_date).label("period"),
+            period_expr.label("period"),
             func.coalesce(func.sum(Installment.current_value), Decimal("0")).label("total_due"),
             func.coalesce(
                 func.sum(
@@ -141,8 +143,8 @@ async def get_receivables_trend(
             Installment.empresa_id == empresa_id,
             Installment.due_date >= cutoff,
         )
-        .group_by(func.date_trunc("month", Installment.due_date))
-        .order_by(func.date_trunc("month", Installment.due_date).desc())
+        .group_by(period_expr)
+        .order_by(period_expr.desc())
         .limit(months)
     )
     result = await session.execute(q)

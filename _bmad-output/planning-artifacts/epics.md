@@ -1961,6 +1961,7 @@ para decidir se aumento meu budget quando atingir os limites.
 - Saldo devedor = apenas parcelas vencidas e não pagas (`status = 'em_atraso'`). Parcelas futuras **não** são dívida.
 - Cancelamento sem atraso → zero saldo devedor. Veículo retorna à frota.
 - Opção de compra paga → veículo transferido ao cliente.
+- **Suspensão ou cancelamento mid-ciclo gera boleto proporcional** ao tempo de uso (FR-CORE-CTR-11). Ex.: contrato semanal R$200 cancelado na sexta após pagar na quarta → cobra R$200 × (2/7) = R$57,14. Stories 13.2 (hook de encerramento) e 13.8 (motor) implementam.
 
 **Dependências:** Épicos 1–11 concluídos ou em progresso.
 
@@ -2592,6 +2593,50 @@ para que eu possa ajustar regras de negócio sem precisar de desenvolvedor.
 
 ---
 
+### História 13.17: Serviço de Boleto Proporcional ao Suspender/Cancelar Contrato
+
+**Emergente em 2026-05-27 após Pablo formalizar regra de negócio mid-sessão.** Implementa o **ServicoBoletoProporcional** — domínio puro + application service — invocado pelos hooks `quando_contrato_suspenso` (Story 13.2) e `quando_contrato_encerrado` quando contrato com pagamento periódico é interrompido no meio de um ciclo de cobrança.
+
+**Lógica:**
+- **Cenário A** — parcela do ciclo ainda em aberto: cancela título original, cria título `tipo='taxa'` com valor proporcional aos dias usados.
+- **Cenário B** — parcela já paga (cliente pagou adiantado): gera título `tipo='ajuste'` com valor negativo (crédito de devolução).
+- **Cenário C** — interrupção exata no vencimento: nada muda.
+
+**Fórmula:** `valor_proporcional = valor_parcela × (dias_usados / dias_totais_ciclo)`.
+
+**3 configs novas em `config.configuracoes_sistema`** (módulo `financeiro`):
+- `cobrar_proporcional_ao_suspender` (booleano, default `true`)
+- `cobrar_proporcional_ao_cancelar` (booleano, default `true`)
+- `dia_base_calculo_proporcional` (string: `data_pagamento` | `data_vencimento_anterior`, default `data_vencimento_anterior`)
+
+**FR de referência:** FR-CORE-CTR-11 (PRD v3.1).
+
+**Pré-requisitos:** 13.2, 13.3, 13.4, 13.16.
+
+**Story:** [`13-17-servico-boleto-proporcional.md`](../implementation-artifacts/13-17-servico-boleto-proporcional.md).
+
+---
+
+### História 13.16: Wizard de Contrato — Plano de Parcelas Detalhado
+
+**Emergente em 2026-05-27 após smoke-test do frontend com o PO.** Reformula a Tela 2 do wizard de contrato (`contrato-wizard.component`) para coletar:
+
+- Data de vencimento da primeira parcela, valor da parcela, quantidade.
+- Intervalo entre parcelas com sub-campos condicionais (`semanal` + dia da semana, `mensal` + dia do mês, `personalizado_dias` + N dias). Arquitetura extensível para tipos futuros.
+- Multa e juros por atraso (decimais % a.m.).
+- Valor da parcela final (opção de compra) opcional.
+- Toggle de aplicação de índice de correção, vinculado aos índices ativos em `config.credenciais_integracao`.
+
+Estende o espelho de parcelas (Tela 3) para mostrar valores corrigidos, e a tela de revisão (Tela 4) com formato `N × R$ X,XX = R$ Y,YY`. Adiciona colunas ao modelo `contrato.contratos` e estende o worker `gerar_titulos_mensais` para suportar `personalizado_dias` e geração de título `tipo='opcao_compra'`.
+
+**Pré-requisitos:** 13.3 (`tipo-titulo-opcao-compra`) done. 13.4 (`sistema-configuracoes-tipadas`) done ou avançada.
+
+**Documento de detalhamento UX:** [`docs/wizard-contrato-detalhamento-ux.md`](../../docs/wizard-contrato-detalhamento-ux.md).
+
+**Story:** [`13-16-wizard-contrato-plano-parcelas.md`](../implementation-artifacts/13-16-wizard-contrato-plano-parcelas.md).
+
+---
+
 **Resumo do Épico 13**
 
 | História | Título | Complexidade |
@@ -2611,10 +2656,12 @@ para que eu possa ajustar regras de negócio sem precisar de desenvolvedor.
 | 13.13 | Desbloqueio em Confiança com Expiração | Média |
 | 13.14 | Override Manual do Valor de Mercado do Veículo | Baixa |
 | 13.15 | Tela de Configurações do Motor (UI) | Alta |
+| 13.16 | Wizard de Contrato — Plano de Parcelas Detalhado | Alta |
+| 13.17 | Serviço de Boleto Proporcional ao Suspender/Cancelar | Média |
 
 **Sequência recomendada de implementação:**
 
-`13.1 → 13.4 → 13.2 → 13.3 → 13.5 → 13.10 → 13.6 → 13.7 → 13.8 → 13.9 → 13.11 → 13.13 → 13.12 → 13.14 → 13.15`
+`13.1 → 13.4 → 13.2 → 13.3 → 13.5 → 13.10 → 13.6 → 13.7 → 13.8 → 13.9 → 13.16 → 13.17 → 13.11 → 13.13 → 13.12 → 13.14 → 13.15`
 
 **Pré-requisito obrigatório:** Epic 12 (histórias 12.2 a 12.8) deve estar completo antes de iniciar Epic 13. O rename de tabelas/models/schemas/workers existentes do Epic 12 é fundação para os motors deste épico.
 

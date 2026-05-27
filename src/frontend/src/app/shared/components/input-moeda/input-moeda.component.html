@@ -1,0 +1,26 @@
+@let _value = displayValue();
+<div class="relative flex items-center">
+  @if (prefix()) {
+    <span class="absolute left-3 text-sm text-[var(--text-muted)] pointer-events-none select-none">
+      {{ prefix() }}
+    </span>
+  }
+  <input
+    [id]="id() || null"
+    type="text"
+    inputmode="decimal"
+    autocomplete="off"
+    [attr.aria-label]="ariaLabel()"
+    [placeholder]="placeholder()"
+    [disabled]="disabled()"
+    [value]="_value"
+    (input)="onInput($event)"
+    (keydown)="onKeyDown($event)"
+    (paste)="onPaste($event)"
+    class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition text-right"
+    [class.pl-10]="prefix()"
+    [class.pl-4]="!prefix()"
+    [class.opacity-50]="disabled()"
+    [class.cursor-not-allowed]="disabled()"
+  />
+</div>

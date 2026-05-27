@@ -4,15 +4,7 @@
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label for="sim-value" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Valor (R$)</label>
-        <input
-          id="sim-value"
-          type="number"
-          [value]="value()"
-          (input)="value.set(+$any($event.target).value)"
-          min="0"
-          step="100"
-          class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
-        />
+        <app-input-moeda id="sim-value" [(value)]="value" />
       </div>
       <div>
         <label for="sim-installments" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Parcelas</label>

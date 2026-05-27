@@ -186,7 +186,7 @@ export class ContratoDetalheComponent implements OnInit {
   }
 
   goBack(): void {
-    this.router.navigate(['/sistema/contracts']);
+    this.router.navigate(['/sistema/contratos']);
   }
 
   statusLabel(status: string): string {

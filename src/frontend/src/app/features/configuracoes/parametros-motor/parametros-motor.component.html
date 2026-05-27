@@ -1,0 +1,141 @@
+<div class="page">
+  <header class="page-header">
+    <h1>Parâmetros do Motor</h1>
+    <p class="subtitulo">
+      Ajuste limites, percentuais e canais que governam a cobrança automatizada.
+      @if (!isAdmin()) {
+        <span class="badge-readonly">🔒 Apenas admin pode alterar</span>
+      }
+    </p>
+  </header>
+
+  @if (carregando()) {
+    <div class="estado-carregando">
+      <svg class="spinner" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none"
+                stroke-dasharray="40 60" stroke-linecap="round" />
+      </svg>
+      <p>Carregando configurações...</p>
+    </div>
+  } @else if (erro()) {
+    <div class="estado-erro">
+      <p>{{ erro() }}</p>
+      <button type="button" class="btn-primario" (click)="carregar()">Tentar novamente</button>
+    </div>
+  } @else {
+    <!-- Layout: tabs verticais no desktop, accordion no mobile -->
+    <div class="layout">
+      <nav class="tabs" role="tablist" aria-label="Seções de configuração">
+        @for (s of secoes(); track s.id) {
+          <button
+            type="button"
+            role="tab"
+            [attr.aria-selected]="secaoAtiva() === s.id"
+            [ngClass]="{ ativa: secaoAtiva() === s.id }"
+            (click)="selecionarSecao(s.id)"
+          >
+            <span class="icone">{{ s.icone }}</span>
+            <span class="rotulo">{{ s.rotulo }}</span>
+            <span class="contador">{{ s.campos.length }}</span>
+          </button>
+        }
+      </nav>
+
+      <section class="conteudo" role="tabpanel">
+        @for (s of secoes(); track s.id) {
+          @if (s.id === secaoAtiva()) {
+            <h2 class="secao-titulo">{{ s.icone }} {{ s.rotulo }}</h2>
+            @if (s.campos.length === 0) {
+              <p class="vazio">Nenhuma configuração disponível neste módulo.</p>
+            }
+            @for (campo of s.campos; track campo.slug) {
+              <div class="campo" [ngClass]="{ erro: !!errosPorSlug()[campo.slug] }">
+                <div class="campo-cabecalho">
+                  <label [attr.for]="'cfg-' + campo.slug" class="campo-rotulo">
+                    {{ campo.rotulo }}
+                    <span class="ajuda" [title]="campo.ajuda" aria-label="Ajuda">ℹ️</span>
+                  </label>
+                  @if (campo.escopo === 'global') {
+                    <span class="badge-padrao">padrão</span>
+                  }
+                </div>
+
+                <div class="campo-controle">
+                  @if (campo.tipo_valor === 'inteiro') {
+                    <div class="input-grupo">
+                      <input
+                        [id]="'cfg-' + campo.slug"
+                        type="number"
+                        step="1"
+                        [value]="campo.valor"
+                        [disabled]="!isAdmin()"
+                        (input)="onValorAlterado(campo, $any($event.target).value)"
+                        [attr.aria-describedby]="errosPorSlug()[campo.slug] ? 'err-' + campo.slug : null"
+                      />
+                      @if (campo.sufixo) {
+                        <span class="sufixo">{{ campo.sufixo }}</span>
+                      }
+                    </div>
+                  } @else if (campo.tipo_valor === 'decimal') {
+                    <div class="input-grupo">
+                      @if (campo.prefixo) {
+                        <span class="prefixo">{{ campo.prefixo }}</span>
+                      }
+                      <input
+                        [id]="'cfg-' + campo.slug"
+                        type="number"
+                        step="0.01"
+                        [value]="campo.valor"
+                        [disabled]="!isAdmin()"
+                        (input)="onValorAlterado(campo, $any($event.target).value)"
+                        [attr.aria-describedby]="errosPorSlug()[campo.slug] ? 'err-' + campo.slug : null"
+                      />
+                      @if (campo.sufixo) {
+                        <span class="sufixo">{{ campo.sufixo }}</span>
+                      }
+                    </div>
+                  } @else if (campo.tipo_valor === 'booleano') {
+                    <label class="toggle" [attr.for]="'cfg-' + campo.slug">
+                      <input
+                        [id]="'cfg-' + campo.slug"
+                        type="checkbox"
+                        [checked]="campo.valor === 'true'"
+                        [disabled]="!isAdmin()"
+                        (change)="onValorAlterado(campo, $any($event.target).checked)"
+                      />
+                      <span class="slider"></span>
+                      <span class="toggle-label">
+                        {{ campo.valor === 'true' ? 'Ativado' : 'Desativado' }}
+                      </span>
+                    </label>
+                  } @else {
+                    <input
+                      [id]="'cfg-' + campo.slug"
+                      type="text"
+                      [value]="campo.valor"
+                      [disabled]="!isAdmin()"
+                      (input)="onValorAlterado(campo, $any($event.target).value)"
+                      [attr.aria-describedby]="errosPorSlug()[campo.slug] ? 'err-' + campo.slug : null"
+                    />
+                  }
+                </div>
+
+                <div class="campo-rodape">
+                  @if (errosPorSlug()[campo.slug]) {
+                    <span class="msg-erro" [id]="'err-' + campo.slug" role="alert">
+                      ⚠️ {{ errosPorSlug()[campo.slug] }}
+                    </span>
+                  } @else if (ultimosSaves()[campo.slug]) {
+                    <span class="msg-ok">✓ Salvo às {{ ultimosSaves()[campo.slug] }}</span>
+                  } @else if (campo.ajuda) {
+                    <span class="msg-ajuda">{{ campo.ajuda }}</span>
+                  }
+                </div>
+              </div>
+            }
+          }
+        }
+      </section>
+    </div>
+  }
+</div>

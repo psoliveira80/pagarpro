@@ -8,6 +8,7 @@ import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { UiIconComponent } from '../../../shared/components/icon/icon.component';
 import { SearchableSelectComponent, SearchableOption } from '../../../shared/components/searchable-select/searchable-select.component';
+import { InputMoedaComponent } from '../../../shared/components/input-moeda/input-moeda.component';
 import {
   ContractService,
   PreviewTitulo,
@@ -21,7 +22,7 @@ import { VehicleService, Veiculo } from '../../../core/services/vehicle.service'
 @Component({
   selector: 'app-contrato-wizard',
   standalone: true,
-  imports: [FormsModule, UiIconComponent, SearchableSelectComponent],
+  imports: [FormsModule, UiIconComponent, SearchableSelectComponent, InputMoedaComponent],
   templateUrl: './contrato-wizard.component.html',
   styleUrl: './contrato-wizard.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -196,7 +197,7 @@ export class ContratoWizardComponent {
         await this.contractService.activate(contract.id);
       }
 
-      this.router.navigate(['/sistema/contracts', contract.id]);
+      this.router.navigate(['/sistema/contratos', contract.id]);
     } catch {
       // Error handled by interceptor
     } finally {
@@ -205,7 +206,7 @@ export class ContratoWizardComponent {
   }
 
   goBack(): void {
-    this.router.navigate(['/sistema/contracts']);
+    this.router.navigate(['/sistema/contratos']);
   }
 
   formatCurrency(value: number | null | undefined): string {

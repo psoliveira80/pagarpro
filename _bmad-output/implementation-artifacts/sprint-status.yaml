@@ -11,7 +11,7 @@
 # Retrospective:  optional ↔ done
 
 generated: 2026-05-07
-last_updated: 2026-05-25
+last_updated: 2026-05-27
 project: FrotaUber
 project_key: NOKEY
 tracking_system: file-system
@@ -186,21 +186,23 @@ development_status:
   # ─── Epic 13: Motor Financeiro Central ───
   # Pré-requisito: Epic 12 (Schema Restructure) deve estar completo
   epic-13: backlog
-  13-1-verificacao-consistencia-ptbr-glossario: backlog
-  13-2-maquina-estados-contrato-suspenso: backlog
-  13-3-tipo-titulo-opcao-compra: backlog
-  13-4-sistema-configuracoes-tipadas: backlog
-  13-5-infraestrutura-base-workers: backlog
-  13-6-motor-gerar-titulos-mensais: backlog
-  13-7-motor-alertar-vencimentos-proximos: backlog
-  13-8-motor-processar-titulos-vencidos: backlog
-  13-9-motor-conciliar-pagamentos-recebidos: backlog
-  13-10-renderizador-templates-mensagem: backlog
-  13-11-ledger-passivo-inoperante: backlog
-  13-12-heroi-financeiro-detalhe-contrato: backlog
-  13-13-desbloqueio-confianca-expiracao: backlog
-  13-14-override-valor-mercado-veiculo: backlog
-  13-15-tela-configuracoes-motor: backlog
+  13-1-verificacao-consistencia-ptbr-glossario: review  # 2026-05-27: implementada por Amelia. 7 aliases PT-BR de Events + glossário consolidado. Hooks/Interfaces adiados (débito documentado). 183 testes verdes.
+  13-2-maquina-estados-contrato-suspenso: review  # 2026-05-27: implementada por Amelia. Enum SituacaoContrato (8 estados) + grafo + ServicoSituacaoContrato. Migration 0023 CHECK constraint + suspenso_em/motivo_suspensao. Worker filtra suspensos. 27 novos testes (205 total).
+  13-3-tipo-titulo-opcao-compra: review  # 2026-05-27: implementada por Amelia. Migration 0024 CHECK tipo + unique opcao_compra + colunas valor_opcao_compra/proprietario_id. TipoTitulo StrEnum + TIPOS_DEVEDORES. ServicoOpcaoCompra. 8 novos testes (213 total).
+  13-4-sistema-configuracoes-tipadas: review  # 2026-05-27: implementada por Amelia. Migration 0021 restrutura tabela com CHECK constraint tipado. ServicoConfiguracao + cache Redis + 15 configs seed. 11 novos testes (194 total passing).
+  13-5-infraestrutura-base-workers: ready-for-dev  # 2026-05-27
+  13-6-motor-gerar-titulos-mensais: ready-for-dev  # 2026-05-27
+  13-7-motor-alertar-vencimentos-proximos: ready-for-dev  # 2026-05-27
+  13-8-motor-processar-titulos-vencidos: ready-for-dev  # 2026-05-27
+  13-9-motor-conciliar-pagamentos-recebidos: ready-for-dev  # 2026-05-27
+  13-10-renderizador-templates-mensagem: review  # 2026-05-27: implementada por Amelia. Migration 0022 cria comunicacao.templates_mensagem. Jinja2 SandboxedEnvironment + StrictUndefined. CRUD + preview admin. 5 templates seedados. 11 novos testes (205 total).
+  13-11-ledger-passivo-inoperante: ready-for-dev  # 2026-05-27
+  13-12-heroi-financeiro-detalhe-contrato: ready-for-dev  # 2026-05-27
+  13-13-desbloqueio-confianca-expiracao: ready-for-dev  # 2026-05-27
+  13-14-override-valor-mercado-veiculo: ready-for-dev  # 2026-05-27
+  13-15-tela-configuracoes-motor: review  # 2026-05-27: implementada por Amelia + Sally UX. Rota /sistema/configuracoes/parametros responsiva (tabs vertical desktop / horizontal mobile). Inputs adaptativos por tipo_valor, autosave debounce 1s, validação inline, permissão admin com read-only badge. Build sem erros. Preview de impacto/reverter deferidos para V2 (dependem dos motores).
+  13-16-wizard-contrato-plano-parcelas: ready-for-dev  # 2026-05-27: emergente do smoke-test pós-Story 12.10. Reformula Tela 2 do wizard (intervalo com sub-campos condicionais, multa/juros, parcela final, toggle correção). Depende de 13.3 e 13.4. Ver _bmad-output/implementation-artifacts/13-16-wizard-contrato-plano-parcelas.md e docs/wizard-contrato-detalhamento-ux.md.
+  13-17-servico-boleto-proporcional: ready-for-dev  # 2026-05-27: emergente da regra de negócio levantada pelo Pablo após criar 13.16. Serviço de domínio que gera título proporcional (ou crédito) quando contrato é suspenso/cancelado mid-ciclo. Formaliza FR-CORE-CTR-11 (PRD v3.1). Depende de 13.2, 13.3, 13.4, 13.16.
   epic-13-retrospective: optional
 
   # ─── Epic 14: Manual do Desenvolvedor & Documentação Final ───

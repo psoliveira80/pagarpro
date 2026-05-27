@@ -323,7 +323,7 @@ async def test_terminate_contract():
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["status"] == "encerrado"
+    assert data["status"] == "encerrado_sem_pendencia"
     assert data["quantidade_titulos_em_aberto"] == 12
     assert Decimal(data["valor_multa"]) == Decimal("500.00")
 

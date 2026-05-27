@@ -53,8 +53,20 @@ from app.workers import celery_app
 
 log = structlog.get_logger()
 
-# Contratos nesses status terminais/rascunho são ignorados pela geração mensal.
-_STATUS_INATIVOS = ("rascunho", "encerrado", "rescindido", "cancelado")
+# Contratos nesses status NÃO devem ter novas parcelas geradas.
+# Inclui: rascunho, suspenso (Story 13.2 — pausado por inadimplência),
+# todos os terminais. Mantemos "encerrado" legado por defesa em
+# profundidade (migration 0023 normaliza para encerrado_sem_pendencia).
+_STATUS_INATIVOS = (
+    "rascunho",
+    "suspenso",
+    "encerrado",  # legado pré-0023
+    "encerrado_sem_pendencia",
+    "encerrado_com_pendencia",
+    "encerrado_compra",
+    "rescindido",
+    "cancelado",
+)
 
 
 def _avancar_um_mes(atual: date, dia_geracao: int) -> date:

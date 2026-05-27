@@ -57,6 +57,10 @@ class Veiculo(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     cliente_atual_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("cadastro.clientes.id"), nullable=True
     )
+    # Story 13.3 — proprietário após opção de compra exercida (status='alienado')
+    proprietario_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("cadastro.clientes.id"), nullable=True
+    )
     criado_por_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("acesso.usuarios.id"), nullable=True
     )

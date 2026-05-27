@@ -47,10 +47,10 @@ export class RelatoriosListaComponent implements OnInit {
   }
 
   openReport(slug: string): void {
-    this.router.navigate(['/sistema/reports', slug]);
+    this.router.navigate(['/sistema/relatorios', slug]);
   }
 
   openBuilder(): void {
-    this.router.navigate(['/sistema/reports', 'builder']);
+    this.router.navigate(['/sistema/relatorios', 'builder']);
   }
 }

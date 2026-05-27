@@ -51,12 +51,13 @@ class ParallelumFipeAdapter:
         return {
             "fipe_code": data.get("codeFipe", ""),
             "value": data.get("price", ""),
+            "price": data.get("price", ""),
             "brand": data.get("brand", ""),
             "model": data.get("model", ""),
             "model_year": data.get("modelYear", ""),
             "fuel": data.get("fuel", ""),
             "reference_month": data.get("referenceMonth", ""),
-            "vehicle_type": vehicle_type,
+            "vehicle_type": data.get("vehicleType", vehicle_type),
         }
 
     async def _get(self, url: str) -> Any:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -27,6 +26,22 @@ class DomainEvent:
         data["occurred_at"] = datetime.fromisoformat(data["occurred_at"])
         return klass(**data)
 
+
+# =============================================================================
+# Domain Events — Story 13.1
+# =============================================================================
+# NOMES EN MANTIDOS COMO CANONICAL para preservar compatibilidade de
+# serialização (eventos persistidos em Redis Streams / audit_log usam
+# `type(self).__name__` no campo `_type`). Trocar canonical agora invalidaria
+# eventos antigos no replay.
+#
+# NOMES PT-BR ficam como aliases para uso preferencial em código novo.
+# Registry aceita ambos os nomes em `from_dict`, garantindo que eventos
+# emitidos com qualquer convenção possam ser deserializados.
+#
+# Migração completa para PT-BR canonical (com replay de eventos antigos)
+# fica documentada como débito técnico — ver `docs/glossario-ptbr.md` seção
+# "Domínio Financeiro — Tabela de Renames EN→PT-BR".
 
 @dataclass(frozen=True)
 class ContractCreatedEvent(DomainEvent):
@@ -80,15 +95,35 @@ class CustomerScoreChangedEvent(DomainEvent):
     new_score: float = 0.0
 
 
+# Aliases PT-BR (Story 13.1) — preferenciais para código novo. Mesma classe,
+# mesma serialização — apenas alternam o ponto de import.
+EventoContratoAtivado = ContractCreatedEvent
+EventoContratoEncerrado = ContractTerminatedEvent
+EventoTituloVencido = InstallmentOverdueEvent
+EventoTituloPago = InstallmentPaidEvent
+EventoPagamentoParcialRecebido = PaymentPartiallyReceivedEvent
+EventoConciliacaoCompletada = ReconciliationCompletedEvent
+EventoScoreClienteAlterado = CustomerScoreChangedEvent
+
+
+# Registry aceita ambos os nomes para `from_dict` funcionar com eventos
+# legados (`_type='ContractCreatedEvent'`) e eventos novos emitidos com
+# nome PT-BR explícito.
 _EVENT_REGISTRY: dict[str, type[DomainEvent]] = {
-    cls.__name__: cls
-    for cls in [
-        ContractCreatedEvent,
-        ContractTerminatedEvent,
-        InstallmentOverdueEvent,
-        InstallmentPaidEvent,
-        PaymentPartiallyReceivedEvent,
-        ReconciliationCompletedEvent,
-        CustomerScoreChangedEvent,
-    ]
+    # EN canonical (forma persistida em Redis Streams / audit log)
+    "ContractCreatedEvent": ContractCreatedEvent,
+    "ContractTerminatedEvent": ContractTerminatedEvent,
+    "InstallmentOverdueEvent": InstallmentOverdueEvent,
+    "InstallmentPaidEvent": InstallmentPaidEvent,
+    "PaymentPartiallyReceivedEvent": PaymentPartiallyReceivedEvent,
+    "ReconciliationCompletedEvent": ReconciliationCompletedEvent,
+    "CustomerScoreChangedEvent": CustomerScoreChangedEvent,
+    # PT-BR aliases (aceitos para retro-compat se algum código novo emitir com nome PT-BR)
+    "EventoContratoAtivado": ContractCreatedEvent,
+    "EventoContratoEncerrado": ContractTerminatedEvent,
+    "EventoTituloVencido": InstallmentOverdueEvent,
+    "EventoTituloPago": InstallmentPaidEvent,
+    "EventoPagamentoParcialRecebido": PaymentPartiallyReceivedEvent,
+    "EventoConciliacaoCompletada": ReconciliationCompletedEvent,
+    "EventoScoreClienteAlterado": CustomerScoreChangedEvent,
 }

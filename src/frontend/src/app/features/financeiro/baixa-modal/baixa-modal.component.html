@@ -34,15 +34,7 @@
 
     <div>
       <label for="wo-amount" class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Valor (R$)</label>
-      <input
-        id="wo-amount"
-        type="number"
-        [value]="amount()"
-        (input)="amount.set(+$any($event.target).value)"
-        min="0"
-        step="0.01"
-        class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition"
-      />
+      <app-input-moeda id="wo-amount" [(value)]="amount" />
     </div>
 
     <div>

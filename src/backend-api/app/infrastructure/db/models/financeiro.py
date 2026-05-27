@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, Date, ForeignKey, Numeric, SmallInteger, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
@@ -41,8 +41,12 @@ class TituloReceber(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Text, nullable=False, server_default=text("'em_aberto'")
     )
     tipo: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default=text("'regular'")
+        Text, nullable=False, server_default=text("'parcela'")
     )
+    # Numeração de parcelas (Story 13.3) — populadas pelo gerador de títulos
+    # para títulos do tipo `parcela`. NULL para `opcao_compra`/`multa`/`taxa`/`ajuste`.
+    numero_parcela: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    total_parcelas: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     pago_em: Mapped[date | None] = mapped_column(Date, nullable=True)
     valor_pago: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
     forma_pagamento: Mapped[str | None] = mapped_column(Text, nullable=True)

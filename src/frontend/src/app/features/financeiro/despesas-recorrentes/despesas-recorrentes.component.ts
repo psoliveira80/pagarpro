@@ -10,6 +10,7 @@ import { FormsModule } from '@angular/forms';
 import { UiIconComponent } from '../../../shared/components/icon/icon.component';
 import { ModalComponent } from '../../../shared/components/modal/modal.component';
 import { CustomSelectComponent, SelectOption } from '../../../shared/components/custom-select/custom-select.component';
+import { InputMoedaComponent } from '../../../shared/components/input-moeda/input-moeda.component';
 import {
   PayableService,
   DespesaRecorrente,
@@ -22,7 +23,7 @@ import { ConfirmService } from '../../../shared/services/confirm.service';
 @Component({
   selector: 'app-despesas-recorrentes',
   standalone: true,
-  imports: [FormsModule, UiIconComponent, CustomSelectComponent, ModalComponent],
+  imports: [FormsModule, UiIconComponent, CustomSelectComponent, ModalComponent, InputMoedaComponent],
   templateUrl: './despesas-recorrentes.component.html',
   styleUrl: './despesas-recorrentes.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

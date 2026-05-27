@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, SmallInteger, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, SmallInteger, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
@@ -62,6 +62,8 @@ class Contrato(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         Boolean, nullable=False, server_default=text("false")
     )
     valor_residual: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    # Story 13.3 — valor da parcela final que dispara transferência de propriedade
+    valor_opcao_compra: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
     clausulas_md: Mapped[str | None] = mapped_column(Text, nullable=True)
     observacoes: Mapped[str | None] = mapped_column(Text, nullable=True)  # restored in 0019
     pdf_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -69,6 +71,10 @@ class Contrato(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     assinado_em: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     encerrado_em: Mapped[date | None] = mapped_column(Date, nullable=True)
     motivo_encerramento: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suspenso_em: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    motivo_suspensao: Mapped[str | None] = mapped_column(String(255), nullable=True)
     criado_por_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("acesso.usuarios.id"), nullable=True
     )

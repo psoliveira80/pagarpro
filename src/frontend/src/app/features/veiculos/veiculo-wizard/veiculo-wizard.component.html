@@ -296,16 +296,7 @@
             <label for="vw-acq-price" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">
               Preço de Aquisição <span class="text-[var(--danger)]">*</span>
             </label>
-            <input
-              id="vw-acq-price"
-              type="number"
-              [value]="acquisitionPrice()"
-              (input)="acquisitionPrice.set(+$any($event.target).value)"
-              placeholder="0,00"
-              min="0"
-              step="0.01"
-              class="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition"
-            />
+            <app-input-moeda id="vw-acq-price" [(value)]="acquisitionPrice" />
             @if (stepAttempted() && acquisitionPrice() <= 0) {
               <p class="mt-1 text-xs text-[var(--danger)]">Informe o preço de aquisição</p>
             }

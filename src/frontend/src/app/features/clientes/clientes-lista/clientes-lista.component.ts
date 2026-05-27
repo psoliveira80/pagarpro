@@ -95,11 +95,11 @@ export class ClientesListaComponent implements OnInit, OnDestroy {
   }
 
   openEditWizard(customer: Cliente): void {
-    this.router.navigate(['/sistema/customers', customer.id, 'edit']);
+    this.router.navigate(['/sistema/clientes', customer.id, 'edit']);
   }
 
   viewCustomer(customer: Cliente): void {
-    this.router.navigate(['/sistema/customers', customer.id]);
+    this.router.navigate(['/sistema/clientes', customer.id]);
   }
 
   async loadCustomers(): Promise<void> {
