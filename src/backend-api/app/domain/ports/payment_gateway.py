@@ -36,3 +36,7 @@ class IPaymentGateway(Protocol):
         Returns a dict with at least: {id, status, refunded_amount}.
         """
         ...
+
+
+# Alias PT-BR (Story 13.18) — preferencial pra código novo.
+IGatewayPagamento = IPaymentGateway

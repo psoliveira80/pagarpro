@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, SmallInteger, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, SmallInteger, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
@@ -49,6 +49,13 @@ class TituloReceber(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     total_parcelas: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     pago_em: Mapped[date | None] = mapped_column(Date, nullable=True)
     valor_pago: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    # Cobrança (Story 13.5) — usadas pelo motor 13.8 (processar_titulos_vencidos)
+    proxima_acao_em: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    acoes_de_cobranca: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
     forma_pagamento: Mapped[str | None] = mapped_column(Text, nullable=True)
     comprovante_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     titulo_origem_id: Mapped[UUID | None] = mapped_column(

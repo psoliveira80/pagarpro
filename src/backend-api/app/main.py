@@ -172,6 +172,11 @@ def create_app() -> FastAPI:
 
     app.include_router(templates_mensagem_router, prefix="/api/v1")
 
+    # API v1 — observabilidade do motor (Epic 13, Story 13.5)
+    from app.api.v1.motor_routes import router as motor_router
+
+    app.include_router(motor_router, prefix="/api/v1")
+
     # SSE routes
     from app.api.sse import router as sse_router
 

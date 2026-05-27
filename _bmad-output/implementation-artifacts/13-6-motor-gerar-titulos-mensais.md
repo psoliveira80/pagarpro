@@ -3,7 +3,7 @@ epic: 13
 story: 6
 title: "Motor `gerar_titulos_mensais`"
 type: "Worker + Domínio"
-status: ready-for-dev
+status: review
 priority: high
 depends_on: "13.5, 13.4, 13.3"
 authored_by: "Amelia (dev) via bmad-create-story"
@@ -97,3 +97,45 @@ src/backend-api/
 
 - A geração de **opção de compra** (Story 13.3) só acontece **na última parcela**. O motor verifica `numero_parcela == total_parcelas` e gera o título adicional.
 - Story 13.16 estende este motor para suportar `personalizado_dias` (intervalos não-mensais).
+
+---
+
+## Dev Agent Record
+
+### Implementação (2026-05-27 — Amelia)
+
+**Escopo entregue (incrementos sobre a base da Story 12.6 que já funcionava):**
+
+1. **`ExecucaoMotorTracker` integrado em session separada** — o tracker persiste em `motor.execucoes_motor` mesmo se o business session der rollback. Marca `executando` no início e `concluido`/`erro` no fim, com `total_registros` (gerados+pulados) e `total_erros`.
+
+2. **Endpoint `POST /api/v1/motor/gerar-titulos`** — disparo manual via Celery `send_task`. Role admin obrigatório. Mensagem direciona o usuário pra `/api/v1/motor/execucoes` pra acompanhar.
+
+3. **Filtro `suspenso` já aplicado** desde Story 13.2 — `_STATUS_INATIVOS` inclui o estado novo.
+
+**Decisões arquiteturais:**
+
+- **Tracker em session separada** evita o problema que o teste `test_tracker_marca_erro_quando_excecao_propaga` documentou (rollback do business session apaga a linha do tracker). Em motor real, queremos histórico mesmo quando o business code falha.
+
+- **`tabela_indices_economicos` (AC 3) adiado** — não há feed real de IGPM/IPCA/INPC configurado em dev (BCB adapter existe mas é HTTP). Quando integração estiver ligada, a tabela vira opcional (cache local de respostas do BCB).
+
+- **Geração de opção de compra integrada ao motor mensal (Notas spec) — adiado.** Em V1, a Story 13.16 (wizard de contrato) gera TODAS as parcelas + opção de compra na criação do contrato. O motor mensal só geraria opção em contratos `modo_geracao='mensal'` que ainda não existem na prática. Quando esse caso aparecer (refactor de Story 13.16), o motor pode ser estendido pra emitir `tipo='opcao_compra'` no último mês.
+
+**Validação:**
+- Suite `test_monthly_generation.py` + `test_workers_tenant.py`: **15 passed, 0 fail** (zero regressão após integrar tracker).
+
+### File List
+
+- `src/backend-api/app/workers/tasks/gerar_titulos_mensais.py` (modificado — wrap com `ExecucaoMotorTracker`)
+- `src/backend-api/app/api/v1/motor_routes.py` (modificado — endpoint `POST /motor/gerar-titulos`)
+
+### Completion Notes
+
+- ✅ AC 1 — Cron `crontab(hour=6, minute=0)` existente (Story 12.6) — Beat continua disparando.
+- ✅ AC 2 — Lógica busca contratos `modo_geracao='mensal'` + `proxima_geracao_em <= hoje` + filtra `_STATUS_INATIVOS`.
+- 🔵 AC 3 — `tabela_indices_economicos` adiada (sem feed em dev).
+- ✅ AC 4 — Contratos sem valor base já levam warning + skip (`_gerar_uma_parcela`).
+- ✅ AC 5 — Idempotente por `_titulo_existe_para_vencimento` + `UniqueConstraint(empresa_id, contrato_id, sequencia)`.
+- ✅ AC 6 — `POST /motor/gerar-titulos` admin-only.
+- ✅ AC 7 — Pattern `dispatch_por_empresa` (Story 12.6) já cobre fan-out.
+- ✅ AC 8 — `ExecucaoMotorTracker` registra com `total_registros`, `total_erros`, `iniciado_em`, `finalizado_em`, `situacao`.
+- ✅ AC 9 — Testes existentes cobrem ativo/suspenso/duplicata/IGPM (`test_monthly_generation.py`).

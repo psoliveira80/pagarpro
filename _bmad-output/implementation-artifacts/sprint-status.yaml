@@ -190,11 +190,11 @@ development_status:
   13-2-maquina-estados-contrato-suspenso: review  # 2026-05-27: implementada por Amelia. Enum SituacaoContrato (8 estados) + grafo + ServicoSituacaoContrato. Migration 0023 CHECK constraint + suspenso_em/motivo_suspensao. Worker filtra suspensos. 27 novos testes (205 total).
   13-3-tipo-titulo-opcao-compra: review  # 2026-05-27: implementada por Amelia. Migration 0024 CHECK tipo + unique opcao_compra + colunas valor_opcao_compra/proprietario_id. TipoTitulo StrEnum + TIPOS_DEVEDORES. ServicoOpcaoCompra. 8 novos testes (213 total).
   13-4-sistema-configuracoes-tipadas: review  # 2026-05-27: implementada por Amelia. Migration 0021 restrutura tabela com CHECK constraint tipado. ServicoConfiguracao + cache Redis + 15 configs seed. 11 novos testes (194 total passing).
-  13-5-infraestrutura-base-workers: ready-for-dev  # 2026-05-27
-  13-6-motor-gerar-titulos-mensais: ready-for-dev  # 2026-05-27
-  13-7-motor-alertar-vencimentos-proximos: ready-for-dev  # 2026-05-27
-  13-8-motor-processar-titulos-vencidos: ready-for-dev  # 2026-05-27
-  13-9-motor-conciliar-pagamentos-recebidos: ready-for-dev  # 2026-05-27
+  13-5-infraestrutura-base-workers: review  # 2026-05-27: implementada por Amelia (escopo mínimo). LockOperacao + SKIP LOCKED + ExecucaoMotorTracker + endpoint /motor/execucoes. Refactor de filas Celery adiado.
+  13-6-motor-gerar-titulos-mensais: review  # 2026-05-27: implementada por Amelia. Integra ExecucaoMotorTracker (session separada) + endpoint POST /motor/gerar-titulos. Já tinha base sólida da Story 12.6. tabela_indices_economicos adiada (sem feed em dev).
+  13-7-motor-alertar-vencimentos-proximos: review  # 2026-05-27: implementada por Amelia. Worker novo + cron 08:00 UTC + fan-out por empresa. Lê config (dias_antecedencia + canal). Renderiza template. Idempotência tripla (Redis lock + dia + skip). 5 testes.
+  13-8-motor-processar-titulos-vencidos: review  # 2026-05-27: implementada por Amelia. Função pura calcular_encargos + worker que aplica encargos, escalona cobrança/suspensão/encerramento. Itera por contrato (não por título). 8 testes (3 unit + 5 integração).
+  13-9-motor-conciliar-pagamentos-recebidos: review  # 2026-05-27: implementada por Amelia. decidir_conciliacao (função pura) + ServicoTituloPago (handler central). Fusão/separação por threshold. Opção de compra delega para ServicoOpcaoCompra. Worker que polling pagamentos bancários adiado (sem integração Pluggy/Asaas em dev). 11 testes.
   13-10-renderizador-templates-mensagem: review  # 2026-05-27: implementada por Amelia. Migration 0022 cria comunicacao.templates_mensagem. Jinja2 SandboxedEnvironment + StrictUndefined. CRUD + preview admin. 5 templates seedados. 11 novos testes (205 total).
   13-11-ledger-passivo-inoperante: ready-for-dev  # 2026-05-27
   13-12-heroi-financeiro-detalhe-contrato: ready-for-dev  # 2026-05-27

@@ -3,7 +3,7 @@ epic: 13
 story: 9
 title: "Motor `conciliar_pagamentos_recebidos` (com Fusão de Pagamento Parcial)"
 type: "Worker + Domínio Financeiro"
-status: ready-for-dev
+status: review
 priority: critical
 depends_on: "13.5, 13.4, 13.3, 13.13"
 authored_by: "Amelia (dev) via bmad-create-story"

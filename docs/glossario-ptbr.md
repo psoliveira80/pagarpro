@@ -173,12 +173,16 @@ Convenção de nomes para código **novo** do Epic 13 em diante. Nomes EN listad
 
 ### Interfaces (Ports do Hexagonal)
 
-| Nome antigo (EN) | Nome novo (PT-BR) | Status |
+| Nome canonical (EN, mantém) | Alias preferencial pra código novo (PT-BR) | Status |
 |---|---|---|
-| `IAssetModule` | `IModuloVertical` | 🔵 débito (interface arquitetural — rename invalida ~30 imports + Protocol type checking; demanda story própria) |
-| `IMessageChannel` | `ICanalMensagem` | 🔵 débito (mesma justificativa) |
-| `IPaymentGateway` | `IGatewayPagamento` | 🔵 débito |
-| `ITrackerGateway` | `IGatewayRastreador` | 🔵 débito |
+| `IAssetModule` | `IModuloVertical` | ✅ alias aplicado (Story 13.18) |
+| `IMessageChannel` | `ICanalMensagem` | ✅ alias aplicado |
+| `IPaymentGateway` | `IGatewayPagamento` | ✅ alias aplicado |
+| `ITrackerGateway` | `IGatewayRastreador` | ✅ alias aplicado |
+
+**Regra:** em código novo, importar pelo alias PT-BR. O nome EN é canonical (Protocol class) — alterar quebra `isinstance(x, IAssetModule)` checks existentes. Os aliases são `IModuloVertical = IAssetModule` (mesmo Protocol class), então `isinstance(x, IModuloVertical)` funciona idêntico.
+
+Métodos individuais dos Protocols (ex.: `on_installment_paid`, `on_contract_created`) **permanecem em inglês** — renomear método de Protocol invalida todos os implementadores. Esse rename fica documentado como débito futuro de refactor coordenado.
 
 ### Legenda
 

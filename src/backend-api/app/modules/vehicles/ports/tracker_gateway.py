@@ -22,3 +22,7 @@ class ITrackerGateway(Protocol):
     async def health_check(self, config: dict[str, Any]) -> bool:
         """Check if the tracker provider API is reachable."""
         ...
+
+
+# Alias PT-BR (Story 13.18) — preferencial pra código novo.
+IGatewayRastreador = ITrackerGateway

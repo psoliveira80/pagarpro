@@ -3,7 +3,7 @@ epic: 13
 story: 7
 title: "Motor `alertar_vencimentos_proximos`"
 type: "Worker + Comunicação"
-status: ready-for-dev
+status: review
 priority: medium
 depends_on: "13.5, 13.4, 13.10"
 authored_by: "Amelia (dev) via bmad-create-story"

@@ -98,3 +98,10 @@ class IAssetModule(Protocol):
     def get_score_factors(self) -> list[ScoreFactor]: ...
 
     def get_custom_routes(self) -> list[APIRouter]: ...
+
+
+# Alias PT-BR (Story 13.18) — preferencial pra código novo do Epic 13 em diante.
+# Mesma classe Protocol; consumidores podem importar qualquer um dos dois nomes.
+# Métodos individuais (on_*, get_*) mantêm nomes em inglês — rename é refactor
+# cross-cutting documentado como débito na Story 13.1.
+IModuloVertical = IAssetModule

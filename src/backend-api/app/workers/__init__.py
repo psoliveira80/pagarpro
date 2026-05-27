@@ -22,6 +22,8 @@ celery_app.conf.include = [
     "app.workers.tasks.gerar_despesas_recorrentes",
     "app.workers.tasks.recalcular_scores_clientes",
     "app.workers.tasks.verificar_saude_canais",
+    "app.workers.tasks.alertar_vencimentos_proximos",
+    "app.workers.tasks.processar_titulos_vencidos",
     # Tasks system-wide (sem tenant)
     "app.workers.tasks.atualizar_views",
     "app.workers.tasks.backup",
@@ -62,6 +64,21 @@ celery_app.conf.beat_schedule = {
         "task": _DISPATCHER,
         "schedule": crontab(minute="*/5"),
         "args": ("app.workers.tasks.verificar_saude_canais.executar",),
+    },
+    # Diariamente às 08:00 UTC (Epic 13, Story 13.7) — lembretes proativos
+    # de vencimento por empresa.
+    "alertar-vencimentos-proximos": {
+        "task": _DISPATCHER,
+        "schedule": crontab(hour=8, minute=0),
+        "args": ("app.workers.tasks.alertar_vencimentos_proximos.executar",),
+    },
+    # Diariamente às 09:00 UTC (Epic 13, Story 13.8) — processa títulos
+    # vencidos: aplica encargos, envia cobrança, suspende/encerra contratos
+    # ao atingir limites configurados.
+    "processar-titulos-vencidos": {
+        "task": _DISPATCHER,
+        "schedule": crontab(hour=9, minute=0),
+        "args": ("app.workers.tasks.processar_titulos_vencidos.executar",),
     },
     # A cada hora — refresh das materialized views (system-wide).
     "atualizar-views": {

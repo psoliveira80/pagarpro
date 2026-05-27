@@ -3,7 +3,7 @@ epic: 13
 story: 8
 title: "Motor `processar_titulos_vencidos` (encargos + escalonamento até suspensão)"
 type: "Worker + Domínio Financeiro"
-status: ready-for-dev
+status: review
 priority: critical
 depends_on: "13.5, 13.4, 13.10, 13.2"
 authored_by: "Amelia (dev) via bmad-create-story"

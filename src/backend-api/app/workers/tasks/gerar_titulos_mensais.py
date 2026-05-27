@@ -224,12 +224,26 @@ async def _run(
 ) -> dict[str, int]:
     from app.infrastructure.db.session import get_sessionmaker
     from app.infrastructure.settings import get_settings
+    from app.workers.base_motor import ExecucaoMotorTracker
 
     hoje = date.today()
     session_factory = get_sessionmaker()
     sumario = {"generated": 0, "skipped": 0, "failed": 0}
     redis = None
     provider_dispose_local = False
+
+    # Story 13.6 — Tracker em session separada pra que persista mesmo se o
+    # business session der rollback. Marca executando → concluido/erro.
+    tracker_session = session_factory()
+    await tracker_session.execute(
+        text("SELECT set_config('app.empresa_id', :eid, true)"),
+        {"eid": str(empresa_id)},
+    )
+    tracker = ExecucaoMotorTracker(
+        tracker_session, "gerar_titulos_mensais", empresa_id
+    )
+    await tracker.__aenter__()
+    await tracker_session.commit()
 
     try:
         if provider is None:
@@ -290,9 +304,23 @@ async def _run(
                 sumario["skipped"] += puladas
 
             await session.commit()
+        # Finaliza tracker como concluido
+        tracker.total_registros = sumario["generated"] + sumario["skipped"]
+        tracker.total_erros = sumario["failed"]
+        await tracker.__aexit__(None, None, None)
+        await tracker_session.commit()
+    except Exception as exc:
+        # Persiste tracker como erro antes de relançar
+        try:
+            await tracker.__aexit__(type(exc), exc, exc.__traceback__)
+            await tracker_session.commit()
+        except Exception:
+            log.exception("tracker_finalize_falhou")
+        raise
     finally:
         if redis is not None and provider_dispose_local:
             await redis.aclose()
+        await tracker_session.close()
 
     log.info(
         "geracao_titulos_mensais_complete",

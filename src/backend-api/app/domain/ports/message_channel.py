@@ -87,3 +87,7 @@ class IMessageChannel(Protocol):
     async def health_check(self) -> ChannelHealth:
         """Check if the channel is operational. Must be lightweight (< 5s)."""
         ...
+
+
+# Alias PT-BR (Story 13.18) — preferencial pra código novo.
+ICanalMensagem = IMessageChannel
