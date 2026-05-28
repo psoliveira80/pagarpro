@@ -33,6 +33,13 @@ export const SYSTEM_ROUTES: Routes = [
           import('../financeiro/financeiro.routes').then((m) => m.FINANCEIRO_ROUTES),
       },
       {
+        path: 'comprovantes',
+        loadComponent: () =>
+          import('../comprovantes/comprovantes-lista/comprovantes-lista.component').then(
+            (m) => m.ComprovantesListaComponent,
+          ),
+      },
+      {
         path: 'configuracoes',
         loadChildren: () =>
           import('../configuracoes/configuracoes.routes').then((m) => m.CONFIGURACOES_ROUTES),

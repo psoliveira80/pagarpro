@@ -160,6 +160,17 @@
         </div>
       }
       <a
+        routerLink="/sistema/comprovantes"
+        routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
+        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"
+        (click)="closeMobileSidebar()"
+      >
+        <ui-icon name="heroDocumentText" />
+        @if (!sidebarCollapsed() || mobileSidebarOpen()) {
+          <span>Comprovantes</span>
+        }
+      </a>
+      <a
         routerLink="/sistema/financeiro/conciliacao"
         routerLinkActive="bg-[var(--border-subtle)] text-[var(--accent)]"
         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition"

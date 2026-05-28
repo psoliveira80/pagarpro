@@ -1,0 +1,180 @@
+<app-modal [open]="true" size="lg" title="Detalhe do comprovante" (closed)="fechar()">
+  @if (carregando()) {
+    <div class="centro">
+      <svg class="spinner" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none"
+                stroke-dasharray="40 60" stroke-linecap="round" />
+      </svg>
+      <p>Carregando...</p>
+    </div>
+  } @else if (comprovante(); as c) {
+    <div class="detalhe">
+      <!-- Score + status no topo -->
+      <header class="topo">
+        <div class="topo-left">
+          <h3>
+            @if (c.valor_detectado) {
+              R$ {{ c.valor_detectado | number: '1.2-2' : 'pt-BR' }}
+            } @else {
+              Valor não detectado
+            }
+          </h3>
+          <span class="badge" [ngClass]="'badge-' + c.status">{{ c.status }}</span>
+        </div>
+        <div class="score" [ngClass]="'score-' + corScore()">
+          <span class="score-label">Confiança</span>
+          <strong>{{ (c.score_confianca * 100).toFixed(0) }}%</strong>
+        </div>
+      </header>
+
+      <!-- Arquivo (preview se imagem) -->
+      @if (c.tipo_arquivo.startsWith('image/')) {
+        <div class="preview-arquivo">
+          <img [src]="c.arquivo_url" alt="Preview do comprovante" loading="lazy" />
+        </div>
+      } @else {
+        <div class="preview-arquivo placeholder">
+          <span>📄 {{ c.tipo_arquivo }}</span>
+          <a [href]="c.arquivo_url" target="_blank" rel="noopener">Abrir arquivo</a>
+        </div>
+      }
+
+      <!-- Dados extraídos -->
+      <section class="dados">
+        <h4>Dados extraídos</h4>
+
+        <dl>
+          <dt>Método</dt>
+          <dd>{{ rotuloMetodo(c.metodo_analise) }}</dd>
+
+          @if (c.data_detectada) {
+            <dt>Data</dt>
+            <dd>{{ c.data_detectada | date: 'dd/MM/yyyy HH:mm' }}</dd>
+          }
+
+          @if (c.banco_emissor) {
+            <dt>Banco emissor</dt>
+            <dd>{{ c.banco_emissor }}</dd>
+          }
+
+          @if (c.pagador_nome) {
+            <dt>Pagador</dt>
+            <dd>
+              {{ c.pagador_nome }}
+              @if (c.pagador_documento) {
+                <small>({{ c.pagador_documento }})</small>
+              }
+            </dd>
+          }
+
+          @if (c.beneficiario_nome) {
+            <dt>Beneficiário</dt>
+            <dd>
+              {{ c.beneficiario_nome }}
+              @if (c.beneficiario_cnpj) {
+                <small>({{ c.beneficiario_cnpj }})</small>
+              }
+            </dd>
+          }
+
+          @if (c.chave_pix_usada) {
+            <dt>Chave PIX</dt>
+            <dd class="mono">{{ c.chave_pix_usada }}</dd>
+          }
+
+          @if (c.pix_e2e_id) {
+            <dt>E2E ID</dt>
+            <dd class="mono">{{ c.pix_e2e_id }}</dd>
+          }
+
+          <dt>Título vinculado</dt>
+          <dd>
+            @if (c.titulo_id) {
+              <span class="ok">✓ Sim ({{ c.titulo_id.substring(0, 8) }}…)</span>
+            } @else {
+              <span class="alerta">⚠ Não vinculado automaticamente — atribuição manual ainda não disponível na UI</span>
+            }
+          </dd>
+        </dl>
+      </section>
+
+      <!-- Avisos -->
+      @if (c.avisos.length > 0) {
+        <section class="avisos">
+          <h4>Avisos da análise</h4>
+          <ul>
+            @for (av of c.avisos; track av) {
+              <li>{{ av }}</li>
+            }
+          </ul>
+        </section>
+      }
+
+      <!-- Histórico -->
+      @if (c.status === 'homologado') {
+        <div class="historico ok">
+          ✓ Homologado em {{ c.homologado_em | date: 'dd/MM/yyyy HH:mm' }}
+        </div>
+      } @else if (c.status === 'rejeitado') {
+        <div class="historico ko">
+          ✗ Rejeitado em {{ c.rejeitado_em | date: 'dd/MM/yyyy HH:mm' }}<br />
+          <small><strong>Motivo:</strong> {{ c.motivo_rejeicao }}</small>
+        </div>
+      }
+
+      <!-- Ações -->
+      @if (c.status === 'analisado') {
+        <footer class="acoes">
+          @if (!mostraRejeitar()) {
+            <button
+              type="button"
+              class="btn-rejeitar"
+              [disabled]="processando()"
+              (click)="mostraRejeitar.set(true)"
+            >Rejeitar</button>
+
+            <button
+              type="button"
+              class="btn-homologar"
+              [disabled]="processando() || !podeHomologar()"
+              [title]="!podeHomologar() ? 'Comprovante precisa estar vinculado a um título e ter valor detectado' : 'Confirma o pagamento'"
+              (click)="homologar()"
+            >
+              @if (processando()) {
+                Processando...
+              } @else {
+                ✓ Homologar pagamento
+              }
+            </button>
+          } @else {
+            <div class="rejeitar-form">
+              <label>
+                <span>Motivo da rejeição</span>
+                <textarea
+                  [ngModel]="motivoRejeicao()"
+                  (ngModelChange)="motivoRejeicao.set($event)"
+                  placeholder="Ex.: valor diverge do esperado / comprovante ilegível / não corresponde a nenhum cliente"
+                  rows="3"
+                ></textarea>
+              </label>
+              <div class="rejeitar-botoes">
+                <button
+                  type="button"
+                  class="btn-link"
+                  [disabled]="processando()"
+                  (click)="mostraRejeitar.set(false); motivoRejeicao.set('')"
+                >Cancelar</button>
+                <button
+                  type="button"
+                  class="btn-rejeitar-confirm"
+                  [disabled]="processando()"
+                  (click)="rejeitar()"
+                >Confirmar rejeição</button>
+              </div>
+            </div>
+          }
+        </footer>
+      }
+    </div>
+  }
+</app-modal>

@@ -1,0 +1,236 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Comprovantes de Pagamento</h1>
+      <p class="subtitulo">
+        Receba, analise e homologue comprovantes PIX enviados pelos clientes.
+      </p>
+    </div>
+  </header>
+
+  <!-- KPIs ─────────────────────────────────────────── -->
+  <section class="kpis">
+    <div class="kpi">
+      <span class="kpi-rotulo">Total na lista</span>
+      <strong class="kpi-valor">{{ stats().total }}</strong>
+    </div>
+    <div class="kpi">
+      <span class="kpi-rotulo">Aguardando</span>
+      <strong class="kpi-valor amarelo">{{ stats().analisado }}</strong>
+    </div>
+    <div class="kpi">
+      <span class="kpi-rotulo">Homologados</span>
+      <strong class="kpi-valor verde">{{ stats().homologado }}</strong>
+    </div>
+    <div class="kpi">
+      <span class="kpi-rotulo">Rejeitados</span>
+      <strong class="kpi-valor cinza">{{ stats().rejeitado }}</strong>
+    </div>
+    <div class="kpi destaque">
+      <span class="kpi-rotulo">⚠ Baixa confiança</span>
+      <strong class="kpi-valor vermelho">{{ stats().baixa_confianca }}</strong>
+    </div>
+  </section>
+
+  <!-- Upload ───────────────────────────────────────── -->
+  <section class="upload-box">
+    <h2>Enviar novo comprovante</h2>
+    <p class="dica">
+      Aceito: imagem (PNG/JPG) ou PDF. O sistema lê QR Code PIX, PDF nativo ou
+      faz OCR automaticamente e tenta vincular ao título em aberto.
+    </p>
+
+    <div class="upload-controles">
+      <label for="arquivo-input" class="botao-arquivo">
+        Selecionar arquivo
+        <input
+          id="arquivo-input"
+          type="file"
+          accept="image/png,image/jpeg,application/pdf"
+          (change)="onArquivoSelecionado($event)"
+          hidden
+        />
+      </label>
+
+      @if (arquivoSelecionado()) {
+        <span class="arquivo-info">
+          📎 {{ arquivoSelecionado()!.name }}
+          ({{ (arquivoSelecionado()!.size / 1024).toFixed(0) }} KB)
+        </span>
+        <button
+          type="button"
+          class="botao-primario"
+          [disabled]="enviandoArquivo()"
+          (click)="enviar()"
+        >
+          @if (enviandoArquivo()) {
+            <svg class="spinner-mini" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"
+                      fill="none" stroke-dasharray="40 60" stroke-linecap="round" />
+            </svg>
+            Analisando...
+          } @else {
+            Analisar
+          }
+        </button>
+      }
+    </div>
+  </section>
+
+  <!-- Filtros + Tabela ─────────────────────────────── -->
+  <section class="filtros">
+    <div class="filtros-controles">
+      <label>
+        <span>Status</span>
+        <select [ngModel]="filtroStatus()" (ngModelChange)="filtroStatus.set($event)">
+          <option value="">Todos</option>
+          <option value="analisado">Aguardando homologação</option>
+          <option value="homologado">Homologados</option>
+          <option value="rejeitado">Rejeitados</option>
+        </select>
+      </label>
+      <label>
+        <span>Score mínimo</span>
+        <input
+          type="number"
+          min="0"
+          max="1"
+          step="0.05"
+          placeholder="ex. 0.70"
+          [ngModel]="filtroScoreMin()"
+          (ngModelChange)="filtroScoreMin.set($event)"
+        />
+      </label>
+      <button type="button" class="botao-secundario" (click)="aplicarFiltros()">
+        Aplicar
+      </button>
+      <button type="button" class="botao-link" (click)="limparFiltros()">
+        Limpar
+      </button>
+    </div>
+  </section>
+
+  @if (carregando()) {
+    <div class="estado-carregando">
+      <svg class="spinner" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none"
+                stroke-dasharray="40 60" stroke-linecap="round" />
+      </svg>
+      <p>Carregando comprovantes...</p>
+    </div>
+  } @else if (erro()) {
+    <div class="estado-erro">
+      <p>{{ erro() }}</p>
+      <button type="button" class="botao-primario" (click)="carregar()">Tentar novamente</button>
+    </div>
+  } @else if (comprovantes().length === 0) {
+    <div class="estado-vazio">
+      <span class="emoji">📭</span>
+      <p>Nenhum comprovante encontrado.</p>
+      <small>Tente ajustar os filtros ou enviar um novo arquivo.</small>
+    </div>
+  } @else {
+    <section class="lista-cards">
+      @for (c of comprovantes(); track c.id) {
+        <article class="card-comprovante" [ngClass]="['borda-' + corPorScore(c.score_confianca)]"
+                 (click)="abrirDetalhe(c)"
+                 (keydown.enter)="abrirDetalhe(c)"
+                 tabindex="0"
+                 role="button"
+                 [attr.aria-label]="'Detalhar comprovante ' + c.id">
+
+          <header class="card-header">
+            <div class="card-titulo">
+              <strong>
+                @if (c.valor_detectado) {
+                  R$ {{ c.valor_detectado | number: '1.2-2' : 'pt-BR' }}
+                } @else {
+                  Valor não detectado
+                }
+              </strong>
+              <span class="badge" [ngClass]="'badge-' + c.status">
+                {{ rotuloStatus(c.status) }}
+              </span>
+            </div>
+            <div class="score" [ngClass]="'score-' + corPorScore(c.score_confianca)">
+              {{ (c.score_confianca * 100).toFixed(0) }}%
+            </div>
+          </header>
+
+          <div class="card-corpo">
+            <div class="card-linha">
+              <span class="rotulo">Método:</span>
+              <span>{{ rotuloMetodo(c.metodo_analise) }}</span>
+            </div>
+            @if (c.data_detectada) {
+              <div class="card-linha">
+                <span class="rotulo">Data:</span>
+                <span>{{ c.data_detectada | date: 'dd/MM/yyyy HH:mm' }}</span>
+              </div>
+            }
+            @if (c.pagador_nome) {
+              <div class="card-linha">
+                <span class="rotulo">Pagador:</span>
+                <span>{{ c.pagador_nome }}</span>
+              </div>
+            }
+            @if (c.banco_emissor) {
+              <div class="card-linha">
+                <span class="rotulo">Banco:</span>
+                <span>{{ c.banco_emissor }}</span>
+              </div>
+            }
+            <div class="card-linha">
+              <span class="rotulo">Título vinculado:</span>
+              @if (c.titulo_id) {
+                <span class="ok">✓ vinculado</span>
+              } @else {
+                <span class="alerta">⚠ não vinculado</span>
+              }
+            </div>
+          </div>
+
+          @if (c.avisos.length > 0) {
+            <div class="card-avisos">
+              @for (av of c.avisos.slice(0, 2); track av) {
+                <small class="aviso">ℹ {{ av }}</small>
+              }
+              @if (c.avisos.length > 2) {
+                <small class="aviso">+{{ c.avisos.length - 2 }} avisos...</small>
+              }
+            </div>
+          }
+
+          <footer class="card-footer">
+            <small>{{ c.criado_em | date: 'dd/MM/yyyy HH:mm' }}</small>
+          </footer>
+        </article>
+      }
+    </section>
+
+    @if (total() > tamanhoPagina) {
+      <nav class="paginacao">
+        <button
+          type="button"
+          [disabled]="!podeVoltar()"
+          (click)="pagina.set(pagina() - 1); carregar()"
+        >Anterior</button>
+        <span>Página {{ pagina() }} de {{ totalPaginas() }}</span>
+        <button
+          type="button"
+          [disabled]="!podeAvancar()"
+          (click)="pagina.set(pagina() + 1); carregar()"
+        >Próxima</button>
+      </nav>
+    }
+  }
+</div>
+
+<!-- Modal de detalhe ─────────────────────────────────── -->
+@if (comprovanteDetalheId()) {
+  <app-comprovante-detalhe
+    [comprovanteId]="comprovanteDetalheId()!"
+    (fechado)="fecharDetalhe()"
+    (atualizado)="aposAcao()"
+  ></app-comprovante-detalhe>
+}

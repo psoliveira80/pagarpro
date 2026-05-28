@@ -1,0 +1,273 @@
+:host { display: block; }
+
+.centro {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  animation: spin 1s linear infinite;
+  color: var(--accent);
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.detalhe {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Topo ────────────────────────────────────────── */
+.topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.topo-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.topo h3 {
+  font-size: 1.5rem;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  width: fit-content;
+}
+
+.badge-analisado { background: color-mix(in srgb, var(--warning) 15%, transparent); color: var(--warning); }
+.badge-homologado { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.badge-rejeitado { background: var(--surface-elevated); color: var(--text-muted); }
+
+.score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--surface-elevated);
+}
+
+.score-label {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.score strong {
+  font-size: 1.5rem;
+}
+
+.score.score-verde { background: color-mix(in srgb, var(--success) 20%, transparent); color: var(--success); }
+.score.score-amarelo { background: color-mix(in srgb, var(--warning) 20%, transparent); color: var(--warning); }
+.score.score-vermelho { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
+
+/* Preview ──────────────────────────────────────── */
+.preview-arquivo {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.preview-arquivo img {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 0.5rem;
+  object-fit: contain;
+}
+
+.preview-arquivo.placeholder {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.preview-arquivo a {
+  color: var(--accent);
+  font-size: 0.875rem;
+}
+
+/* Dados ────────────────────────────────────────── */
+.dados h4, .avisos h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.5rem 1rem;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+dt {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+dd {
+  color: var(--text-primary);
+  margin: 0;
+}
+
+dd small {
+  color: var(--text-muted);
+  margin-left: 0.25rem;
+}
+
+dd.mono {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+  word-break: break-all;
+}
+
+dd .ok { color: var(--success); font-weight: 500; }
+dd .alerta { color: var(--warning); font-weight: 500; }
+
+/* Avisos ───────────────────────────────────────── */
+.avisos ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.avisos li {
+  margin-bottom: 0.25rem;
+}
+
+/* Histórico ────────────────────────────────────── */
+.historico {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.historico.ok {
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+  border-left: 3px solid var(--success);
+}
+
+.historico.ko {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  border-left: 3px solid var(--danger);
+}
+
+/* Ações ────────────────────────────────────────── */
+.acoes {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.btn-rejeitar {
+  padding: 0.625rem 1.25rem;
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-rejeitar:hover {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.btn-homologar {
+  padding: 0.625rem 1.5rem;
+  background: var(--success);
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-homologar:hover { opacity: 0.9; }
+.btn-homologar:disabled { opacity: 0.5; cursor: not-allowed; background: var(--text-muted); }
+
+.btn-link {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.btn-rejeitar-confirm {
+  padding: 0.5rem 1.25rem;
+  background: var(--danger);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.rejeitar-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rejeitar-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.rejeitar-form label span {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.rejeitar-form textarea {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.rejeitar-botoes {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
