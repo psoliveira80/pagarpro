@@ -182,6 +182,11 @@ def create_app() -> FastAPI:
 
     app.include_router(comprovantes_router, prefix="/api/v1")
 
+    # API v1 — conciliação bancária OFX/PDF/CSV (Epic 13, Story 13.20)
+    from app.api.v1.conciliacao_routes import router as conciliacao_router
+
+    app.include_router(conciliacao_router, prefix="/api/v1")
+
     # SSE routes
     from app.api.sse import router as sse_router
 

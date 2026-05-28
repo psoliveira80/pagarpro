@@ -32,6 +32,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.servico_configuracao import ServicoConfiguracao
@@ -130,6 +131,11 @@ class ServicoAnaliseComprovante:
         resultado.clamp_score()
 
         # Persiste
+        # Code-review V2: cap em `avisos` para evitar crescimento descontrolado
+        avisos_capados = resultado.avisos[:20]
+        if len(resultado.avisos) > 20:
+            avisos_capados.append(f"... e mais {len(resultado.avisos) - 20} avisos truncados")
+
         comprovante = ComprovantePagamento(
             empresa_id=self.empresa_id,
             cliente_id=cliente_id,
@@ -155,13 +161,29 @@ class ServicoAnaliseComprovante:
                 if resultado.metodo == MetodoAnalise.OCR
                 else None
             ),
-            avisos=resultado.avisos,
+            avisos=avisos_capados,
             status="analisado",
             origem=origem,
             telefone_remetente=telefone_remetente,
         )
         self.session.add(comprovante)
-        await self.session.flush()
+        # Code-review V2: trata race entre SELECT e INSERT (defesa em profundidade
+        # contra IntegrityError da unique constraint `(empresa_id, arquivo_hash)`).
+        try:
+            await self.session.flush()
+        except IntegrityError:
+            await self.session.rollback()
+            # Re-lê o registro inserido pelo worker concorrente
+            existente_pos_race = await self.session.execute(
+                select(ComprovantePagamento).where(
+                    ComprovantePagamento.empresa_id == self.empresa_id,
+                    ComprovantePagamento.arquivo_hash == hash_arquivo,
+                )
+            )
+            ja_inserido = existente_pos_race.scalar_one_or_none()
+            if ja_inserido is not None:
+                raise ComprovanteJaAnalisadoError(ja_inserido) from None
+            raise  # falha não-relacionada à unique constraint
         return comprovante
 
     async def _executar_pipeline(

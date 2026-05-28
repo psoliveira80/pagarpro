@@ -3,7 +3,7 @@ epic: 13
 story: 20
 title: "Conciliação Bancária com UX Visual (OFX + PDF + CSV)"
 type: "UX + Domínio Financeiro + Backend"
-status: ready-for-dev
+status: review-backend
 priority: high
 depends_on: "13.9, 13.19"
 authored_by: "Amelia (dev) + Sally (UX)"
@@ -137,3 +137,81 @@ src/frontend/src/app/features/financeiro/conciliacao-visual/
 - Sally UX é **co-autora** desta story — UX visual é diferencial competitivo.
 - Reusa quase tudo do backend de 13.9 e 13.19. O esforço aqui é majoritariamente frontend + os importadores.
 - Considerar **export** da sessão de conciliação em PDF (relatório auditável) — pode ser sub-story se virar grande.
+
+---
+
+## Dev Agent Record
+
+### Implementação backend (2026-05-28 — Amelia)
+
+**Status:** Backend **completo e testado**. Frontend visual fica como story-irmã (precisa Sally UX co-autorar a tela).
+
+**Escopo entregue:**
+
+- Migration 0027: criou `conta_bancaria.matches_conciliacao` (audit completo com possibilidade de desfazer em 30 dias) + colunas auxiliares em `sessoes_conciliacao` (`nome_arquivo_origem`, `hash_arquivo`, `formato_origem`) + cross-reference `comprovante_id` em `transacoes_bancarias`. Reusa tabelas existentes (`contas_bancarias`, `transacoes_bancarias`, `sessoes_conciliacao` da Story 5.x).
+- **3 importadores** (`infrastructure/conciliacao/`):
+  - `importador_ofx.py` (lib `ofxparse`): parsing completo de OFX, extrai data/valor/descrição/fitid/tipo (PIX/TED/DOC).
+  - `importador_pdf.py` (`pdfplumber`): regex robusta sobre PDF textual; detecta banco no header; PDFs escaneados (poucos chars) retornam graciosamente vazio. Suporte a OCR para escaneado fica como sub-story.
+  - `importador_csv.py`: mapeamento explícito de colunas (`{data: "Data", valor: "Valor", descricao: "Histórico"}`). Detecção automática de formato BR (`800,00`) vs US (`800.00`).
+- **`ServicoConciliacao`** (orquestrador):
+  - `importar()` cria sessão idempotente por hash SHA-256 do arquivo (mesmo extrato 2× retorna sessão existente).
+  - `listar_sugestoes()` retorna lista de matches sugeridos com score 0.0–1.0 e motivo auditável.
+  - **Cross-check com 13.19**: se transação bate com comprovante já homologado, score 1.0 + flag `ja_existia_via_comprovante=True` — **evita dupla contagem**.
+  - `aplicar_match()` registra `MatchConciliacao` + dispara `ServicoTituloPago.registrar_pagamento` (reusa fluxo 13.9). Quando vem via comprovante, pula `ServicoTituloPago` (já foi feito).
+  - `desfazer_match()` em até 30 dias — marca `desfeito_em`, libera transação para novo match. **Não reverte título automaticamente** (estorno é decisão contábil separada — documentado no docstring).
+- **7 endpoints REST** (`/api/v1/conciliacao/*`):
+  - `POST /importar` — multipart upload OFX/PDF/CSV.
+  - `GET /sessoes` — lista sessões do tenant.
+  - `GET /sessoes/{id}` — detalhe + transações + sugestões.
+  - `POST /aplicar` — gestor confirma 1 match.
+  - `POST /aplicar-lote` — todos matches ≥ `score_minimo` (default 0.95).
+  - `POST /desfazer/{id}` — desfaz em até 30 dias.
+  - `POST /finalizar/{id}` — sessão concluída (read-only).
+
+**Heurística de score (em `_scorear`):**
+
+| Critério | Boost |
+|---|---|
+| Valor exato | +0.60 |
+| Valor ±R$ 0,01 | +0.55 |
+| Valor ±R$ 1,00 | +0.30 |
+| Data exata | +0.30 |
+| Data ±2d | +0.25 |
+| Data ±5d | +0.15 |
+| Descrição contém "PIX"/"transferência" | +0.05 |
+
+**Decisões pragmáticas:**
+
+1. **PDF escaneado adiado** — pdfplumber detecta e retorna gracioso. Reuso do pipeline OCR da 13.19 vira sub-story (precisa `pdf2image` + poppler).
+2. **Mapeamento CSV não persistente** — cada import passa o mapeamento. Story futura pode persistir por banco para reuso.
+3. **`desfazer_match` não reverte título** — comportamento documentado. Reversão envolve `MovimentoTituloReceber` tipo='estorno' com implicações fiscais — gestor faz manualmente.
+
+**Validação:**
+- 12 testes específicos: 3 importadores (OFX/CSV/PDF), idempotência por hash, sugestões com match por valor+data, aplicar match dispara `ServicoTituloPago`, aplicar lote score-gated, desfazer libera transação, **cross-check com comprovante homologado (anti-dupla-contagem)**.
+- Full regression: **275 passed, 6 skipped** (de 263 → +12, zero regressões).
+
+### File List
+
+**Backend:**
+- `src/backend-api/alembic/versions/0027_matches_conciliacao.py` (novo)
+- `src/backend-api/app/infrastructure/db/models/conta_bancaria.py` (modificado — campos extras em `SessaoConciliacao`, `comprovante_id` em `TransacaoBancaria`, novo model `MatchConciliacao`)
+- `src/backend-api/app/infrastructure/conciliacao/__init__.py` (novo)
+- `src/backend-api/app/infrastructure/conciliacao/dto.py` (novo — DTOs neutros)
+- `src/backend-api/app/infrastructure/conciliacao/importador_ofx.py` (novo)
+- `src/backend-api/app/infrastructure/conciliacao/importador_pdf.py` (novo)
+- `src/backend-api/app/infrastructure/conciliacao/importador_csv.py` (novo)
+- `src/backend-api/app/application/services/servico_conciliacao.py` (novo — orquestrador + scorer)
+- `src/backend-api/app/api/v1/conciliacao_routes.py` (novo — 7 endpoints)
+- `src/backend-api/app/main.py` (modificado — registra router)
+- `src/backend-api/app/tests/test_conciliacao.py` (novo — 12 testes)
+
+### Completion Notes (backend)
+
+- ✅ AC 1, 2, 3 — Importação OFX/PDF/CSV.
+- ✅ AC 4 — Mapeamento CSV via JSON no upload.
+- ✅ AC 5 — Matching com 4 tiers de score implementados.
+- 🔵 AC 6 — UX visual da tela (frontend) fica como **story irmã** dedicada com Sally UX co-autorando.
+- ✅ AC 7 — Estado da sessão (`em_andamento`/`concluida`) + auto-save em cada match aplicado.
+- ✅ AC 8 — Cross-check com comprovantes (13.19) implementado e testado.
+- ✅ AC 9 — `matches_conciliacao` separada com `desfeito_em`/`motivo_desfazer`.
+- ✅ AC 10 — 12 testes cobrindo todos os cenários principais.
