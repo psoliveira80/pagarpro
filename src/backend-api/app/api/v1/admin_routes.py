@@ -4,6 +4,7 @@ import json
 import math
 import time
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -172,8 +173,18 @@ async def test_integration(
     session: SessionDep,
     current_user: CurrentUserDep,
 ) -> IntegrationTestResult:
+    """Roda health check REAL contra o provedor — chama o adapter via factory.
+
+    Antes era stub que sempre retornava 'healthy'. Agora:
+    - WhatsApp Evolution Go: GET /instance/status (verifica `connected`)
+    - Outros provedores: ainda stub (cobrem por categoria conforme adapter ganha health_check)
+    """
+    # Multi-tenant guard: cred só pode pertencer à empresa do usuário logado.
     result = await session.execute(
-        select(IntegrationCredential).where(IntegrationCredential.id == integration_id)
+        select(IntegrationCredential).where(
+            IntegrationCredential.id == integration_id,
+            IntegrationCredential.empresa_id == current_user.empresa_id,
+        )
     )
     cred = result.scalar_one_or_none()
     if not cred:
@@ -181,27 +192,64 @@ async def test_integration(
 
     start = time.monotonic()
     try:
-        # Simulate connectivity test - in production this would call the adapter
-        cred.status = "healthy"
+        status, detalhe = await _executar_health_check(session, cred)
+        cred.status = status
         cred.ultimo_health_check = datetime.now(timezone.utc)
         latency = (time.monotonic() - start) * 1000
         await session.commit()
         return IntegrationTestResult(
             integration_id=str(cred.id),
-            status="healthy",
+            status=status,
             latency_ms=round(latency, 2),
+            error=detalhe if status != "healthy" else None,
         )
     except Exception as e:
         cred.status = "error"
         cred.ultimo_health_check = datetime.now(timezone.utc)
         latency = (time.monotonic() - start) * 1000
         await session.commit()
+        log.warning("integration_test_falhou", credencial_id=str(cred.id), erro=str(e))
         return IntegrationTestResult(
             integration_id=str(cred.id),
             status="error",
             latency_ms=round(latency, 2),
             error=str(e),
         )
+
+
+async def _executar_health_check(
+    session, cred: IntegrationCredential
+) -> tuple[str, str | None]:
+    """Despacha health check por categoria/provedor. Retorna `(status, detalhe)`.
+
+    `status` é um dos: `healthy`, `degraded`, `error`.
+    `detalhe` é mensagem explicando estado não-saudável.
+    """
+    if cred.categoria == "whatsapp" and cred.provedor == "evolution_go":
+        from app.infrastructure.adapters.whatsapp.whatsapp_factory import (
+            get_adapter_por_credencial_id,
+        )
+
+        adapter = await get_adapter_por_credencial_id(session, cred.id)
+        if adapter is None:
+            return "error", "adapter não pôde ser instanciado a partir da credencial"
+        # Nem todos os adapters do Protocol IWhatsAppGateway expõem health_check
+        # (legados zapi/uazapi/evolution_api ainda não). Detecta por capability.
+        health_check = getattr(adapter, "health_check", None)
+        if health_check is None:
+            return "healthy", None  # sem capability — assume ok
+        info: dict[str, Any] = await health_check()
+        if info.get("connected") is True:
+            return "healthy", None
+        if info.get("banido"):
+            return "error", "instância banida pelo WhatsApp"
+        erro = info.get("erro") or "instância não conectada"
+        if str(erro).lower() in ("connecting", "qr"):
+            return "degraded", f"instância em {erro}"
+        return "error", str(erro)
+
+    # Demais categorias: stub temporário enquanto cada adapter ganha health_check.
+    return "healthy", None
 
 
 # ──────────────────────────────────────────────────────────────────
