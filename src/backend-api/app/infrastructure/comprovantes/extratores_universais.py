@@ -32,9 +32,26 @@ RE_VALOR_SEM_REAL = re.compile(
     r"(?<![.,\d])(\d{1,3}(?:\.\d{3})*,\d{2})(?![.,\d])",
 )
 
-# Data BR: "01/06/2026" ou "01-06-2026" (com ou sem hora opcional após)
+# Data BR: "01/06/2026" ou "01-06-2026" — hora opcional após espaço, vírgula
+# ou hífen. Auditoria 2026-05-29 B11: Caixa usa "27/05/2026, 18:09:07" (vírgula
+# obrigatória entre data e hora) e antes o regex perdia a hora. Agora aceita
+# vírgula, espaço e/ou hífen como separadores entre data e hora.
 RE_DATA_BR = re.compile(
-    r"\b(\d{2})[/-](\d{2})[/-](\d{4})(?:\s+(?:às|as|-)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?\b",
+    r"\b(\d{2})[/-](\d{2})[/-](\d{4})"
+    r"(?:[\s,]+(?:às|as|-)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+    re.IGNORECASE,
+)
+
+# Data BR com mês em texto: "23/mai/2026 - 08:34:21" (PicPay e variantes).
+# Auditoria 2026-05-29 B11.
+_MES_PT = {
+    "jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
+    "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12,
+}
+RE_DATA_BR_MES_TEXTO = re.compile(
+    r"\b(\d{1,2})[/\s-](jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zçãéúí]*"
+    r"[/\s.,-]+(\d{4})"
+    r"(?:[\s,]+(?:às|as|-)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
     re.IGNORECASE,
 )
 
@@ -166,14 +183,40 @@ def extrair_data(texto: str) -> datetime | None:
     Heurística: comprovantes PIX têm a data da transação no topo
     (logo após o cabeçalho do banco). Primeira data encontrada é
     quase sempre a data da transação.
+
+    Suporta dois formatos (auditoria 2026-05-29 B11):
+    - Numérico: `21/05/2026 - 20:06:18` ou `27/05/2026, 18:09:07`
+    - Com mês em texto: `23/mai/2026 - 08:34:21` (PicPay e variantes)
     """
+    candidatas: list[datetime | None] = []
+
     m = RE_DATA_BR.search(texto)
-    if not m:
-        return None
-    dia, mes, ano = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    hora = int(m.group(4)) if m.group(4) else 0
-    minuto = int(m.group(5)) if m.group(5) else 0
-    segundo = int(m.group(6)) if m.group(6) else 0
+    if m:
+        candidatas.append(_montar_datetime(
+            int(m.group(1)), int(m.group(2)), int(m.group(3)),
+            m.group(4), m.group(5), m.group(6),
+        ))
+
+    m2 = RE_DATA_BR_MES_TEXTO.search(texto)
+    if m2:
+        mes_int = _MES_PT.get(m2.group(2)[:3].lower())
+        if mes_int is not None:
+            candidatas.append(_montar_datetime(
+                int(m2.group(1)), mes_int, int(m2.group(3)),
+                m2.group(4), m2.group(5), m2.group(6),
+            ))
+
+    validos = [d for d in candidatas if d is not None]
+    return validos[0] if validos else None
+
+
+def _montar_datetime(
+    dia: int, mes: int, ano: int,
+    hora_s: str | None, minuto_s: str | None, segundo_s: str | None,
+) -> datetime | None:
+    hora = int(hora_s) if hora_s else 0
+    minuto = int(minuto_s) if minuto_s else 0
+    segundo = int(segundo_s) if segundo_s else 0
     try:
         return datetime(ano, mes, dia, hora, minuto, segundo)
     except ValueError:
@@ -295,9 +338,16 @@ def _linha_indica_chave_pix(linha: str) -> bool:
 def extrair_nomes(texto: str) -> tuple[str | None, str | None]:
     """Heurística para extrair pagador e beneficiário.
 
-    Procura linhas seguintes a palavras-chave:
-    - Beneficiário: "Para", "Destinatário", "Beneficiário", "Quem recebeu"
-    - Pagador: "De", "Pagador", "Origem", "Quem pagou"
+    Procura linhas seguintes a palavras-chave em DUAS classes:
+    - "Cabeçalho de seção" (Pagador, Dados do pagador, De): nome vem na
+      linha N+1 ou N+2 (caso N+1 seja outro label como "Nome").
+    - "Label inline" ("Nome:" / "Nome"): nome vem na mesma linha após o
+      label, ou na linha seguinte.
+
+    Auditoria 2026-05-29 B10: bancos reais usam combinações distintas
+    (Santander: "De" sozinho + nome em N+1; Caixa: "Pagador" + "Nome
+    Alexvaldo"; Bradesco: "Nome: ADSON..." dentro de seção; PicPay:
+    "De" + nome em múltiplas linhas).
 
     Retorna (pagador, beneficiario).
     """
@@ -305,51 +355,149 @@ def extrair_nomes(texto: str) -> tuple[str | None, str | None]:
     pagador: str | None = None
     beneficiario: str | None = None
 
-    palavras_chave_pagador = (
-        "de:", "pagador", "origem", "quem pagou", "remetente"
+    cabecalhos_pagador = (
+        "dados do pagador", "dados de quem fez", "pagador", "origem",
+        "quem pagou", "remetente",
     )
-    palavras_chave_beneficiario = (
-        "para:", "destinatário", "beneficiário", "quem recebeu", "favorecido", "recebedor"
+    cabecalhos_beneficiario = (
+        "dados do recebedor", "dados de quem recebeu", "destinatário",
+        "beneficiário", "quem recebeu", "favorecido", "recebedor",
     )
+
+    # Standalone "De" / "Para" como linhas inteiras (Santander, PicPay)
+    standalones_pagador = ("de", "de:")
+    standalones_beneficiario = ("para", "para:")
 
     for i, linha in enumerate(linhas):
         linha_lower = linha.lower()
 
-        for chave in palavras_chave_pagador:
-            if chave in linha_lower and pagador is None:
-                pagador = _nome_proximo(linha, linhas, i, chave)
-                break
+        if pagador is None:
+            for chave in cabecalhos_pagador:
+                if chave in linha_lower:
+                    pagador = _nome_inline_ou_proximo(linha, linhas, i)
+                    break
+            if pagador is None and linha_lower in standalones_pagador:
+                pagador = _nome_apos_cabecalho(linhas, i)
 
-        for chave in palavras_chave_beneficiario:
-            if chave in linha_lower and beneficiario is None:
-                beneficiario = _nome_proximo(linha, linhas, i, chave)
-                break
+        if beneficiario is None:
+            for chave in cabecalhos_beneficiario:
+                if chave in linha_lower:
+                    beneficiario = _nome_inline_ou_proximo(linha, linhas, i)
+                    break
+            if beneficiario is None and linha_lower in standalones_beneficiario:
+                beneficiario = _nome_apos_cabecalho(linhas, i)
 
     return pagador, beneficiario
 
 
-def _nome_proximo(linha: str, linhas: list[str], i: int, chave: str) -> str | None:
-    """Pega o nome após a palavra-chave (mesma linha ou próxima)."""
-    # Tenta extrair da mesma linha após o `:`
-    idx_dois_pontos = linha.find(":")
-    if idx_dois_pontos > 0 and idx_dois_pontos < len(linha) - 1:
-        nome = linha[idx_dois_pontos + 1 :].strip()
-        if nome and not nome.lower().startswith(("destinatário", "beneficiário", "pagador")):
-            return _sanitizar_nome(nome)
-    # Senão, pega a linha seguinte
-    if i + 1 < len(linhas):
-        return _sanitizar_nome(linhas[i + 1])
+# Linhas que NÃO podem virar "nome" — são sub-labels que costumam aparecer
+# após cabeçalhos de seção (Pagador/Recebedor). Inclui "para"/"de" sozinhos
+# porque Santander e PicPay quebram "Dados do recebedor\nPara\n<nome>"
+# (auditoria 2026-05-29 B10).
+_LINHAS_NAO_NOME = {
+    "nome", "cpf", "cnpj", "cpf/cnpj", "instituição", "instituicao",
+    "chave", "chave pix", "ag", "cc", "tipo", "valor", "data",
+    "id", "id transação", "id da transação", "número de controle",
+    "código de segurança", "chave de segurança", "situação",
+    "para", "de", "para:", "de:",
+}
+
+
+def _nome_inline_ou_proximo(linha: str, linhas: list[str], i: int) -> str | None:
+    """Tenta primeiro pegar nome inline ("Pagador: João da Silva") e cai pra
+    cabeçalho de seção só se não houver nome após `:` na mesma linha.
+
+    Casos cobertos:
+    - "Pagador: João da Silva" → inline pega "João da Silva" ✓
+    - "Dados do pagador" (sem dois pontos) → busca seção em N+1..N+3
+    - "Pagador" (sozinho, com `:` no fim) → busca seção em N+1..N+3
+    """
+    idx = linha.find(":")
+    if idx > 0:
+        inline = linha[idx + 1:].strip()
+        if inline:
+            sanitizado = _sanitizar_nome(inline)
+            if sanitizado is not None:
+                return sanitizado
+    return _nome_apos_cabecalho(linhas, i)
+
+
+def _nome_apos_cabecalho(linhas: list[str], i: int) -> str | None:
+    """Pega o nome real após um cabeçalho de seção (Pagador, De, Recebedor).
+
+    Tenta linhas N+1, N+2, N+3 — pula sub-labels (Nome, CPF, etc.) e
+    aceita a primeira que tenha cara de nome humano. Se a sub-label
+    "Nome" aparece, devolve o conteúdo da linha seguinte (e se essa for
+    continuação em 2 linhas, junta com a próxima — caso PicPay).
+    """
+    for offset in range(1, 4):
+        if i + offset >= len(linhas):
+            return None
+        candidato = linhas[i + offset]
+        candidato_lower = candidato.lower().strip(":")
+        # Sub-label "Nome" — segue olhando a próxima linha
+        if candidato_lower in ("nome", "nome:"):
+            if i + offset + 1 < len(linhas):
+                return _juntar_continuacao_nome(linhas, i + offset + 1)
+            return None
+        # "Nome Alexvaldo Lemos de Souza" — Caixa
+        if candidato_lower.startswith("nome ") and len(candidato) > 5:
+            return _sanitizar_nome(candidato[5:])
+        # "Nome: ADSON..." — Bradesco
+        if candidato_lower.startswith("nome:"):
+            return _sanitizar_nome(candidato.split(":", 1)[1])
+        # Linha "De" sozinha aninhada — ignora e segue
+        if candidato_lower in _LINHAS_NAO_NOME:
+            continue
+        return _juntar_continuacao_nome(linhas, i + offset)
     return None
 
 
+def _juntar_continuacao_nome(linhas: list[str], idx: int) -> str | None:
+    """Pega `linhas[idx]` e tenta concatenar com `linhas[idx+1]` se essa
+    parecer continuação do nome (linha curta, só letras maiúsculas, sem
+    label conhecido). Caso PicPay: `ANA MARIA DE JESUS` + `COELHO`.
+    """
+    base = linhas[idx].strip()
+    if idx + 1 < len(linhas):
+        seguinte = linhas[idx + 1].strip()
+        seguinte_lower = seguinte.lower().strip(":")
+        # Pula se a próxima linha tem cara de label/documento/agência
+        if seguinte and seguinte_lower not in _LINHAS_NAO_NOME:
+            letras = sum(1 for c in seguinte if c.isalpha())
+            so_letras_ou_espaco = all(
+                c.isalpha() or c.isspace() or c in ".-'" for c in seguinte
+            )
+            if 0 < len(seguinte) <= 40 and letras >= 3 and so_letras_ou_espaco:
+                base = f"{base} {seguinte}"
+    return _sanitizar_nome(base)
+
+
 def _sanitizar_nome(nome: str) -> str | None:
-    """Limpa nome — corta em pontuação e remove documentos colados."""
+    """Limpa nome — corta em pontuação e remove documentos colados.
+
+    Auditoria 2026-05-29 B10: descarta linhas que parecem agência/conta
+    (`AG 0323 | CC 15379`) e ruído OCR (sequências de pontuação).
+    """
     nome = re.sub(r"\d{3}\.\d{3}\.\d{3}-\d{2}", "", nome)  # remove CPF
     nome = re.sub(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}", "", nome)  # remove CNPJ
-    nome = nome.strip(" -|:•\t")
+    nome = nome.strip(" -|:•\t.")
     if len(nome) < 3 or len(nome) > 100:
         return None
-    return nome
+    # Descarta dados bancários "AG 0323 | CC 15379"
+    if re.match(r"^(AG|CC|AG\.|CC\.)\b", nome, re.IGNORECASE):
+        return None
+    # Descarta linhas que são só pontuação/dígitos
+    letras = sum(1 for c in nome if c.isalpha())
+    if letras < 3:
+        return None
+    # Remove prefixo "Nome "/"Nome." residual ("Nome FELIPE..." / "Nome. FELIPE...")
+    nome_low = nome.lower()
+    if nome_low.startswith("nome. "):
+        nome = nome[6:].strip()
+    elif nome_low.startswith("nome "):
+        nome = nome[5:].strip()
+    return nome if len(nome) >= 3 else None
 
 
 def extrair_entidades_de_texto(texto: str) -> tuple[EntidadesExtraidas, list[str]]:

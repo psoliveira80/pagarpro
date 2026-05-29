@@ -137,6 +137,64 @@ def test_extrai_cnpj_sem_mascara():
     assert cnpj == "11.222.333/0001-81"
 
 
+def test_extrai_data_com_virgula_separadora():
+    """Auditoria B11: Caixa usa '27/05/2026, 18:09:07' (vírgula). Antes
+    perdia a hora porque o regex só aceitava espaço."""
+    d = extrair_data("Pix enviado\n27/05/2026, 18:09:07")
+    assert d == datetime(2026, 5, 27, 18, 9, 7)
+
+
+def test_extrai_data_com_mes_em_texto():
+    """Auditoria B11: PicPay usa '23/mai/2026 - 08:34:21'."""
+    d = extrair_data("Comprovante\n23/mai/2026 - 08:34:21")
+    assert d == datetime(2026, 5, 23, 8, 34, 21)
+
+
+def test_extrai_pagador_padrao_caixa():
+    """Auditoria B10: Caixa intercala 'Pagador' (cabeçalho), 'Nome <nome>',
+    sem dois pontos."""
+    from app.infrastructure.comprovantes.extratores_universais import extrair_nomes
+    texto = (
+        "Recebedor\n"
+        "Nome Mobility And Reliability Solution Ltda\n"
+        "CNPJ 32.428.543/0001-09\n"
+        "Pagador\n"
+        "Nome Alexvaldo Lemos de Souza\n"
+        "CPF ***.361.225-**\n"
+    )
+    pagador, beneficiario = extrair_nomes(texto)
+    assert pagador and "Alexvaldo" in pagador
+    assert beneficiario and "Mobility" in beneficiario
+
+
+def test_extrai_pagador_padrao_santander():
+    """Auditoria B10: Santander usa 'De' sozinho em linha + nome em N+1."""
+    from app.infrastructure.comprovantes.extratores_universais import extrair_nomes
+    texto = (
+        "Dados do recebedor\n"
+        "Para\n"
+        "Mobility And Reliability Solution Ltda\n"
+        "CNPJ\n"
+        "32.***.***/0001-0*\n"
+        "Dados do pagador\n"
+        "De\n"
+        "Fabio Dos Santos Brandao\n"
+        "CPF\n"
+        "***.518.325-**\n"
+    )
+    pagador, beneficiario = extrair_nomes(texto)
+    assert pagador and "Fabio" in pagador
+    assert beneficiario and "Mobility" in beneficiario
+
+
+def test_extrai_pagador_descarta_dados_bancarios():
+    """Auditoria B10: PicPay coloca 'AG 0323 | CC 15379' como bloco depois do
+    pagador. Sanitizador deve descartar."""
+    from app.infrastructure.comprovantes.extratores_universais import _sanitizar_nome
+    assert _sanitizar_nome("AG 0323 | CC 15379") is None
+    assert _sanitizar_nome("AG. 1234") is None
+
+
 def test_chave_pix_ignora_uuid_em_linha_de_autenticacao():
     """Auditoria B3: campo 'Autenticação' do banco vinha sendo extraído
     como chave PIX UUID. Agora o UUID em linha 'Autenticação:...' é

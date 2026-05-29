@@ -42,7 +42,7 @@ class ComprovantePagamento(UUIDPrimaryKeyMixin, Base):
 
     arquivo_url: Mapped[str] = mapped_column(Text, nullable=False)
     arquivo_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    tipo_arquivo: Mapped[str] = mapped_column(String(20), nullable=False)
+    tipo_arquivo: Mapped[str] = mapped_column(String(64), nullable=False)
     tamanho_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     metodo_analise: Mapped[str | None] = mapped_column(String(20), nullable=True)

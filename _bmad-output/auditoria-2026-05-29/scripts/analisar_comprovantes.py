@@ -68,11 +68,18 @@ async def analisar_um(emp_id, cli_id, arquivo: Path) -> dict:
 
     sm = get_sessionmaker()
     bytes_arquivo = arquivo.read_bytes()
-    mime = (
-        "application/pdf" if arquivo.suffix.lower() == ".pdf"
-        else "image/png" if arquivo.suffix.lower() == ".png"
-        else "application/octet-stream"
-    )
+    # Auditoria 2026-05-29 B9: mapeamento cobre PDFs e formatos comuns de imagem
+    # do WhatsApp (.jpeg, .jpg, .png). Sem isso, .jpeg caía em octet-stream e
+    # quebrava o pipeline na camada de imagem.
+    sufixo = arquivo.suffix.lower()
+    mime_por_sufixo = {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
+    mime = mime_por_sufixo.get(sufixo, "application/octet-stream")
     async with sm() as s:
         await s.execute(text("SET LOCAL row_security = off"))
         try:
