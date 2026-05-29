@@ -411,11 +411,14 @@ async def _processar_state_machine(
         conversa.aguardando_comprovante_ate = datetime.now(timezone.utc) + timedelta(
             minutes=timeout_min
         )
-        await adapter.send_text(
-            telefone,
-            f"📎 Pode mandar a foto/PDF do comprovante agora.\n"
-            f"Vou processar automaticamente quando chegar! 🙂\n\n"
-            f"(Aguardo até {timeout_min} minutos.)",
+        await _enviar_template(
+            session, empresa_id, telefone, adapter,
+            "iniciar_captura_comprovante", {"timeout_min": timeout_min},
+            fallback=(
+                f"📎 Pode mandar a foto/PDF do comprovante agora.\n"
+                f"Vou processar automaticamente quando chegar! 🙂\n\n"
+                f"(Aguardo até {timeout_min} minutos.)"
+            ),
         )
 
     elif decisao.acao == AcaoMaquina.PROCESSAR_COMPROVANTE:
@@ -429,9 +432,10 @@ async def _processar_state_machine(
             cliente_id=str(cliente_id),
             midia_url=(decisao.parametros or {}).get("midia_url"),
         )
-        await adapter.send_text(
-            telefone,
-            "📎 Recebi seu comprovante! Vou analisar e te aviso em instantes. 🙂",
+        await _enviar_template(
+            session, empresa_id, telefone, adapter,
+            "comprovante_recebido_inicial", {},
+            fallback="📎 Recebi seu comprovante! Vou analisar e te aviso em instantes. 🙂",
         )
         # 13.23 dispara tarefa Celery a partir daqui.
         try:
@@ -542,39 +546,38 @@ async def _processar_state_machine(
             await _enviar_menu()
 
     elif decisao.acao == AcaoMaquina.REGISTRAR_CONFIRMACAO_RECEBIMENTO:
-        # Story 13.25 — cliente clicou "Confirmo recebimento" no lembrete.
-        # Valida que `titulo_id` pertence à empresa da conversa (defesa
-        # multi-tenant — id no payload do botão vem do cliente, não pode ser
-        # confiável sozinho).
-        titulo_id_str = (decisao.parametros or {}).get("titulo_id")
-        try:
-            from uuid import UUID as _UUID
-            from sqlalchemy import select as _select
-            from app.infrastructure.db.models.financeiro import TituloReceber as _TR
+        # Story 13.25 AC 4 — delega para ServicoConfirmacaoRecebimento
+        # (validação multi-tenant + audit + UPDATE da conversa).
+        from uuid import UUID as _UUID
+        from app.application.services.servico_confirmacao_recebimento import (
+            ServicoConfirmacaoRecebimento,
+        )
 
+        titulo_id_str = (decisao.parametros or {}).get("titulo_id")
+        tit_id = None
+        try:
             tit_id = _UUID(titulo_id_str) if titulo_id_str else None
-            conversa.confirmacao_recebimento_em = datetime.now(timezone.utc)
-            if tit_id:
-                existe = (await session.execute(
-                    _select(_TR.id).where(
-                        _TR.id == tit_id,
-                        _TR.empresa_id == empresa_id,
-                    )
-                )).scalar_one_or_none()
-                if existe is None:
-                    log.warning(
-                        "confirmacao_recebimento_titulo_de_outro_tenant",
-                        titulo_id=str(tit_id),
-                        empresa_id=str(empresa_id),
-                    )
-                else:
-                    conversa.confirmacao_recebimento_titulo_id = tit_id
-            await adapter.send_text(
-                telefone,
-                "Obrigado! Avisaremos novamente próximo do vencimento. 🙂",
+        except (ValueError, TypeError):
+            log.warning(
+                "confirmacao_recebimento_titulo_id_invalido",
+                valor=titulo_id_str,
+            )
+
+        try:
+            servico_conf = ServicoConfirmacaoRecebimento(session, empresa_id)
+            await servico_conf.registrar(
+                conversa_id=conversa.id,
+                titulo_id=tit_id,
+                ator="cliente",
             )
         except Exception:
             log.exception("falha_registrar_confirmacao")
+
+        await _enviar_template(
+            session, empresa_id, telefone, adapter,
+            "agradecimento_confirmacao_recebimento", {},
+            fallback="Obrigado! Avisaremos novamente próximo do vencimento. 🙂",
+        )
 
     elif decisao.acao == AcaoMaquina.INICIAR_ATENDIMENTO_IA:
         # Story 13.26 (V2) — encaminhar para AgentOrchestrator existente.
@@ -590,3 +593,42 @@ async def _processar_state_machine(
         conversa.estado_maquina = decisao.proximo_estado.value
 
     await session.flush()
+
+
+async def _enviar_template(
+    session,
+    empresa_id,
+    telefone: str,
+    adapter,
+    nome_template: str,
+    contexto: dict,
+    *,
+    fallback: str,
+) -> None:
+    """Renderiza template via RenderizadorTemplate e envia ao cliente.
+
+    Se template ausente (não seedado pra esse tenant nem global) ou render
+    falhar, usa `fallback` (texto puro) — cliente nunca fica sem resposta.
+    """
+    from app.infrastructure.mensageria.renderizador_template import (
+        RenderizadorTemplate,
+        TemplateNaoEncontradoError,
+        TemplateRenderError,
+    )
+
+    texto = fallback
+    try:
+        renderizador = RenderizadorTemplate(session, empresa_id)
+        texto = await renderizador.renderizar(nome_template, contexto, canal="whatsapp")
+    except TemplateNaoEncontradoError:
+        log.info(
+            "template_nao_encontrado_usando_fallback",
+            template=nome_template,
+            empresa_id=str(empresa_id),
+        )
+    except TemplateRenderError:
+        log.exception("template_render_falhou", template=nome_template)
+    try:
+        await adapter.send_text(telefone, texto)
+    except Exception:
+        log.exception("falha_enviar_template", template=nome_template)

@@ -142,6 +142,60 @@ TEMPLATES_PADRAO: list[tuple[str, str, str, str]] = [
         "equipe entrará em contato para a transferência.",
         "Confirmação do exercício da opção de compra (parcela final)",
     ),
+    # ── Stories 13.22 / 13.23 / 13.25 — fluxo de comprovante via WhatsApp ──
+    (
+        "iniciar_captura_comprovante", "whatsapp",
+        "📎 Pode mandar a foto/PDF do comprovante agora.\n"
+        "Vou processar automaticamente quando chegar! 🙂\n\n"
+        "(Aguardo até {{timeout_min}} minutos.)",
+        "Resposta quando cliente clica 'Enviar comprovante' no menu rígido",
+    ),
+    (
+        "comprovante_recebido_inicial", "whatsapp",
+        "📎 Recebi seu comprovante! Vou analisar e te aviso em instantes. 🙂",
+        "Ack imediato quando mídia chega no estado AGUARDANDO_COMPROVANTE",
+    ),
+    (
+        "comprovante_ja_enviado", "whatsapp",
+        "📎 Esse comprovante já tinha sido enviado antes — verificamos o histórico.",
+        "Cliente reenviou o mesmo arquivo (hash SHA-256 idêntico)",
+    ),
+    (
+        "comprovante_validado_automatico", "whatsapp",
+        "✓ Pagamento confirmado! "
+        "{% if contrato_reativado %}Veículo liberado. Boa rodagem 🚗💨"
+        "{% else %}Valeu 🙏{% endif %}",
+        "Auto-homologação OK (integral/excedente). Reativa contrato se estava suspenso.",
+    ),
+    (
+        "comprovante_validado_parcial", "whatsapp",
+        "✓ Pagamento parcial recebido! O restante foi adicionado à próxima "
+        "parcela. Veículo continua na situação anterior.",
+        "Pagamento parcial detectado (fundido/separado pelo ServicoTituloPago)",
+    ),
+    (
+        "comprovante_aguardando_validacao_manual", "whatsapp",
+        "📎 Recebi seu comprovante! Está em análise.\n"
+        "Vou te avisar assim que confirmar. 🙂\n\n(motivo: {{motivo}})",
+        "Comprovante caiu em homologação manual (score baixo, sem match, etc.)",
+    ),
+    (
+        "comprovante_rejeitado_blacklist", "whatsapp",
+        "📎 Recebi seu comprovante! Está em análise pela nossa equipe. "
+        "Em breve daremos retorno. 🙂",
+        "Cliente em blacklist — fluxo idêntico ao manual sem revelar a flag",
+    ),
+    (
+        "comprovante_erro_homologacao", "whatsapp",
+        "📎 Recebi seu comprovante. Houve um problema no processamento "
+        "automático — um humano vai revisar e te confirmar em breve.",
+        "registrar_pagamento levantou exceção após análise OK",
+    ),
+    (
+        "agradecimento_confirmacao_recebimento", "whatsapp",
+        "Obrigado! Avisaremos novamente próximo do vencimento. 🙂",
+        "Cliente clicou 'Confirmo recebimento' no lembrete (Story 13.25)",
+    ),
 ]
 
 

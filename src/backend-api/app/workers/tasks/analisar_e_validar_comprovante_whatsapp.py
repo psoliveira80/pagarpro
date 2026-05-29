@@ -20,7 +20,6 @@ Fluxo (assíncrono, fora do webhook):
 from __future__ import annotations
 
 import asyncio
-from decimal import Decimal
 from uuid import UUID
 
 import httpx
@@ -111,11 +110,10 @@ async def _executar(
                 telefone_remetente=telefone_remetente,
             )
         except ComprovanteJaAnalisadoError as ja:
-            await _responder(
-                session,
-                empresa_uuid,
-                telefone_remetente,
-                "📎 Esse comprovante já tinha sido enviado antes — verificamos o histórico.",
+            await _responder_template(
+                session, empresa_uuid, telefone_remetente,
+                "comprovante_ja_enviado", {},
+                fallback="📎 Esse comprovante já tinha sido enviado antes — verificamos o histórico.",
             )
             await session.commit()
             return {
@@ -123,63 +121,42 @@ async def _executar(
                 "comprovante_id": str(ja.comprovante_existente.id),
             }
 
-        # 3. Decide auto-homologação
-        config = ServicoConfiguracao(session, empresa_uuid, redis=None)
-        score_min = await config.obter_decimal(
-            "score_minimo_auto_homologar", "comprovantes", padrao=Decimal("0.80")
+        # 3. Decisão de auto-homologação delegada ao ServicoValidacaoAutomatica
+        # (Story 13.23 AC 3 — refactor hexagonal). Service é puro, devolve
+        # decisão + motivo. Worker só orquestra os efeitos.
+        from app.application.services.servico_validacao_automatica import (
+            ServicoValidacaoAutomatica,
         )
+        servico_validacao = ServicoValidacaoAutomatica(session, empresa_uuid)
+        decisao = await servico_validacao.avaliar(comprovante.id)
+
+        config = ServicoConfiguracao(session, empresa_uuid, redis=None)
         desbloqueio_auto = await config.obter_booleano(
             "desbloqueio_automatico_apos_validacao", "comprovantes", padrao=True
         )
 
-        # Valida que o título cassado pelo matcher ainda está homologável.
-        # (cancelado / soft-deleted / contrato encerrado caem em manual.)
-        titulo_valido = False
-        if comprovante.titulo_id is not None:
-            from app.infrastructure.db.models.financeiro import TituloReceber as _TR
-            from app.infrastructure.db.models.contrato import Contrato as _Contrato
-            row = (await session.execute(
-                select(_TR.status, _Contrato.status.label("contrato_status"))
-                .join(_Contrato, _Contrato.id == _TR.contrato_id)
-                .where(
-                    _TR.id == comprovante.titulo_id,
-                    _TR.empresa_id == empresa_uuid,
-                )
-            )).first()
-            if row is not None:
-                titulo_valido = (
-                    row[0] in ("em_aberto", "em_atraso")
-                    and row[1] in ("vigente", "suspenso")
-                )
-
-        pode_auto = (
-            not cliente.na_blacklist_comprovantes
-            and comprovante.score_confianca is not None
-            and Decimal(comprovante.score_confianca) >= score_min
-            and comprovante.titulo_id is not None
-            and comprovante.valor_detectado is not None
-            and titulo_valido
-        )
-
-        if not pode_auto:
-            motivo = _motivo_revisao_manual(
-                cliente=cliente,
-                comprovante=comprovante,
-                score_min=score_min,
+        if not decisao.pode_auto:
+            # Cliente em blacklist recebe template específico (não revela
+            # a flag) — demais casos recebem o template "aguardando análise".
+            nome_template = (
+                "comprovante_rejeitado_blacklist"
+                if decisao.blacklist
+                else "comprovante_aguardando_validacao_manual"
             )
-            await _responder(
-                session,
-                empresa_uuid,
-                telefone_remetente,
-                f"📎 Recebi seu comprovante! Está em análise.\n"
-                f"Vou te avisar assim que confirmar. 🙂\n\n"
-                f"(motivo: {motivo})",
+            await _responder_template(
+                session, empresa_uuid, telefone_remetente,
+                nome_template, {"motivo": decisao.motivo},
+                fallback=(
+                    f"📎 Recebi seu comprovante! Está em análise.\n"
+                    f"Vou te avisar assim que confirmar. 🙂\n\n"
+                    f"(motivo: {decisao.motivo})"
+                ),
             )
             await session.commit()
             return {
                 "status": "manual_review",
                 "comprovante_id": str(comprovante.id),
-                "motivo": motivo,
+                "motivo": decisao.motivo,
             }
 
         # 4. Auto-homologa
@@ -199,12 +176,13 @@ async def _executar(
         except Exception:
             log.exception("falha_registrar_pagamento_auto",
                           comprovante_id=str(comprovante.id))
-            await _responder(
-                session,
-                empresa_uuid,
-                telefone_remetente,
-                "📎 Recebi seu comprovante. Houve um problema no processamento "
-                "automático — um humano vai revisar e te confirmar em breve.",
+            await _responder_template(
+                session, empresa_uuid, telefone_remetente,
+                "comprovante_erro_homologacao", {},
+                fallback=(
+                    "📎 Recebi seu comprovante. Houve um problema no processamento "
+                    "automático — um humano vai revisar e te confirmar em breve."
+                ),
             )
             await session.commit()
             return {"status": "auto_homologate_failed"}
@@ -248,18 +226,27 @@ async def _executar(
                 except Exception:
                     log.exception("falha_reativar_contrato")
 
-        # 6. Confirma com o cliente. Mensagem reflete a decisão do
-        # ServicoTituloPago (integral / parcial / fusão).
+        # 6. Confirma com o cliente via template (parcial vs integral).
         if pagamento_parcial:
-            msg = (
-                "✓ Pagamento parcial recebido! O restante foi adicionado à "
-                "próxima parcela. Veículo continua na situação anterior."
+            await _responder_template(
+                session, empresa_uuid, telefone_remetente,
+                "comprovante_validado_parcial", {},
+                fallback=(
+                    "✓ Pagamento parcial recebido! O restante foi adicionado à "
+                    "próxima parcela. Veículo continua na situação anterior."
+                ),
             )
-        elif contrato_reativado:
-            msg = "✓ Pagamento confirmado! Veículo liberado. Boa rodagem 🚗💨"
         else:
-            msg = "✓ Pagamento confirmado! Valeu 🙏"
-        await _responder(session, empresa_uuid, telefone_remetente, msg)
+            await _responder_template(
+                session, empresa_uuid, telefone_remetente,
+                "comprovante_validado_automatico",
+                {"contrato_reativado": contrato_reativado},
+                fallback=(
+                    "✓ Pagamento confirmado! Veículo liberado. Boa rodagem 🚗💨"
+                    if contrato_reativado
+                    else "✓ Pagamento confirmado! Valeu 🙏"
+                ),
+            )
         await session.commit()
         return {
             "status": "auto_homologated",
@@ -267,20 +254,6 @@ async def _executar(
             "titulo_id": str(comprovante.titulo_id),
             "contrato_reativado": contrato_reativado,
         }
-
-
-def _motivo_revisao_manual(*, cliente, comprovante, score_min) -> str:
-    if cliente.na_blacklist_comprovantes:
-        return "cliente na blacklist"
-    if comprovante.titulo_id is None:
-        return "sem título compatível"
-    if comprovante.valor_detectado is None:
-        return "valor não detectado"
-    if comprovante.score_confianca is None:
-        return "score não calculado"
-    if Decimal(comprovante.score_confianca) < score_min:
-        return f"score baixo ({Decimal(comprovante.score_confianca):.2f} < {score_min})"
-    return "revisão preventiva"
 
 
 async def _responder(session, empresa_id: UUID, telefone: str, texto: str) -> None:
@@ -303,3 +276,40 @@ async def _responder(session, empresa_id: UUID, telefone: str, texto: str) -> No
         await adapter.send_text(telefone, texto)
     except Exception:
         log.exception("falha_enviar_resposta_whatsapp", telefone=telefone)
+
+
+async def _responder_template(
+    session,
+    empresa_id: UUID,
+    telefone: str,
+    nome_template: str,
+    contexto: dict,
+    *,
+    fallback: str,
+) -> None:
+    """Renderiza `nome_template` via RenderizadorTemplate e envia ao cliente.
+
+    Se template não estiver seedado ou render falhar, usa `fallback` (texto
+    puro). Isso garante que o cliente NUNCA fica sem resposta por causa de
+    template ausente — mas o sistema continua funcional enquanto o seed
+    propaga em todos os tenants.
+    """
+    from app.infrastructure.mensageria.renderizador_template import (
+        RenderizadorTemplate,
+        TemplateNaoEncontradoError,
+        TemplateRenderError,
+    )
+
+    texto = fallback
+    try:
+        renderizador = RenderizadorTemplate(session, empresa_id)
+        texto = await renderizador.renderizar(nome_template, contexto, canal="whatsapp")
+    except TemplateNaoEncontradoError:
+        log.info(
+            "template_nao_encontrado_usando_fallback",
+            template=nome_template,
+            empresa_id=str(empresa_id),
+        )
+    except TemplateRenderError:
+        log.exception("template_render_falhou", template=nome_template)
+    await _responder(session, empresa_id, telefone, texto)
