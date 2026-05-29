@@ -5,6 +5,7 @@ import boto3
 import structlog
 from botocore.config import Config as BotoConfig
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
+from pydantic import BaseModel, Field
 
 from app.api.deps import CurrentUserDep, SessionDep
 from app.api.v1.schemas.customers import (
@@ -264,4 +265,89 @@ async def upload_attachment(
         mime=file.content_type,
         tamanho_bytes=len(content),
         criado_em=attachment.criado_em,
+    )
+
+
+# ─────────────────── Story 13.22 AC 8 — Blacklist de comprovantes ────────────
+
+
+class BlacklistComprovantesRequest(BaseModel):
+    ativar: bool = Field(..., description="True ativa blacklist, false desativa")
+    motivo: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Motivo da inclusão/remoção (registrado em audit log)",
+    )
+
+
+class BlacklistComprovantesResponse(BaseModel):
+    cliente_id: str
+    na_blacklist_comprovantes: bool
+    motivo_blacklist: str | None
+
+
+@router.put(
+    "/{customer_id}/blacklist-comprovantes",
+    response_model=BlacklistComprovantesResponse,
+)
+async def alternar_blacklist_comprovantes(
+    customer_id: uuid.UUID,
+    body: BlacklistComprovantesRequest,
+    session: SessionDep,
+    current_user: CurrentUserDep,
+) -> BlacklistComprovantesResponse:
+    """Ativa/desativa blacklist de validação automática de comprovantes do
+    cliente. Cliente em blacklist sempre cai em homologação manual mesmo
+    com score 100 (regra de fraude — Story 13.22 AC 8).
+
+    Restrito a roles `admin` e `financeiro` (mutação sensível, exige audit
+    com `category='security'`).
+    """
+    permitidos = {"admin", "financeiro"}
+    roles = {(p.nome or "").lower() for p in (current_user.perfis or [])}
+    if not (permitidos & roles):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas admin ou financeiro podem alterar blacklist",
+        )
+
+    repo = CustomerRepository(session, current_user.empresa_id)
+    cliente = await repo.get_by_id(customer_id)
+    if cliente is None:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    antes = {
+        "na_blacklist_comprovantes": cliente.na_blacklist_comprovantes,
+        "motivo_blacklist": cliente.motivo_blacklist,
+    }
+    cliente.na_blacklist_comprovantes = body.ativar
+    cliente.motivo_blacklist = body.motivo if body.ativar else None
+    depois = {
+        "na_blacklist_comprovantes": cliente.na_blacklist_comprovantes,
+        "motivo_blacklist": cliente.motivo_blacklist,
+    }
+
+    audit = AuditLogger(session)
+    await audit.record(
+        action=(
+            "cliente.blacklist_comprovantes_ativada"
+            if body.ativar
+            else "cliente.blacklist_comprovantes_desativada"
+        ),
+        user_id=str(current_user.id),
+        entity="clientes",
+        entity_id=str(customer_id),
+        payload_before=antes,
+        payload_after=depois,
+        correlation_id=get_correlation_id(),
+        module="cobranca",
+        category="security",
+        severity="warning",
+    )
+    await session.commit()
+    await session.refresh(cliente)
+    return BlacklistComprovantesResponse(
+        cliente_id=str(customer_id),
+        na_blacklist_comprovantes=cliente.na_blacklist_comprovantes,
+        motivo_blacklist=cliente.motivo_blacklist,
     )

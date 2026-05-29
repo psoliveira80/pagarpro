@@ -37,6 +37,14 @@ from app.infrastructure.db.models.financeiro import TituloReceber
 log = structlog.get_logger()
 
 
+def _so_digitos_cnpj(cnpj: str | None) -> str:
+    """Normaliza CNPJ: só dígitos. Botão PIX nativo do Evolution Go rejeita
+    chaves com máscara."""
+    if not cnpj:
+        return ""
+    return "".join(c for c in cnpj if c.isdigit())
+
+
 class AcaoNaoPermitidaError(Exception):
     """Cliente tentou ação para a qual não tem direito (score baixo,
     blacklist, limite atingido). Caller decide como responder."""
@@ -139,9 +147,14 @@ class ServicoAcoesCliente:
         if empresa is None:
             raise AcaoNaoPermitidaError("Empresa não encontrada")
 
-        # V1: usa CNPJ da empresa como chave PIX.
+        # V1: usa CNPJ da empresa como chave PIX (só dígitos — botão PIX
+        # nativo do Evolution Go rejeita máscara).
         # V2: ler chave PIX preferida das configurações da empresa.
-        chave = (empresa.cnpj or "").strip()
+        chave = _so_digitos_cnpj(empresa.cnpj)
+        if len(chave) != 14:
+            raise AcaoNaoPermitidaError(
+                "Empresa sem chave PIX (CNPJ) válida cadastrada"
+            )
         return DadosPix(
             descricao=(
                 f"Parcela {titulo.sequencia} — vencimento "
@@ -150,7 +163,7 @@ class ServicoAcoesCliente:
             valor=titulo.valor,
             chave_pix=chave,
             tipo_chave="cnpj",
-            nome_recebedor=empresa.razao_social,
+            nome_recebedor=empresa.razao_social or "Empresa",
         )
 
     # ── Adiamento ────────────────────────────────────────────────
@@ -288,11 +301,32 @@ class ServicoAcoesCliente:
             )
 
         cliente.desbloqueios_confianca_usados_no_periodo += 1
+        validade = date.today() + timedelta(days=dias)
+        cliente.desbloqueio_confianca_ate = validade
+
+        # Audit log obrigatório (regra global — mutação financeira / fluxo
+        # de cobrança). Sem isso o cliente pode contestar "nunca pedi" e
+        # não há trilha.
+        audit = AuditLogger(self.session)
+        await audit.record(
+            action="cliente.desbloqueio_confianca_aplicado",
+            user_id=str(ator_id) if ator_id else None,
+            entity="clientes",
+            entity_id=str(cliente_id),
+            payload_after={
+                "contrato_id": str(contrato.id),
+                "dias_desbloqueio": dias,
+                "validade_ate": validade.isoformat(),
+            },
+            module="cobranca",
+            category="security",
+        )
+
         await self.session.flush()
         return {
             "contrato_id": str(contrato.id),
             "dias_desbloqueio": dias,
-            "validade_ate": (date.today() + timedelta(days=dias)).isoformat(),
+            "validade_ate": validade.isoformat(),
         }
 
     # ── Pagamento parcial ───────────────────────────────────────
@@ -364,12 +398,17 @@ class ServicoAcoesCliente:
             select(Empresa).where(Empresa.id == self.empresa_id)
         )).scalar_one()
 
+        chave = _so_digitos_cnpj(empresa.cnpj)
+        if len(chave) != 14:
+            raise AcaoNaoPermitidaError(
+                "Empresa sem chave PIX (CNPJ) válida cadastrada"
+            )
         return DadosPix(
             descricao=f"Pagamento parcial — parcela {titulo.sequencia}",
             valor=valor,
-            chave_pix=(empresa.cnpj or "").strip(),
+            chave_pix=chave,
             tipo_chave="cnpj",
-            nome_recebedor=empresa.razao_social,
+            nome_recebedor=empresa.razao_social or "Empresa",
         )
 
     # ── Helpers ──────────────────────────────────────────────────

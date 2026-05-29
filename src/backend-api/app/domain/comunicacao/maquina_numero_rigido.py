@@ -118,9 +118,11 @@ def decidir(
     # ── Mídia ────────────────────────────────────────────────────────
     if evento.tipo == "midia" and evento.tem_midia:
         if estado_atual == EstadoMaquina.AGUARDANDO_COMPROVANTE and aguardando_comprovante_valido:
+            # AC 13.23-8: mantém em AGUARDANDO_COMPROVANTE pra aceitar 2+ fotos
+            # em sequência dentro do timeout (flag expira naturalmente).
             return DecisaoMaquina(
                 acao=AcaoMaquina.PROCESSAR_COMPROVANTE,
-                proximo_estado=EstadoMaquina.IDLE,
+                proximo_estado=EstadoMaquina.AGUARDANDO_COMPROVANTE,
                 parametros={"midia_url": evento.midia_url},
             )
         # Cliente mandou mídia fora do contexto — manda reenviar

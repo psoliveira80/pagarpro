@@ -226,9 +226,10 @@ async def _process(event_id: str, provider: str) -> dict:
 
         # Story 13.22 — handler do menu rígido do Evolution Go.
         # Só roda quando: (a) provider é evolution_go, (b) cliente identificado,
-        # (c) IA atendente está desativada (default). Quando IA ativa, deixa
-        # o AgentOrchestrator existente assumir.
-        if provider == "evolution_go" and customer_id is not None:
+        # (c) agente automático está ativo (operadora não puxou takeover).
+        # Quando humano assume (`agent_active=False`), state machine fica em
+        # silêncio para não atropelar a conversa manual.
+        if provider == "evolution_go" and customer_id is not None and conv.agent_active:
             try:
                 await _processar_state_machine(
                     session=session,
@@ -418,10 +419,11 @@ async def _processar_state_machine(
         )
 
     elif decisao.acao == AcaoMaquina.PROCESSAR_COMPROVANTE:
-        # Limpa o flag antes de despachar
-        conversa.aguardando_comprovante_ate = None
-        # Story 13.23: dispara a task de análise. Por enquanto registra log
-        # — handler completo entra na 13.23.
+        # Story 13.23 AC 8: cliente pode mandar 2+ fotos em sequência dentro
+        # do timeout. Mantemos o flag `aguardando_comprovante_ate` válido até
+        # expirar naturalmente — cada mídia que chegar nessa janela vira
+        # comprovante. Idempotência fica por conta do hash SHA-256 no
+        # ServicoAnaliseComprovante (mídia idêntica reenviada não é reanalisada).
         log.info(
             "comprovante_recebido_via_menu",
             cliente_id=str(cliente_id),
@@ -541,15 +543,32 @@ async def _processar_state_machine(
 
     elif decisao.acao == AcaoMaquina.REGISTRAR_CONFIRMACAO_RECEBIMENTO:
         # Story 13.25 — cliente clicou "Confirmo recebimento" no lembrete.
+        # Valida que `titulo_id` pertence à empresa da conversa (defesa
+        # multi-tenant — id no payload do botão vem do cliente, não pode ser
+        # confiável sozinho).
         titulo_id_str = (decisao.parametros or {}).get("titulo_id")
         try:
             from uuid import UUID as _UUID
+            from sqlalchemy import select as _select
             from app.infrastructure.db.models.financeiro import TituloReceber as _TR
 
             tit_id = _UUID(titulo_id_str) if titulo_id_str else None
             conversa.confirmacao_recebimento_em = datetime.now(timezone.utc)
             if tit_id:
-                conversa.confirmacao_recebimento_titulo_id = tit_id
+                existe = (await session.execute(
+                    _select(_TR.id).where(
+                        _TR.id == tit_id,
+                        _TR.empresa_id == empresa_id,
+                    )
+                )).scalar_one_or_none()
+                if existe is None:
+                    log.warning(
+                        "confirmacao_recebimento_titulo_de_outro_tenant",
+                        titulo_id=str(tit_id),
+                        empresa_id=str(empresa_id),
+                    )
+                else:
+                    conversa.confirmacao_recebimento_titulo_id = tit_id
             await adapter.send_text(
                 telefone,
                 "Obrigado! Avisaremos novamente próximo do vencimento. 🙂",

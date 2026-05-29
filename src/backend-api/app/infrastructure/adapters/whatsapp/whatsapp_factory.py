@@ -198,8 +198,15 @@ async def get_evolution_go_por_credencial_telefone(
 
     cred: IntegrationCredential | None = None
     if cred_id is not None:
+        # Defesa em profundidade: filtra por empresa_id mesmo no lookup por id
+        # — regra inegociável multi-tenant. Se numero_origem_id estiver corrompido
+        # apontando pra credencial de outra empresa (bug histórico/migração),
+        # devolve None e cai pro fallback do tenant correto.
         cred = (await session.execute(
-            select(IntegrationCredential).where(IntegrationCredential.id == cred_id)
+            select(IntegrationCredential).where(
+                IntegrationCredential.id == cred_id,
+                IntegrationCredential.empresa_id == empresa_id,
+            )
         )).scalar_one_or_none()
     if cred is None:
         # Fallback: primeiro Evolution Go ativo da empresa

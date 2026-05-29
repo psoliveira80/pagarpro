@@ -144,6 +144,28 @@ async def _enviar_via_canal(
         return False, str(exc)
 
 
+async def _cliente_ja_confirmou_recebimento(
+    session: AsyncSession,
+    titulo_id: UUID,
+    dias_adiar: int,
+) -> bool:
+    """Story 13.25 AC 5 — checa se o cliente já clicou 'Confirmo recebimento'
+    para esse título nas últimas `dias_adiar` dias. Se sim, o worker pula o
+    envio (cliente já avisou que sabe do vencimento)."""
+    from datetime import timedelta
+    from sqlalchemy import select as _select
+    from app.infrastructure.db.models.cobranca import Conversa
+
+    limite = datetime.now(timezone.utc) - timedelta(days=dias_adiar)
+    row = (await session.execute(
+        _select(Conversa.id).where(
+            Conversa.confirmacao_recebimento_titulo_id == titulo_id,
+            Conversa.confirmacao_recebimento_em >= limite,
+        ).limit(1)
+    )).scalar_one_or_none()
+    return row is not None
+
+
 async def _enviar_lembrete_whatsapp_com_botao(
     session: AsyncSession,
     empresa_id: UUID,
@@ -206,6 +228,26 @@ async def _processar_titulo(
 
         if await _ja_enviado_hoje(session, titulo.id, TIPO_LEMBRETE):
             log.info("lembrete_ja_enviado_hoje", titulo_id=str(titulo.id))
+            return
+
+        # Story 13.25 AC 5 — cliente clicou "Confirmo recebimento" recentemente?
+        # Se sim, pula o envio (registra LembreteEnviado com canal='pulado').
+        servico_config_local = ServicoConfiguracao(session, empresa_id, redis=redis)
+        dias_adiar = await servico_config_local.obter_inteiro(
+            "dias_adiar_apos_confirmacao", "comunicacao", padrao=2
+        )
+        if dias_adiar > 0 and await _cliente_ja_confirmou_recebimento(
+            session, titulo.id, dias_adiar
+        ):
+            log.info("lembrete_pulado_cliente_confirmou", titulo_id=str(titulo.id))
+            session.add(LembreteEnviado(
+                empresa_id=empresa_id,
+                titulo_id=titulo.id,
+                tipo=TIPO_LEMBRETE,
+                canal="pulado_cliente_confirmou",
+                sucesso=True,
+                erro=None,
+            ))
             return
 
         contexto = await _montar_contexto(session, titulo)

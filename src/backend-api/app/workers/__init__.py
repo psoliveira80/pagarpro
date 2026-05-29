@@ -35,6 +35,7 @@ celery_app.conf.include = [
     "app.workers.tasks.run_agent_turn",
     "app.workers.tasks.send_broadcast",
     "app.workers.tasks.analisar_e_validar_comprovante_whatsapp",
+    "app.workers.tasks.expirar_desbloqueios_confianca",
 ]
 
 # Beat schedule — tasks por-empresa rodam via dispatch_por_empresa.
@@ -98,5 +99,11 @@ celery_app.conf.beat_schedule = {
     "daily-backup-03utc": {
         "task": "backup.run_backup",
         "schedule": crontab(hour=3, minute=0),
+    },
+    # A cada 6 horas — re-suspende contrato de cliente cujo desbloqueio em
+    # confiança expirou e ainda tem título em atraso (Story 13.22 A1).
+    "expirar-desbloqueios-confianca": {
+        "task": "app.workers.tasks.expirar_desbloqueios_confianca.executar",
+        "schedule": crontab(minute=15, hour="*/6"),
     },
 }

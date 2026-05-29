@@ -99,6 +99,10 @@ class Cliente(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         Integer, nullable=False, server_default=text("0"),
     )
     inicio_periodo_acoes: Mapped[date | None] = mapped_column(nullable=True)
+    # Story 13.22 A1 (code review) — data até a qual o desbloqueio em confiança
+    # vigora. Worker `processar_titulos_vencidos` re-suspende o contrato quando
+    # expira (se ainda houver título em atraso).
+    desbloqueio_confianca_ate: Mapped[date | None] = mapped_column(nullable=True)
 
     # --- Compat aliases (Story 12.3 transition) ---
     full_name = synonym("nome_completo")

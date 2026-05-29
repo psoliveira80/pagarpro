@@ -120,7 +120,7 @@ async def _executar(
             await session.commit()
             return {
                 "status": "already_analyzed",
-                "comprovante_id": str(ja.args[0].id),
+                "comprovante_id": str(ja.comprovante_existente.id),
             }
 
         # 3. Decide auto-homologação
@@ -132,12 +132,33 @@ async def _executar(
             "desbloqueio_automatico_apos_validacao", "comprovantes", padrao=True
         )
 
+        # Valida que o título cassado pelo matcher ainda está homologável.
+        # (cancelado / soft-deleted / contrato encerrado caem em manual.)
+        titulo_valido = False
+        if comprovante.titulo_id is not None:
+            from app.infrastructure.db.models.financeiro import TituloReceber as _TR
+            from app.infrastructure.db.models.contrato import Contrato as _Contrato
+            row = (await session.execute(
+                select(_TR.status, _Contrato.status.label("contrato_status"))
+                .join(_Contrato, _Contrato.id == _TR.contrato_id)
+                .where(
+                    _TR.id == comprovante.titulo_id,
+                    _TR.empresa_id == empresa_uuid,
+                )
+            )).first()
+            if row is not None:
+                titulo_valido = (
+                    row[0] in ("em_aberto", "em_atraso")
+                    and row[1] in ("vigente", "suspenso")
+                )
+
         pode_auto = (
             not cliente.na_blacklist_comprovantes
             and comprovante.score_confianca is not None
             and Decimal(comprovante.score_confianca) >= score_min
             and comprovante.titulo_id is not None
             and comprovante.valor_detectado is not None
+            and titulo_valido
         )
 
         if not pode_auto:
@@ -192,9 +213,15 @@ async def _executar(
         comprovante.status = "homologado"
         comprovante.homologado_em = datetime.now(timezone.utc)
 
-        # 5. Desbloqueio do contrato (se suspenso)
+        decisao_pagamento = (resultado_pagamento or {}).get("decisao", "integral")
+        # Pagamento PARCIAL (fundido/separado) — sobrou saldo; não reativa
+        # contrato automaticamente. Cliente precisa saber que ainda deve algo.
+        pagamento_parcial = decisao_pagamento in ("fundido", "separado")
+
+        # 5. Desbloqueio do contrato (só quando pagamento integral/excedente
+        # quitou a parcela) — pagamento parcial deixa contrato como está.
         contrato_reativado = False
-        if desbloqueio_auto:
+        if desbloqueio_auto and not pagamento_parcial:
             contrato = (await session.execute(
                 select(Contrato).where(
                     Contrato.cliente_id == cliente_uuid,
@@ -221,12 +248,17 @@ async def _executar(
                 except Exception:
                     log.exception("falha_reativar_contrato")
 
-        # 6. Confirma com o cliente
-        msg = (
-            "✓ Pagamento confirmado! Valeu 🙏"
-            if not contrato_reativado
-            else "✓ Pagamento confirmado! Veículo liberado. Boa rodagem 🚗💨"
-        )
+        # 6. Confirma com o cliente. Mensagem reflete a decisão do
+        # ServicoTituloPago (integral / parcial / fusão).
+        if pagamento_parcial:
+            msg = (
+                "✓ Pagamento parcial recebido! O restante foi adicionado à "
+                "próxima parcela. Veículo continua na situação anterior."
+            )
+        elif contrato_reativado:
+            msg = "✓ Pagamento confirmado! Veículo liberado. Boa rodagem 🚗💨"
+        else:
+            msg = "✓ Pagamento confirmado! Valeu 🙏"
         await _responder(session, empresa_uuid, telefone_remetente, msg)
         await session.commit()
         return {
@@ -244,8 +276,10 @@ def _motivo_revisao_manual(*, cliente, comprovante, score_min) -> str:
         return "sem título compatível"
     if comprovante.valor_detectado is None:
         return "valor não detectado"
-    if comprovante.score_confianca is None or Decimal(comprovante.score_confianca) < score_min:
-        return f"score baixo ({comprovante.score_confianca} < {score_min})"
+    if comprovante.score_confianca is None:
+        return "score não calculado"
+    if Decimal(comprovante.score_confianca) < score_min:
+        return f"score baixo ({Decimal(comprovante.score_confianca):.2f} < {score_min})"
     return "revisão preventiva"
 
 

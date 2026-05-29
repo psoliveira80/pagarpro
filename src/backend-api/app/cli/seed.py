@@ -96,6 +96,10 @@ CONFIGURACOES_PADRAO: list[tuple[str, str, str, str, str]] = [
     ("score_minimo_auto_homologar", "comprovantes", "decimal", "0.80",
      "Score (0-1) mínimo para auto-homologar comprovante (sem revisão humana). "
      "Cliente em blacklist sempre vai pra fila manual independente do score."),
+    # ── confirmação de recebimento (Story 13.25) ──
+    ("dias_adiar_apos_confirmacao", "comunicacao", "inteiro", "2",
+     "Quando cliente clica 'Confirmo recebimento' no lembrete, sistema pula "
+     "os próximos envios desse título por N dias"),
     # ── IA atendente (Story 13.26 — adiada V2; flag já registrada) ──
     ("ia_atendente_ativa", "comunicacao", "booleano", "false",
      "Toggle global de IA atendente (false = menu rígido apenas)"),
