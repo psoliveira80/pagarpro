@@ -26,9 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -48,8 +46,12 @@ from app.infrastructure.comprovantes.extratores_universais import (
 )
 from app.infrastructure.comprovantes.matcher_titulos import encontrar_titulo_match
 from app.infrastructure.comprovantes.ocr import extrair_texto_via_ocr
+from app.infrastructure.comprovantes.pdf_rasterizer import rasterizar_pdf
 from app.infrastructure.comprovantes.pdf_text_extractor import extrair_texto_pdf
 from app.infrastructure.db.models.comprovante_pagamento import ComprovantePagamento
+
+
+BANCO_DESCONHECIDO = "desconhecido"
 
 
 log = logging.getLogger(__name__)
@@ -224,43 +226,34 @@ class ServicoAnaliseComprovante:
             pdf_result = extrair_texto_pdf(bytes_arquivo)
             if pdf_result is not None:
                 texto, confianca = pdf_result
-                entidades = extrair_entidades_de_texto(texto)
-                entidades = self._completar_com_banco(entidades, texto)
-                resultado = ResultadoAnaliseComprovante(
-                    metodo=MetodoAnalise.PDF_TEXTO,
-                    score_confianca=confianca,
-                    entidades=entidades,
-                )
-                # Boost por banco identificado
-                tpl = detectar_banco(texto)
-                if tpl is not None:
-                    resultado.score_confianca += tpl.confianca_boost
-                    resultado.adicionar_aviso(f"banco_detectado: {tpl.nome_oficial}")
-                return await self._talvez_acionar_ia(
-                    resultado, bytes_arquivo, tipo_mime, modo_analise, threshold_acionar_ia
+                return await self._montar_resultado_textual(
+                    texto,
+                    MetodoAnalise.PDF_TEXTO,
+                    confianca,
+                    bytes_arquivo,
+                    tipo_mime,
+                    modo_analise,
+                    threshold_acionar_ia,
                 )
 
         # ── Camada 3: OCR ──
-        # Para PDF que chegou aqui, é escaneado → precisamos rasterizar
-        # antes do OCR. Em V1, só suportamos OCR direto em imagens.
-        # PDF escaneado: TODO em story futura (incluir pdf2image).
-        if tipo_mime.startswith("image/"):
-            ocr_result = extrair_texto_via_ocr(bytes_arquivo)
+        # Suporta imagem direta E PDF escaneado (rasterizado via pdf2image).
+        # Auditoria 2026-05-29 B4: antes, PDF escaneado caía aqui mas o pipeline
+        # só processava image/*, então qualquer comprovante de banco escaneado
+        # falhava silencioso.
+        bytes_para_ocr = self._preparar_bytes_para_ocr(bytes_arquivo, tipo_mime)
+        if bytes_para_ocr is not None:
+            ocr_result = extrair_texto_via_ocr(bytes_para_ocr)
             if ocr_result is not None:
                 texto, confianca = ocr_result
-                entidades = extrair_entidades_de_texto(texto)
-                entidades = self._completar_com_banco(entidades, texto)
-                resultado = ResultadoAnaliseComprovante(
-                    metodo=MetodoAnalise.OCR,
-                    score_confianca=confianca,
-                    entidades=entidades,
-                )
-                tpl = detectar_banco(texto)
-                if tpl is not None:
-                    resultado.score_confianca += tpl.confianca_boost
-                    resultado.adicionar_aviso(f"banco_detectado: {tpl.nome_oficial}")
-                return await self._talvez_acionar_ia(
-                    resultado, bytes_arquivo, tipo_mime, modo_analise, threshold_acionar_ia
+                return await self._montar_resultado_textual(
+                    texto,
+                    MetodoAnalise.OCR,
+                    confianca,
+                    bytes_arquivo,
+                    tipo_mime,
+                    modo_analise,
+                    threshold_acionar_ia,
                 )
 
         # Nada funcionou — retorna resultado mínimo com aviso
@@ -271,15 +264,67 @@ class ServicoAnaliseComprovante:
             avisos=["nenhuma camada do pipeline conseguiu extrair dados"],
         )
 
+    def _preparar_bytes_para_ocr(
+        self, bytes_arquivo: bytes, tipo_mime: str
+    ) -> bytes | None:
+        """Devolve bytes prontos pro Tesseract. Para PDF escaneado, rasteriza
+        a 1ª página via `pdf2image` (camada complementar leve, B4)."""
+        if tipo_mime.startswith("image/"):
+            return bytes_arquivo
+        if tipo_mime == "application/pdf":
+            paginas = rasterizar_pdf(bytes_arquivo)
+            if paginas:
+                # Comprovante de banco quase sempre cabe em 1 página. As demais
+                # ficam disponíveis pra uma future melhoria de análise multi-pg.
+                return paginas[0]
+        return None
+
+    async def _montar_resultado_textual(
+        self,
+        texto: str,
+        metodo: MetodoAnalise,
+        confianca_base: float,
+        bytes_arquivo: bytes,
+        tipo_mime: str,
+        modo_analise: str,
+        threshold_acionar_ia: Decimal,
+    ) -> ResultadoAnaliseComprovante:
+        """Caminho comum pra PDF texto e OCR: extrai entidades, identifica
+        banco, monta resultado, agrega avisos do extrator."""
+        entidades, avisos_extracao = extrair_entidades_de_texto(texto)
+        entidades = self._completar_com_banco(entidades, texto)
+        resultado = ResultadoAnaliseComprovante(
+            metodo=metodo,
+            score_confianca=confianca_base,
+            entidades=entidades,
+        )
+        for aviso in avisos_extracao:
+            resultado.adicionar_aviso(aviso)
+        tpl = detectar_banco(texto)
+        if tpl is not None:
+            resultado.score_confianca += tpl.confianca_boost
+            resultado.adicionar_aviso(f"banco_detectado: {tpl.nome_oficial}")
+        elif entidades.banco_emissor == BANCO_DESCONHECIDO:
+            resultado.adicionar_aviso("banco_emissor_nao_identificado")
+        return await self._talvez_acionar_ia(
+            resultado, bytes_arquivo, tipo_mime, modo_analise, threshold_acionar_ia
+        )
+
     def _completar_com_banco(
         self, entidades: EntidadesExtraidas, texto: str
     ) -> EntidadesExtraidas:
-        """Anexa `banco_emissor` na EntidadesExtraidas se detectado."""
+        """Anexa `banco_emissor` na EntidadesExtraidas.
+
+        Quando `detectar_banco` reconhece o banco, usa o `nome_oficial`.
+        Quando não reconhece mas o texto está populado, marca como
+        `"desconhecido"` — auditoria 2026-05-29 B6: silent `None`
+        atrapalhava métrica do gestor de "X comprovantes de banco
+        desconhecido pendentes de classificação".
+        """
         if not texto:
             return entidades
         tpl = detectar_banco(texto)
-        if tpl is None:
-            return entidades
+        novo_banco = tpl.nome_oficial if tpl is not None else BANCO_DESCONHECIDO
         # EntidadesExtraidas é frozen — recria com banco_emissor preenchido
         return EntidadesExtraidas(
             valor=entidades.valor,
@@ -291,7 +336,7 @@ class ServicoAnaliseComprovante:
             beneficiario_nome=entidades.beneficiario_nome,
             pagador_documento=entidades.pagador_documento,
             pagador_nome=entidades.pagador_nome,
-            banco_emissor=tpl.nome_oficial,
+            banco_emissor=novo_banco,
             textos_brutos=list(entidades.textos_brutos),
         )
 

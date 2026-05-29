@@ -32,6 +32,9 @@ dependencies = [
     "pytesseract>=0.3.10",
     "opencv-python-headless>=4.10",
     "PyYAML>=6.0",
+    # Auditoria 2026-05-29 B4 — rasterização de PDF escaneado pro Tesseract
+    # (requer apt poppler-utils — já no Dockerfile)
+    "pdf2image>=1.17",
 ]
 
 [project.optional-dependencies]

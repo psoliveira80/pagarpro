@@ -74,7 +74,25 @@ def test_rejeita_cnpj_invalido():
 
 def test_extrai_valor_principal_pega_o_maior():
     texto = "Valor pago: R$ 1.250,00\nTaxa: R$ 2,50\nSaldo: R$ 350,00"
-    assert extrair_valor_principal(texto) == Decimal("1250.00")
+    valor, avisos = extrair_valor_principal(texto)
+    assert valor == Decimal("1250.00")
+    assert avisos == []
+
+
+def test_extrai_valor_ignora_cpf_mascarado_quando_sem_real():
+    """Auditoria B2: OCR em CPF mascarado ('CPF: ***.987,65 4-+*') gerava
+    falso valor. Garante que o regex prefere matches com R$ explícito e
+    descarta linhas obviamente de CPF/CNPJ."""
+    texto = "Valor: R$ 600,00\nCPF: ***.987,65-**"
+    valor, _ = extrair_valor_principal(texto)
+    assert valor == Decimal("600.00")
+
+
+def test_extrai_valor_sem_real_emite_aviso():
+    texto = "Pagamento\n1.234,56"
+    valor, avisos = extrair_valor_principal(texto)
+    assert valor == Decimal("1234.56")
+    assert "valor_sem_prefixo_real" in avisos
 
 
 def test_extrai_data_brasileira_com_hora():
@@ -92,9 +110,46 @@ def test_extrai_data_sem_hora():
 def test_extrai_documentos_so_validos():
     # CPF válido e CNPJ válido misturados com lixo
     texto = "CPF do pagador: 123.456.789-09\nCPF inválido: 111.111.111-11\nCNPJ: 11.222.333/0001-81"
-    cpf, cnpj = extrair_documentos(texto)
+    cpf, cnpj, avisos = extrair_documentos(texto)
     assert cpf == "123.456.789-09"
     assert cnpj == "11.222.333/0001-81"
+    # Quando há match válido, paramos antes do inválido — sem aviso espúrio
+    assert avisos == []
+
+
+def test_extrai_documentos_emite_aviso_quando_so_invalidos():
+    """Auditoria B5: se OCR enxerga algo que tem cara de CPF/CNPJ mas o DV
+    falha, queremos saber — provavelmente é OCR ruim ou comprovante fake."""
+    texto = "CPF: 111.111.111-11\nCNPJ: 22.222.222/2222-22"
+    cpf, cnpj, avisos = extrair_documentos(texto)
+    assert cpf is None
+    assert cnpj is None
+    assert "cpf_regex_casou_mas_dv_invalido" in avisos
+    assert "cnpj_regex_casou_mas_dv_invalido" in avisos
+
+
+def test_extrai_cnpj_sem_mascara():
+    """Auditoria B5: 'CNPJ: 12345678000199' (sem máscara) deve ser detectado
+    e normalizado pro formato com máscara."""
+    # 11.222.333/0001-81 com DV válido — equivale a 11222333000181
+    texto = "Beneficiário: FROTAUBER\nCNPJ: 11222333000181"
+    _, cnpj, _ = extrair_documentos(texto)
+    assert cnpj == "11.222.333/0001-81"
+
+
+def test_chave_pix_ignora_uuid_em_linha_de_autenticacao():
+    """Auditoria B3: campo 'Autenticação' do banco vinha sendo extraído
+    como chave PIX UUID. Agora o UUID em linha 'Autenticação:...' é
+    rejeitado, e o que está na linha 'Chave:' continua passando."""
+    from app.infrastructure.comprovantes.extratores_universais import (
+        extrair_chave_pix,
+    )
+    texto = (
+        "Comprovante PIX\n"
+        "Autenticação: 9F4A2B1C-7E5D-4F9A-B8C2-1234567890AB\n"
+        "Chave: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\n"
+    )
+    assert extrair_chave_pix(texto) == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 
 def test_extrai_entidades_de_comprovante_completo():
@@ -108,7 +163,7 @@ Beneficiário: Frota Uber LTDA
 CNPJ: 11.222.333/0001-81
 Chave PIX: financeiro@frotauber.com
 """
-    e = extrair_entidades_de_texto(texto)
+    e, avisos = extrair_entidades_de_texto(texto)
     assert e.valor == Decimal("1250.00")
     assert e.data == datetime(2026, 5, 3, 14, 32)
     assert e.pagador_documento == "123.456.789-09"
@@ -116,6 +171,7 @@ Chave PIX: financeiro@frotauber.com
     assert e.chave_pix == "financeiro@frotauber.com"
     assert e.pagador_nome and "João" in e.pagador_nome
     assert e.beneficiario_nome and "Frota Uber" in e.beneficiario_nome
+    assert avisos == []
 
 
 # ─────────────────────────────────────────────────────────────────

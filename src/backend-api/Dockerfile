@@ -16,11 +16,13 @@ FROM python:3.12-slim AS runtime
 # - Tesseract OCR (Story 13.19) — análise de comprovantes PIX
 # - libzbar0 (Story 13.19) — leitura de BR Code (QR Code PIX)
 # - libgl1/libgomp1 (Story 13.19) — OpenCV pré-processamento de imagem
+# - poppler-utils (auditoria 2026-05-29 B4) — rasterizar PDF escaneado pro Tesseract
 # - libpq5 — driver Postgres
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpangocairo-1.0-0 libpango-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
     tesseract-ocr tesseract-ocr-por libtesseract-dev libleptonica-dev \
     libzbar0 libgl1 libgomp1 \
+    poppler-utils \
     libpq5 curl \
     && rm -rf /var/lib/apt/lists/*
 
