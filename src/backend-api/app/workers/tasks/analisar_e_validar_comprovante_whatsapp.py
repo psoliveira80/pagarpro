@@ -106,7 +106,9 @@ async def _executar(
                 tipo_mime=mime,
                 arquivo_url=media_url,
                 cliente_id=cliente_uuid,
-                origem="whatsapp_menu",
+                # Constraint `ck_comprovante_origem` aceita só
+                # ('upload', 'whatsapp', 'email'). Auditoria 2026-05-29 #2.
+                origem="whatsapp",
                 telefone_remetente=telefone_remetente,
             )
         except ComprovanteJaAnalisadoError as ja:
