@@ -1,7 +1,18 @@
-<div class="fixed top-4 right-4 z-[1200] flex flex-col gap-2 pointer-events-none">
+<!--
+  Posição:
+  - Desktop: 16px abaixo da barra superior (h-16 = 64px) → top-[5rem]
+  - Mobile: mesmo top, mas com gutters laterais (right + left) pra não
+    estourar borda em telas estreitas. max-w-sm desktop, full mobile.
+  z-[1200] fica acima do header (z-[1000]) e modais (z-[1100]).
+-->
+<div
+  class="fixed top-20 right-4 left-4 md:left-auto z-[1200]
+         flex flex-col items-end gap-2 pointer-events-none"
+>
   @for (toast of toasts(); track toast.id) {
     <div
-      class="pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-sm animate-slide-in"
+      class="pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-sm font-medium
+             w-full md:w-auto md:max-w-sm animate-slide-in"
       [class]="
         toast.type === 'error' ? 'bg-[var(--danger)] text-white' :
         toast.type === 'success' ? 'bg-[var(--success)] text-white' :
@@ -10,9 +21,9 @@
       "
     >
       <div class="flex items-center justify-between gap-3">
-        <span>{{ toast.message }}</span>
+        <span class="break-words">{{ toast.message }}</span>
         <button
-          class="opacity-70 hover:opacity-100 transition-opacity text-lg leading-none cursor-pointer"
+          class="opacity-70 hover:opacity-100 transition-opacity text-lg leading-none cursor-pointer shrink-0"
           (click)="toastService.dismiss(toast.id)"
           aria-label="Fechar"
         >
