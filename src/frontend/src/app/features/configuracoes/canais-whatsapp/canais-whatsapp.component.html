@@ -21,8 +21,8 @@
     Canais &rsaquo; WhatsApp
   </h1>
   <p class="text-sm text-[var(--text-secondary)] mt-1">
-    Provedor: <strong>Evolution Go</strong> &middot; Tela de monitoramento
-    e administração dos números conectados.
+    Provedor em uso: <strong>{{ labelProvedorPrincipal() }}</strong>
+    &middot; Monitora e administra os números conectados.
   </p>
 </header>
 
@@ -317,92 +317,105 @@
   [open]="mostrarFormNovo()"
   (closed)="fecharFormNovoNumero()"
   size="md"
-  title="Adicionar número WhatsApp (Evolution Go)"
+  title="Adicionar número WhatsApp"
 >
   <form
     class="flex flex-col gap-4"
     (ngSubmit)="salvarNovoNumero()"
     (keydown.enter)="$event.preventDefault()"
   >
-    <p class="text-sm text-[var(--text-secondary)]">
-      Use as credenciais da instância já provisionada em
-      <code class="font-mono text-xs">evo-go.megaflow.work</code>.
-    </p>
-
+    <!-- Seletor de provedor — form dinâmico abaixo -->
     <label class="flex flex-col gap-1">
       <span class="text-sm font-medium text-[var(--text-primary)]">
-        Apelido <span class="text-[var(--text-muted)]">(opcional)</span>
+        Provedor <span class="text-[var(--danger)]">*</span>
       </span>
-      <input
-        type="text"
-        class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
-               text-[var(--text-primary)] focus:outline-none
-               focus:border-[var(--accent)]"
-        placeholder="Ex: Cobrança 1"
-        [value]="novoApelido()"
-        (input)="novoApelido.set($any($event.target).value)"
+      <app-select
+        [options]="provedorOptions()"
+        [value]="novoProvedorId()"
+        (valueChange)="onProvedorNovoChange($event)"
+        placeholder="Selecione o provedor"
       />
     </label>
 
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-medium text-[var(--text-primary)]">
-        Instance ID <span class="text-[var(--danger)]">*</span>
-      </span>
-      <input
-        type="text"
-        class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
-               text-[var(--text-primary)] focus:outline-none
-               focus:border-[var(--accent)] font-mono text-sm"
-        placeholder="UUID da instância no Evolution Go"
-        [value]="novoInstanceId()"
-        (input)="novoInstanceId.set($any($event.target).value)"
-        required
-      />
-    </label>
+    @if (provedorSelecionado(); as prov) {
+      <p class="text-xs text-[var(--text-secondary)]">{{ prov.help }}</p>
 
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-medium text-[var(--text-primary)]">
-        Instance Token <span class="text-[var(--danger)]">*</span>
-      </span>
-      <input
-        type="password"
-        class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
-               text-[var(--text-primary)] focus:outline-none
-               focus:border-[var(--accent)] font-mono text-sm"
-        placeholder="Token de autenticação (apikey)"
-        [value]="novoInstanceToken()"
-        (input)="novoInstanceToken.set($any($event.target).value)"
-        required
-      />
-    </label>
+      @if (!prov.disponivel) {
+        <div class="rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/30
+                    px-3 py-2 text-sm text-[var(--text-primary)]">
+          Este provedor está reservado mas ainda não tem adapter implementado.
+          Cadastro desabilitado.
+        </div>
+      }
 
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-medium text-[var(--text-primary)]">
-        Número E.164 <span class="text-[var(--danger)]">*</span>
-      </span>
-      <input
-        type="text"
-        class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
-               text-[var(--text-primary)] focus:outline-none
-               focus:border-[var(--accent)] font-mono text-sm"
-        placeholder="+5511987654321"
-        [value]="novoNumeroE164()"
-        (input)="novoNumeroE164.set($any($event.target).value)"
-        required
-      />
-    </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-medium text-[var(--text-primary)]">
+          Apelido <span class="text-[var(--text-muted)]">(opcional)</span>
+        </span>
+        <input
+          type="text"
+          class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
+                 text-[var(--text-primary)] focus:outline-none
+                 focus:border-[var(--accent)]"
+          placeholder="Ex: Cobrança 1"
+          [value]="novoApelido()"
+          (input)="novoApelido.set($any($event.target).value)"
+        />
+      </label>
 
-    <label class="flex items-center gap-2 cursor-pointer select-none">
-      <input
-        type="checkbox"
-        class="rounded border-[var(--border)] accent-[var(--accent)]"
-        [checked]="novoPrincipal()"
-        (change)="novoPrincipal.set($any($event.target).checked)"
-      />
-      <span class="text-sm text-[var(--text-primary)]">
-        Marcar como padrão para novos clientes
-      </span>
-    </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-medium text-[var(--text-primary)]">
+          Número E.164 <span class="text-[var(--danger)]">*</span>
+        </span>
+        <input
+          type="text"
+          class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
+                 text-[var(--text-primary)] focus:outline-none
+                 focus:border-[var(--accent)] font-mono text-sm"
+          placeholder="+5511987654321"
+          [value]="novoNumeroE164()"
+          (input)="novoNumeroE164.set($any($event.target).value)"
+          required
+        />
+      </label>
+
+      <!-- Campos dinâmicos do provedor -->
+      @for (campo of prov.campos; track campo.key) {
+        <label class="flex flex-col gap-1">
+          <span class="text-sm font-medium text-[var(--text-primary)]">
+            {{ campo.label }}
+            @if (campo.required) {
+              <span class="text-[var(--danger)]">*</span>
+            } @else {
+              <span class="text-[var(--text-muted)]">(opcional)</span>
+            }
+          </span>
+          <input
+            [type]="campo.type"
+            class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
+                   text-[var(--text-primary)] focus:outline-none
+                   focus:border-[var(--accent)] font-mono text-sm"
+            [value]="getNovoConfig(campo.key)"
+            (input)="setNovoConfig(campo.key, $any($event.target).value)"
+            [required]="campo.required"
+            [disabled]="!prov.disponivel"
+          />
+        </label>
+      }
+
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          class="rounded border-[var(--border)] accent-[var(--accent)]"
+          [checked]="novoPrincipal()"
+          [disabled]="!prov.disponivel"
+          (change)="novoPrincipal.set($any($event.target).checked)"
+        />
+        <span class="text-sm text-[var(--text-primary)]">
+          Marcar como padrão para novos clientes
+        </span>
+      </label>
+    }
 
     <div class="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
       <button

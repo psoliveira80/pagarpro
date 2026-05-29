@@ -24,7 +24,6 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import CurrentUserDep, SessionDep
 from app.application.services.servico_roteamento_numeros import (
-    NenhumNumeroAtivoError,
     ServicoRoteamentoNumeros,
 )
 from app.application.shared.audit_logger import AuditLogger
@@ -52,18 +51,61 @@ class MarcarBanidoRequest(BaseModel):
 
 
 class NumeroCreateRequest(BaseModel):
-    """Payload pra cadastrar nova instância Evolution Go.
+    """Payload pra cadastrar nova instância WhatsApp em QUALQUER provedor
+    suportado (`evolution_go` padrão da Topologia A, `evolution_api`
+    self-hosted, `zapi`, `uazapi`).
 
     Em Topologia A o provisionamento da instância acontece no provedor SaaS
-    (Pablo). Esta rota é usada pelo painel admin SaaS (e enquanto ele não
-    existe, pela tela `Canais › WhatsApp`) pra registrar a credencial no
-    tenant correto. NÃO escaneia QR — instância já chega pronta.
+    (Pablo) usando `evolution_go`. Empresas que rodam infra própria podem
+    cadastrar outros providers — schemas validados em
+    `validar_config_por_provedor`. Meta Cloud API (`meta_cloud`) está
+    reservado mas sem adapter implementado.
     """
+    provedor: str = Field(default="evolution_go", max_length=40)
     apelido: str | None = Field(default=None, max_length=80)
-    instance_id: str = Field(min_length=1, max_length=120)
-    instance_token: str = Field(min_length=1, max_length=300)
     numero_e164: str = Field(min_length=8, max_length=20)
     eh_principal: bool = False
+    config: dict = Field(default_factory=dict)
+
+
+# Schema por provedor: chave → (campos obrigatórios, suportado)
+_PROVEDORES_SUPORTADOS: dict[str, tuple[tuple[str, ...], bool]] = {
+    "evolution_go": (("instance_id", "instance_token"), True),
+    "evolution_api": (("base_url", "api_key", "instance"), True),
+    "zapi": (("instance_id", "token"), True),
+    "uazapi": (("base_url", "api_key", "instance"), True),
+    # Meta Cloud API oficial — sem adapter ainda. Cadastro bloqueado.
+    "meta_cloud": (("phone_number_id", "access_token", "waba_id"), False),
+}
+
+
+def _validar_config_por_provedor(provedor: str, config: dict) -> None:
+    if provedor not in _PROVEDORES_SUPORTADOS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Provedor '{provedor}' não reconhecido. "
+                f"Suportados: {', '.join(_PROVEDORES_SUPORTADOS)}"
+            ),
+        )
+    campos, ativo = _PROVEDORES_SUPORTADOS[provedor]
+    if not ativo:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Provedor '{provedor}' reservado mas ainda sem adapter "
+                "— em breve."
+            ),
+        )
+    faltando = [c for c in campos if not str(config.get(c, "")).strip()]
+    if faltando:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Campos obrigatórios faltando para {provedor}: "
+                f"{', '.join(faltando)}"
+            ),
+        )
 
 
 # ───────── Helpers ─────────
@@ -91,37 +133,120 @@ async def listar_numeros(
     return [NumeroOut(**n) for n in numeros]
 
 
+@router.get("/provedores")
+async def listar_provedores_suportados(
+    current_user: CurrentUserDep,
+) -> list[dict]:
+    """Lista provedores WhatsApp suportados pra alimentar o seletor da UI.
+
+    Cada entrada traz `id`, `label`, `campos` (lista de campos requeridos
+    com tipo) e `disponivel` (false = reservado/em breve). Restrito a
+    admin — gestor comum não escolhe provider.
+    """
+    _check_admin(current_user)
+    catalogo: list[dict] = [
+        {
+            "id": "evolution_go",
+            "label": "Evolution Go (SaaS provedor)",
+            "help": (
+                "Instância hospedada no Evolution Go central — Topologia A. "
+                "Use as credenciais geradas no painel SaaS."
+            ),
+            "campos": [
+                {"key": "instance_id", "label": "Instance ID", "type": "text", "required": True},
+                {"key": "instance_token", "label": "Instance Token", "type": "password", "required": True},
+            ],
+            "disponivel": True,
+            "multi_numero": True,
+        },
+        {
+            "id": "evolution_api",
+            "label": "Evolution API (self-hosted)",
+            "help": "Sua própria instância Evolution API rodando em servidor próprio.",
+            "campos": [
+                {"key": "base_url", "label": "URL do Servidor", "type": "url", "required": True},
+                {"key": "api_key", "label": "API Key", "type": "password", "required": True},
+                {"key": "instance", "label": "Nome da Instância", "type": "text", "required": True},
+            ],
+            "disponivel": True,
+            "multi_numero": False,
+        },
+        {
+            "id": "zapi",
+            "label": "Z-API",
+            "help": "Acesse z-api.io para obter Instance ID + Token.",
+            "campos": [
+                {"key": "instance_id", "label": "Instance ID", "type": "text", "required": True},
+                {"key": "token", "label": "Token", "type": "password", "required": True},
+                {"key": "client_token", "label": "Client Token (webhook)", "type": "password", "required": False},
+            ],
+            "disponivel": True,
+            "multi_numero": False,
+        },
+        {
+            "id": "uazapi",
+            "label": "Uazapi",
+            "help": "Acesse uazapi.com para obter base_url + chave.",
+            "campos": [
+                {"key": "base_url", "label": "URL da API", "type": "url", "required": True},
+                {"key": "api_key", "label": "API Key", "type": "password", "required": True},
+                {"key": "instance", "label": "Instância", "type": "text", "required": True},
+            ],
+            "disponivel": True,
+            "multi_numero": False,
+        },
+        {
+            "id": "meta_cloud",
+            "label": "Meta Cloud API (oficial)",
+            "help": "Em breve — adapter para WhatsApp Business Platform oficial.",
+            "campos": [
+                {"key": "phone_number_id", "label": "Phone Number ID", "type": "text", "required": True},
+                {"key": "access_token", "label": "Access Token", "type": "password", "required": True},
+                {"key": "waba_id", "label": "WABA ID", "type": "text", "required": True},
+            ],
+            "disponivel": False,
+            "multi_numero": True,
+        },
+    ]
+    return catalogo
+
+
 @router.post("", response_model=NumeroOut, status_code=201)
 async def cadastrar_numero(
     body: NumeroCreateRequest,
     session: SessionDep,
     current_user: CurrentUserDep,
 ) -> NumeroOut:
-    """Cadastra uma instância Evolution Go no tenant atual.
+    """Cadastra uma instância WhatsApp no tenant — provedor à escolha.
 
-    Substitui o caminho `POST /admin/integrations` para `category='whatsapp'`,
-    que agora é bloqueado por validador no schema. Multi-tenant garantido
-    pelo `current_user.empresa_id`. Se for marcada como principal, qualquer
-    outra principal da mesma empresa é rebaixada (regra de unicidade do
-    `ServicoRoteamentoNumeros.definir_numero_principal`).
+    Substitui `POST /admin/integrations` para `category='whatsapp'` (que
+    fica bloqueado por validator no schema). Multi-tenant garantido pelo
+    `current_user.empresa_id`. Se for marcada como principal, qualquer
+    outra principal da mesma empresa é rebaixada.
+
+    O config requerido depende do provedor — ver
+    `GET /numeros-cobranca/provedores` para o catálogo.
     """
     _check_admin(current_user)
+    _validar_config_por_provedor(body.provedor, body.config)
+
     from app.infrastructure.db.models.integration_credential import IntegrationCredential
+
+    config_persistir = dict(body.config)
+    config_persistir.update({
+        "numero_e164": body.numero_e164,
+        "apelido": body.apelido,
+        "status_whatsapp": "ativo",
+        "eh_principal": False,  # ServicoRoteamentoNumeros marca abaixo
+    })
 
     cred = IntegrationCredential(
         empresa_id=current_user.empresa_id,
         categoria="whatsapp",
-        provedor="evolution_go",
+        provedor=body.provedor,
         ativo=True,
         status="configurada",
-        config={
-            "instance_id": body.instance_id,
-            "instance_token": body.instance_token,
-            "numero_e164": body.numero_e164,
-            "apelido": body.apelido,
-            "status_whatsapp": "ativo",
-            "eh_principal": False,  # marcado pelo servico_roteamento abaixo
-        },
+        config=config_persistir,
     )
     session.add(cred)
     await session.flush()
@@ -131,18 +256,22 @@ async def cadastrar_numero(
         await servico.definir_numero_principal(cred.id, ator_id=current_user.id)
 
     audit = AuditLogger(session)
+    audit_after = {
+        "provedor": body.provedor,
+        "numero_e164": body.numero_e164,
+        "eh_principal": body.eh_principal,
+        # Não loga tokens/keys — só identificadores não-sensíveis
+        "instance_id": body.config.get("instance_id"),
+        "instance": body.config.get("instance"),
+        "phone_number_id": body.config.get("phone_number_id"),
+    }
     await audit.record(
         action="numero_whatsapp.cadastrado",
         user_id=str(current_user.id),
         entity="credenciais_integracao",
         entity_id=str(cred.id),
         category="security",
-        payload_after={
-            "provedor": "evolution_go",
-            "instance_id": body.instance_id,
-            "numero_e164": body.numero_e164,
-            "eh_principal": body.eh_principal,
-        },
+        payload_after={k: v for k, v in audit_after.items() if v is not None},
     )
     await session.commit()
 
