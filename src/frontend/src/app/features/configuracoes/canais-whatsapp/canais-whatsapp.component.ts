@@ -5,7 +5,7 @@ import {
   CanaisWhatsappService,
   NumeroWhatsApp,
 } from '../../../core/services/canais-whatsapp.service';
-import { AdminService, IntegrationCreate } from '../../../core/services/admin.service';
+import { AdminService } from '../../../core/services/admin.service';
 import { UiIconComponent } from '../../../shared/components/icon/icon.component';
 import { ModalComponent } from '../../../shared/components/modal/modal.component';
 import { ToastComponent } from '../../../shared/components/toast/toast.component';
@@ -236,22 +236,15 @@ export class CanaisWhatsappComponent implements OnInit {
 
   async salvarNovoNumero(): Promise<void> {
     if (!this.podeSalvarNovo) return;
-    const payload: IntegrationCreate = {
-      category: 'whatsapp',
-      provider: 'evolution_go',
-      is_active: true,
-      config: {
+    this.salvandoNovo.set(true);
+    try {
+      await this.service.cadastrar({
+        apelido: this.novoApelido().trim() || null,
         instance_id: this.novoInstanceId().trim(),
         instance_token: this.novoInstanceToken().trim(),
         numero_e164: this.novoNumeroE164().trim(),
-        apelido: this.novoApelido().trim() || null,
         eh_principal: this.novoPrincipal(),
-        status_whatsapp: 'ativo',
-      },
-    };
-    this.salvandoNovo.set(true);
-    try {
-      await this.adminService.createIntegration(payload);
+      });
       this.toast.show({ message: 'Número adicionado', type: 'success' });
       this.fecharFormNovoNumero();
       await this.carregar();

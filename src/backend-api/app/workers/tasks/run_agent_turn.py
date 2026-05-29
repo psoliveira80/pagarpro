@@ -32,7 +32,10 @@ async def _run(conversation_id: str, user_message: str) -> dict:
     from app.core.agent.orchestrator import AgentOrchestrator
     from app.core.agent.tool_registry import get_tool_registry
     from app.infrastructure.adapters.llm.llm_factory import get_llm_provider
-    from app.infrastructure.adapters.whatsapp.whatsapp_factory import get_whatsapp_gateway
+    from app.infrastructure.adapters.whatsapp.whatsapp_factory import (
+        get_evolution_go_por_credencial_telefone,
+        get_whatsapp_gateway,
+    )
     from app.infrastructure.db.models.agent import AgentConfig
     from app.infrastructure.db.models.conversation import Conversation
     from app.infrastructure.db.session import get_sessionmaker
@@ -86,12 +89,26 @@ async def _run(conversation_id: str, user_message: str) -> dict:
 
         await session.commit()
 
-        # Send reply via WhatsApp if applicable
+        # Send reply via WhatsApp if applicable. Roteamento estável:
+        # primeiro tenta resolver pelo número que o cliente já usa
+        # (Evolution Go multi-número, Story 13.21). Se a empresa só tem
+        # provider legado (zapi/uazapi/evolution_api), cai no helper
+        # legacy tenant-aware como fallback.
         if conv.channel == "whatsapp" and conv.phone_e164 and reply:
             try:
-                gateway = await get_whatsapp_gateway(session)
+                gateway = await get_evolution_go_por_credencial_telefone(
+                    session, conv.empresa_id, conv.phone_e164,
+                )
+                if gateway is None:
+                    gateway = await get_whatsapp_gateway(session, conv.empresa_id)
                 if gateway:
                     await gateway.send_text(conv.phone_e164, reply)
+                else:
+                    log.warning(
+                        "whatsapp_send_sem_gateway",
+                        empresa_id=str(conv.empresa_id),
+                        conv_id=conversation_id,
+                    )
             except Exception:
                 log.warning("whatsapp_send_failed", exc_info=True)
 

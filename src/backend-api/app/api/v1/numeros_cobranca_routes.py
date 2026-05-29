@@ -27,6 +27,7 @@ from app.application.services.servico_roteamento_numeros import (
     NenhumNumeroAtivoError,
     ServicoRoteamentoNumeros,
 )
+from app.application.shared.audit_logger import AuditLogger
 
 
 router = APIRouter(prefix="/numeros-cobranca", tags=["numeros-cobranca"])
@@ -48,6 +49,21 @@ class NumeroOut(BaseModel):
 
 class MarcarBanidoRequest(BaseModel):
     motivo: str = Field(min_length=3, max_length=500)
+
+
+class NumeroCreateRequest(BaseModel):
+    """Payload pra cadastrar nova instância Evolution Go.
+
+    Em Topologia A o provisionamento da instância acontece no provedor SaaS
+    (Pablo). Esta rota é usada pelo painel admin SaaS (e enquanto ele não
+    existe, pela tela `Canais › WhatsApp`) pra registrar a credencial no
+    tenant correto. NÃO escaneia QR — instância já chega pronta.
+    """
+    apelido: str | None = Field(default=None, max_length=80)
+    instance_id: str = Field(min_length=1, max_length=120)
+    instance_token: str = Field(min_length=1, max_length=300)
+    numero_e164: str = Field(min_length=8, max_length=20)
+    eh_principal: bool = False
 
 
 # ───────── Helpers ─────────
@@ -73,6 +89,68 @@ async def listar_numeros(
     servico = ServicoRoteamentoNumeros(session, current_user.empresa_id)
     numeros = await servico.listar_numeros()
     return [NumeroOut(**n) for n in numeros]
+
+
+@router.post("", response_model=NumeroOut, status_code=201)
+async def cadastrar_numero(
+    body: NumeroCreateRequest,
+    session: SessionDep,
+    current_user: CurrentUserDep,
+) -> NumeroOut:
+    """Cadastra uma instância Evolution Go no tenant atual.
+
+    Substitui o caminho `POST /admin/integrations` para `category='whatsapp'`,
+    que agora é bloqueado por validador no schema. Multi-tenant garantido
+    pelo `current_user.empresa_id`. Se for marcada como principal, qualquer
+    outra principal da mesma empresa é rebaixada (regra de unicidade do
+    `ServicoRoteamentoNumeros.definir_numero_principal`).
+    """
+    _check_admin(current_user)
+    from app.infrastructure.db.models.integration_credential import IntegrationCredential
+
+    cred = IntegrationCredential(
+        empresa_id=current_user.empresa_id,
+        categoria="whatsapp",
+        provedor="evolution_go",
+        ativo=True,
+        status="configurada",
+        config={
+            "instance_id": body.instance_id,
+            "instance_token": body.instance_token,
+            "numero_e164": body.numero_e164,
+            "apelido": body.apelido,
+            "status_whatsapp": "ativo",
+            "eh_principal": False,  # marcado pelo servico_roteamento abaixo
+        },
+    )
+    session.add(cred)
+    await session.flush()
+
+    servico = ServicoRoteamentoNumeros(session, current_user.empresa_id)
+    if body.eh_principal:
+        await servico.definir_numero_principal(cred.id, ator_id=current_user.id)
+
+    audit = AuditLogger(session)
+    await audit.record(
+        action="numero_whatsapp.cadastrado",
+        user_id=str(current_user.id),
+        entity="credenciais_integracao",
+        entity_id=str(cred.id),
+        category="security",
+        payload_after={
+            "provedor": "evolution_go",
+            "instance_id": body.instance_id,
+            "numero_e164": body.numero_e164,
+            "eh_principal": body.eh_principal,
+        },
+    )
+    await session.commit()
+
+    numeros = await servico.listar_numeros()
+    novo = next((n for n in numeros if n["credencial_id"] == str(cred.id)), None)
+    if novo is None:
+        raise HTTPException(status_code=500, detail="Credencial sumiu após cadastro")
+    return NumeroOut(**novo)
 
 
 @router.put("/{credencial_id}/marcar-banido", response_model=dict)

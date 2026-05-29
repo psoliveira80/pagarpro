@@ -1,34 +1,33 @@
-"""Celery task: verificar saúde dos canais de mensageria da empresa (story 12-6, scaffolding).
+"""Celery task: verificar saúde dos canais de mensageria da empresa.
 
-Executa a cada 5 minutos via Celery Beat, **uma vez por empresa ativa**
-(orquestrado por `dispatch_por_empresa`). Para cada `CredencialIntegracao`
-ativa da empresa na categoria `whatsapp`, faz uma verificação leve de
-configuração (presença de credenciais não-vazias) e atualiza
-`status` + `ultimo_health_check`.
+Executa a cada 5 minutos via Celery Beat, **uma vez por empresa ativa**.
+Para cada `CredencialIntegracao` ativa da empresa na categoria `whatsapp`:
 
-**Limitação consciente (Epic 11):** esta versão NÃO chama
-`adapter.health_check()` porque:
+1. Valida que a credencial tem os campos mínimos pra conectar
+   (config_incompleta indica cadastro inacabado).
+2. Se config OK, instancia o adapter via factory tenant-aware
+   (`get_adapter_por_credencial_id`) e chama `adapter.health_check()`
+   se exposto pelo provider. Atualiza `status` conforme retorno.
+3. Atualiza `ultimo_health_check` sempre.
 
-1. `get_whatsapp_gateway(session)` na arquitetura atual retorna o primeiro
-   gateway ativo cacheado processo-wide (`_adapter_cache` em
-   `whatsapp_factory.py`) — não é tenant-aware, então chamá-lo dentro de
-   uma task per-tenant traria adapter de OUTRA empresa.
-2. Health check real precisa de timeout + concorrência (gather + wait_for)
-   para não bloquear a fila a cada credencial lenta.
+Concorrência: cada credencial é checada com `asyncio.wait_for(timeout=5s)`
+e dentro de um `gather` — uma instância lenta não bloqueia as demais.
 
-Esta task é o scaffolding — mantém `ultimo_health_check` atualizado para
-o painel de Integrações ver "última verificação há X minutos" e marca
-credenciais com config faltando. O Epic 11 (Channel Health Monitoring)
-substitui o stub por uma chamada real com adapter tenant-scoped.
-
-Isolamento tenant: a task recebe `empresa_id` como primeiro argumento,
-seta contexto Python + `app.empresa_id` no Postgres para RLS.
+Notas:
+- Story 13.21 introduziu **multi-número Evolution Go** — cada credencial
+  é uma INSTÂNCIA distinta. Esta task verifica TODAS, não só "a primeira".
+- Para o caso específico de Evolution Go, há também
+  `monitorar_saude_numeros` (system-wide) que atualiza saúde + dispara
+  re-atribuição em caso de banimento. Esta task aqui é por empresa e
+  cobre todos os providers (zapi/uazapi/evolution_api/evolution_go).
+- Isolamento tenant garantido por `set_empresa_id` + `app.empresa_id` RLS.
 """
 
 from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -42,12 +41,11 @@ from app.workers import celery_app
 log = structlog.get_logger()
 
 
-def _credencial_tem_config_minima(cred: CredencialIntegracao) -> bool:
-    """Verifica se a credencial tem os campos mínimos para tentar conectar.
+HEALTH_CHECK_TIMEOUT_S = 5.0
 
-    Hoje cobre WhatsApp (zapi/uazapi/evolution_api). Quando adicionar outros
-    canais (email, sms), estender com `cred.categoria` no switch.
-    """
+
+def _credencial_tem_config_minima(cred: CredencialIntegracao) -> bool:
+    """Verifica se a credencial tem os campos mínimos para tentar conectar."""
     config = cred.config or {}
     if cred.categoria != "whatsapp":
         return False
@@ -55,15 +53,55 @@ def _credencial_tem_config_minima(cred: CredencialIntegracao) -> bool:
         return bool(config.get("instance_id")) and bool(config.get("token"))
     if cred.provedor in ("uazapi", "evolution_api"):
         return bool(config.get("base_url")) and bool(config.get("api_key"))
+    if cred.provedor == "evolution_go":
+        return bool(config.get("instance_id")) and bool(config.get("instance_token"))
     return False
+
+
+async def _checar_uma(session, cred: CredencialIntegracao) -> tuple[str, str | None]:
+    """Roda health check real numa credencial. Retorna `(status, detalhe)`."""
+    from app.infrastructure.adapters.whatsapp.whatsapp_factory import (
+        get_adapter_por_credencial_id,
+    )
+
+    if not _credencial_tem_config_minima(cred):
+        return "config_incompleta", None
+
+    adapter = await get_adapter_por_credencial_id(session, cred.id)
+    if adapter is None:
+        return "error", "adapter_nao_instanciavel"
+
+    health_check = getattr(adapter, "health_check", None)
+    if health_check is None:
+        # Provider sem capability — assume configurada (sem evidência contrária).
+        return "configurada", None
+    try:
+        info: dict[str, Any] = await asyncio.wait_for(
+            health_check(), timeout=HEALTH_CHECK_TIMEOUT_S
+        )
+    except asyncio.TimeoutError:
+        return "error", "timeout"
+    except Exception as exc:
+        return "error", str(exc)[:200]
+
+    if info.get("connected") is True:
+        return "healthy", None
+    if info.get("banido"):
+        return "error", "banido"
+    erro = info.get("erro") or "desconectado"
+    if str(erro).lower() in ("connecting", "qr"):
+        return "degraded", f"instancia em {erro}"
+    return "error", str(erro)
 
 
 async def _run(empresa_id: UUID) -> dict[str, int]:
     from app.infrastructure.db.session import get_sessionmaker
 
     session_factory = get_sessionmaker()
-    saudaveis = 0
-    sem_config = 0
+    contagem: dict[str, int] = {
+        "healthy": 0, "degraded": 0, "error": 0,
+        "configurada": 0, "config_incompleta": 0, "total": 0,
+    }
 
     async with session_factory() as session:
         await session.execute(
@@ -77,35 +115,32 @@ async def _run(empresa_id: UUID) -> dict[str, int]:
             CredencialIntegracao.categoria == "whatsapp",
         )
         credenciais = list((await session.execute(stmt)).scalars().all())
+        contagem["total"] = len(credenciais)
+
+        resultados = await asyncio.gather(
+            *(_checar_uma(session, cred) for cred in credenciais),
+            return_exceptions=False,
+        )
 
         agora = datetime.now(timezone.utc)
-        for cred in credenciais:
-            if _credencial_tem_config_minima(cred):
-                cred.status = "configurada"
-                saudaveis += 1
-            else:
-                cred.status = "config_incompleta"
-                sem_config += 1
-                log.warning(
-                    "credencial_config_incompleta",
-                    empresa_id=str(empresa_id),
-                    provedor=cred.provedor,
-                )
+        for cred, (status, detalhe) in zip(credenciais, resultados):
+            cred.status = status
             cred.ultimo_health_check = agora
+            contagem[status] = contagem.get(status, 0) + 1
+            if status in ("error", "degraded", "config_incompleta") and detalhe:
+                log.info(
+                    "credencial_health_alerta",
+                    empresa_id=str(empresa_id),
+                    credencial_id=str(cred.id),
+                    provedor=cred.provedor,
+                    status=status,
+                    detalhe=detalhe,
+                )
 
         await session.commit()
 
-    sumario = {
-        "configurada": saudaveis,
-        "config_incompleta": sem_config,
-        "total": len(credenciais),
-    }
-    log.info(
-        "verificar_saude_canais_complete",
-        empresa_id=str(empresa_id),
-        **sumario,
-    )
-    return sumario
+    log.info("verificar_saude_canais_complete", empresa_id=str(empresa_id), **contagem)
+    return contagem
 
 
 @celery_app.task(name="app.workers.tasks.verificar_saude_canais.executar")

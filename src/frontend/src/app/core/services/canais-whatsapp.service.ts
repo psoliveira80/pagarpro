@@ -16,6 +16,14 @@ export interface NumeroWhatsApp {
   motivo_banimento: string | null;
 }
 
+export interface NovoNumeroPayload {
+  apelido?: string | null;
+  instance_id: string;
+  instance_token: string;
+  numero_e164: string;
+  eh_principal?: boolean;
+}
+
 export type StatusWhatsApp = 'ativo' | 'inativo' | 'banido' | 'desconectado';
 
 @Injectable({ providedIn: 'root' })
@@ -25,6 +33,12 @@ export class CanaisWhatsappService {
 
   async listar(): Promise<NumeroWhatsApp[]> {
     return firstValueFrom(this.http.get<NumeroWhatsApp[]>(this.baseUrl));
+  }
+
+  async cadastrar(payload: NovoNumeroPayload): Promise<NumeroWhatsApp> {
+    return firstValueFrom(
+      this.http.post<NumeroWhatsApp>(this.baseUrl, payload),
+    );
   }
 
   async marcarBanido(credencialId: string, motivo: string): Promise<{ clientes_migrados: number }> {

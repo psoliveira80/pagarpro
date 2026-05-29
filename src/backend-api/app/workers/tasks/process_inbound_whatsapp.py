@@ -94,8 +94,21 @@ async def _process(event_id: str, provider: str) -> dict:
             numero_origem_id = cred.id
         else:
             # Fallback: providers legados (zapi/uazapi/evolution_api).
-            # `get_whatsapp_gateway` busca o primeiro ativo na tabela.
-            adapter = await get_whatsapp_gateway(session)
+            # Esses providers não trazem instance_id no webhook nem suportam
+            # multi-número, então precisamos saber QUAL empresa receber. Se
+            # event.empresa_id não veio do webhook handler (ex: secret
+            # configurada por tenant), recusamos — sem fallback global pra
+            # evitar vazamento multi-tenant.
+            if event.empresa_id is None:
+                log.error(
+                    "legacy_webhook_sem_empresa_id",
+                    provider=provider,
+                    event_id=event_id,
+                )
+                event.processed = True
+                await session.commit()
+                return {"status": "error", "reason": "missing_tenant_context"}
+            adapter = await get_whatsapp_gateway(session, event.empresa_id)
 
         if adapter is None:
             log.error("no_whatsapp_adapter", provider=provider)

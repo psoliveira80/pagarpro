@@ -37,9 +37,6 @@ _ADAPTER_REGISTRY: dict[str, type] = {
     "evolution_go": EvolutionGoAdapter,
 }
 
-_adapter_cache: dict[str, IWhatsAppGateway] = {}
-
-
 def _build_adapter(provider: str, config: dict) -> IWhatsAppGateway | None:
     """Instantiate adapter from provider name + config dict."""
     if provider == "zapi":
@@ -78,36 +75,54 @@ def _build_adapter(provider: str, config: dict) -> IWhatsAppGateway | None:
 
 async def get_whatsapp_gateway(
     session: AsyncSession,
+    empresa_id,
 ) -> IWhatsAppGateway | None:
-    """Get the active WhatsApp gateway adapter from integration_credentials."""
+    """**LEGACY/DEPRECATED** — retorna o primeiro adapter WhatsApp ativo
+    do tenant.
+
+    Foi a função do modelo "1 provedor WhatsApp por empresa" anterior à
+    Story 13.21 (multi-número Evolution Go). Hoje só serve para:
+
+    - Providers legados (zapi/uazapi/evolution_api) que NÃO suportam
+      multi-número e ainda existem em empresas migradas de schemas
+      antigos.
+    - Fallback emergencial quando o roteamento por cliente
+      (`ServicoRoteamentoNumeros`) não consegue identificar destinatário.
+
+    **NÃO USE em código novo.** Para envio outbound:
+    - Conhece o cliente: `ServicoRoteamentoNumeros.credencial_para_outbound(cliente_id)`
+      + `get_adapter_por_credencial_id(session, cred.id)`.
+    - Conhece só o telefone: `get_evolution_go_por_credencial_telefone(session, empresa_id, telefone)`.
+
+    Antes desta refatoração (2026-05-29) a função tinha cache GLOBAL
+    cross-tenant — vazamento multi-tenant grave. Cache removido.
+    """
     from app.infrastructure.db.models.integration_credential import IntegrationCredential
 
-    # Check cache first
-    if _adapter_cache:
-        return next(iter(_adapter_cache.values()))
-
     stmt = select(IntegrationCredential).where(
+        IntegrationCredential.empresa_id == empresa_id,
         IntegrationCredential.categoria == "whatsapp",
         IntegrationCredential.ativo.is_(True),
-    ).limit(1)
+    ).order_by(IntegrationCredential.criado_em.asc()).limit(1)
 
     result = await session.execute(stmt)
     cred = result.scalar_one_or_none()
 
     if cred is None:
-        log.warning("no_active_whatsapp_provider")
+        log.warning("no_active_whatsapp_provider", empresa_id=str(empresa_id))
         return None
 
-    adapter = _build_adapter(cred.provedor, cred.config or {})
-    if adapter:
-        _adapter_cache[cred.provedor] = adapter
-
-    return adapter
+    return _build_adapter(cred.provedor, cred.config or {})
 
 
 def clear_adapter_cache() -> None:
-    """Clear cached adapters (e.g., after credential update)."""
-    _adapter_cache.clear()
+    """**No-op preservado pra compatibilidade com callers legados.**
+
+    Antes existia cache global `_adapter_cache`; removido em 2026-05-29
+    porque era cross-tenant. Adapters agora são construídos sob demanda
+    a cada chamada — overhead aceitável dado o ganho de isolamento.
+    """
+    return None
 
 
 # ─────────────────── Story 13.21 — Evolution Go multi-número ─────────────────

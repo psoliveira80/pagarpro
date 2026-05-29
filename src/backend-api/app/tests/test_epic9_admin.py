@@ -21,9 +21,18 @@ from app.api.v1.schemas.admin import (
 
 class TestIntegrationSchemas:
     def test_integration_create_defaults(self):
-        body = IntegrationCreate(category="whatsapp", provider="evolution_api")
+        # WhatsApp ficou bloqueado neste endpoint (passou pra /numeros-cobranca).
+        # Aqui testamos com uma categoria genérica que ainda usa /admin/integrations.
+        body = IntegrationCreate(category="llm", provider="openai")
         assert body.is_active is True
         assert body.config == {}
+
+    def test_integration_create_rejeita_whatsapp(self):
+        """Garantia da decisão arquitetural de 2026-05-29: WhatsApp tem
+        endpoint dedicado (POST /numeros-cobranca) porque cada credencial é
+        uma INSTÂNCIA (número), não um provedor único."""
+        with pytest.raises(ValueError, match=r"numeros-cobranca"):
+            IntegrationCreate(category="whatsapp", provider="evolution_go")
 
     def test_integration_update_partial(self):
         body = IntegrationUpdate(provider="zapi")

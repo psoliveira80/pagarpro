@@ -119,33 +119,55 @@ async def list_channels(
     session: SessionDep,
     user: CurrentUserDep,
 ) -> list[dict]:
-    """List all available messaging channels — reads from integration_credentials DB."""
+    """Lista canais de mensageria + status agregado.
+
+    WhatsApp: agora pode ter N instâncias por empresa (Story 13.21).
+    `configured` = ao menos 1 instância ativa; `healthy` = todas ativas
+    estão em estado conectado/configurada.
+    """
     from app.infrastructure.db.models.integration_credential import IntegrationCredential
 
-    stmt = select(IntegrationCredential).where(IntegrationCredential.ativo.is_(True))
+    stmt = select(IntegrationCredential).where(
+        IntegrationCredential.empresa_id == user.empresa_id,
+        IntegrationCredential.ativo.is_(True),
+    )
     result = await session.execute(stmt)
     db_integrations = result.scalars().all()
 
-    configured = {i.categoria: i for i in db_integrations}
+    # Agrupa por categoria (uma categoria pode ter N credenciais — caso WhatsApp)
+    por_categoria: dict[str, list[IntegrationCredential]] = {}
+    for cred in db_integrations:
+        por_categoria.setdefault(cred.categoria, []).append(cred)
 
-    all_types = [
-        {"type": "whatsapp", "label": "WhatsApp"},
-        {"type": "email", "label": "E-mail", "coming_soon": True},
-        {"type": "sms", "label": "SMS", "coming_soon": True},
-        {"type": "telegram", "label": "Telegram", "coming_soon": True},
+    all_types: list[tuple[str, str, bool]] = [
+        ("whatsapp", "WhatsApp", False),
+        ("email", "E-mail", True),
+        ("sms", "SMS", True),
+        ("telegram", "Telegram", True),
     ]
 
     channels = []
-    for t in all_types:
-        intg = configured.get(t["type"])
+    for type_id, label, coming_soon in all_types:
+        creds = por_categoria.get(type_id, [])
+        configured = len(creds) > 0
+        healthy_states = {"healthy", "configurada"}
+        healthy = configured and all(c.status in healthy_states for c in creds)
+        provider = creds[0].provedor if configured else None
+        if type_id == "whatsapp" and len(creds) > 1:
+            display_name = f"{label} ({len(creds)} números)"
+        elif configured:
+            display_name = f"{label} ({provider})"
+        else:
+            display_name = label
         channels.append({
-            "channel_type": t["type"],
-            "provider": intg.provedor if intg else None,
-            "display_name": f"{t['label']} ({intg.provedor})" if intg else t["label"],
-            "label": t["label"],
-            "configured": intg is not None,
-            "healthy": intg.status == "healthy" if intg else False,
-            "coming_soon": bool(t.get("coming_soon", False)),
+            "channel_type": type_id,
+            "provider": provider,
+            "instances_count": len(creds),
+            "display_name": display_name,
+            "label": label,
+            "configured": configured,
+            "healthy": healthy,
+            "coming_soon": coming_soon,
         })
 
     return channels
@@ -156,24 +178,46 @@ async def get_channel_status(
     session: SessionDep,
     user: CurrentUserDep,
 ) -> dict:
-    """Check WhatsApp channel health — reads from DB."""
+    """Resumo do canal WhatsApp do tenant: # instâncias, # saudáveis.
+
+    Antes retornava só "a primeira credencial". Agora retorna agregação
+    consistente com multi-número (Story 13.21).
+    """
     from app.infrastructure.db.models.integration_credential import IntegrationCredential
 
     stmt = select(IntegrationCredential).where(
+        IntegrationCredential.empresa_id == user.empresa_id,
         IntegrationCredential.categoria == "whatsapp",
         IntegrationCredential.ativo.is_(True),
     )
     result = await session.execute(stmt)
-    cred = result.scalar_one_or_none()
+    creds = list(result.scalars().all())
 
-    if cred is None:
-        return {"configured": False, "healthy": False, "provider": None, "message": "Nenhum canal WhatsApp configurado"}
+    if not creds:
+        return {
+            "configured": False,
+            "healthy": False,
+            "instances_count": 0,
+            "healthy_count": 0,
+            "provider": None,
+            "message": (
+                "Nenhum número WhatsApp configurado. Cadastre em "
+                "Configurações › Canais › WhatsApp."
+            ),
+        }
 
+    healthy_states = {"healthy", "configurada"}
+    saudaveis = sum(1 for c in creds if c.status in healthy_states)
     return {
         "configured": True,
-        "healthy": cred.status == "healthy",
-        "provider": cred.provedor,
-        "message": f"Canal {cred.provedor} configurado",
+        "healthy": saudaveis == len(creds),
+        "instances_count": len(creds),
+        "healthy_count": saudaveis,
+        "provider": creds[0].provedor,
+        "message": (
+            f"{saudaveis} de {len(creds)} número(s) "
+            f"em estado saudável"
+        ),
     }
 
 
@@ -204,20 +248,29 @@ async def send_broadcast(
     from app.infrastructure.db.models.integration_credential import IntegrationCredential
     from app.infrastructure.db.models.customer import Customer
 
-    # Check WhatsApp channel is configured
+    # Confere que o tenant tem AO MENOS 1 número WhatsApp ativo (Story 13.21
+    # multi-número — qualquer instância ativa basta porque o roteamento por
+    # cliente escolhe a credencial certa em tempo de envio).
     channel_stmt = select(IntegrationCredential).where(
+        IntegrationCredential.empresa_id == user.empresa_id,
         IntegrationCredential.categoria == "whatsapp",
         IntegrationCredential.ativo.is_(True),
-    )
+    ).limit(1)
     channel_result = await session.execute(channel_stmt)
     if channel_result.scalar_one_or_none() is None:
         raise HTTPException(
             status_code=422,
-            detail="Nenhum canal WhatsApp configurado. Configure um canal em Configurações > Integrações antes de enviar.",
+            detail=(
+                "Nenhum número WhatsApp configurado. Cadastre em "
+                "Configurações › Canais › WhatsApp antes de enviar."
+            ),
         )
 
-    # Get campaign
-    stmt = select(BroadcastCampaign).where(BroadcastCampaign.id == broadcast_id)
+    # Get campaign — multi-tenant guard.
+    stmt = select(BroadcastCampaign).where(
+        BroadcastCampaign.id == broadcast_id,
+        BroadcastCampaign.empresa_id == user.empresa_id,
+    )
     result = await session.execute(stmt)
     campaign = result.scalar_one_or_none()
 
@@ -227,12 +280,13 @@ async def send_broadcast(
     if campaign.status not in ("rascunho", "agendado"):
         raise HTTPException(status_code=400, detail="Este aviso já foi enviado ou está em andamento")
 
-    # Count recipients (active customers with phone)
+    # Conta destinatários (clientes ativos COM telefone, DA EMPRESA do user).
     recipients_count_stmt = select(func.count()).select_from(Customer).where(
+        Customer.empresa_id == user.empresa_id,
         Customer.excluido_em.is_(None),
         Customer.status == "ativo",
-        Customer.phone.isnot(None),
-        Customer.phone != "",
+        Customer.telefone.isnot(None),
+        Customer.telefone != "",
     )
     recipients_result = await session.execute(recipients_count_stmt)
     total_recipients = recipients_result.scalar_one()

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Integrations ---
@@ -24,6 +24,20 @@ class IntegrationCreate(BaseModel):
     provider: str
     config: dict = {}
     is_active: bool = True
+
+    @field_validator("category")
+    @classmethod
+    def _bloqueia_whatsapp_no_endpoint_generico(cls, v: str) -> str:
+        """WhatsApp tem endpoint dedicado (`POST /numeros-cobranca`) porque
+        cada credencial é uma INSTÂNCIA (número), não um provedor único.
+        Cadastrar via `/admin/integrations` mistura responsabilidades."""
+        if v == "whatsapp":
+            raise ValueError(
+                "Use POST /numeros-cobranca para cadastrar números WhatsApp. "
+                "A tela Integrações trata provedores singulares (LLM, GPS, "
+                "Pagamento etc.); WhatsApp tem tela dedicada em Canais."
+            )
+        return v
 
 
 class IntegrationUpdate(BaseModel):
