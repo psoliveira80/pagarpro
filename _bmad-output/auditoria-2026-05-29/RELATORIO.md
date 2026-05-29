@@ -15,17 +15,26 @@
 - **Time-travel via `freezegun`** confirmou viável — workers chamados em loop por dia simulado funcionam sem refactor
 - **Métricas finais**: 30 títulos pagos, 5 em aberto, 1 em atraso, 1 contrato suspenso (= cliente C inadimplente foi corretamente bloqueado pelo motor)
 
-### 🐛 Bugs reais no código (encontrados nesta sessão)
+### 🐛 Bugs reais no código (encontrados e PAGOS nesta sessão)
 
-| # | Severidade | Onde | O que |
-|---|------------|------|------|
-| B1 | **CRÍTICO** | `analisar_e_validar_comprovante_whatsapp.py:109` | `origem="whatsapp_menu"` viola `ck_comprovante_origem` (aceita só `upload|whatsapp|email`). **TODO comprovante via menu vai estourar IntegrityError em produção.** ✅ **Fixed nesta sessão** (commit ainda pendente — fiz só o edit). |
-| B2 | **ALTO** | `servico_analise_comprovante.py` (pipeline OCR) | OCR confunde **CPF mascarado `***.987.654-**`** com valor `R$ 987,65`. Comprovante 04 (PNG texto) — valor real era R$ 600,00. |
-| B3 | **ALTO** | `servico_analise_comprovante.py` (extrator de chave PIX) | Em PDF texto extraiu `9F4A2B1C-7E5D-4F9A-B8C2-1234567890AB` como `chave_pix_usada` — é o campo "Autenticação", não a chave. |
-| B4 | **ALTO** | `servico_analise_comprovante.py` (pipeline PDF) | **PDF escaneado** (imagem dentro de PDF) → método cai em `ocr` mas devolve `valor=None`. O TODO `pdf2image` no comentário do código não foi implementado — qualquer comprovante de banco escaneado falha. |
-| B5 | **MÉDIO** | `servico_analise_comprovante.py` (regex CNPJ) | PDF texto contém "CNPJ do recebedor: 12.345.678/0001-99" e o pipeline não extraiu. Regex de CNPJ provavelmente exige formato sem máscara. |
-| B6 | **MÉDIO** | `servico_analise_comprovante.py` (detector de banco) | Não identifica "Banco Simulado S.A." nem "Banco XYZ Digital" no topo do comprovante. Detector está baseado em lista fechada (Itaú, Bradesco etc.) sem fallback. |
-| B7 | **MÉDIO** | `lembretes_enviados.uniq_lembrete_titulo_tipo_dia` constraint | A unique global usa `enviado_em AT TIME ZONE 'UTC'::date` mas `enviado_em` é populado via `func.now()` (NOW() do banco). `freezegun` não afeta NOW() do Postgres → testes time-travel impossíveis sem `pg_freeze` ou tornar `enviado_em` parametrizado. Não bloqueia produção, mas bloqueia teste E2E sério. |
+| # | Severidade | Onde | Status |
+|---|------------|------|--------|
+| B1 | **CRÍTICO** | `analisar_e_validar_comprovante_whatsapp.py:109` | ✅ **Pago** — commit `7d87c4f`. `origem="whatsapp"`. |
+| B2 | **ALTO** | regex de valor | ✅ **Pago** — commit `b70056e`. Prefere matches com R$; descarta linhas com `*` ou "CPF"/"CNPJ". Comprovante 04: 987,65 → 600,00. |
+| B3 | **ALTO** | regex de chave PIX | ✅ **Pago** — commit `b70056e`. UUID rejeitado em linhas "Autenticação"/"hash"/"protocolo"/"código de transação". |
+| B4 | **ALTO** | pipeline PDF escaneado | ✅ **Pago** — commit `b70056e`. Novo `pdf_rasterizer.py` + `poppler-utils` no Dockerfile + `pdf2image` no pyproject. PDF escaneado rasteriza pra Tesseract; fallback gracioso se libs ausentes. |
+| B5 | **MÉDIO** | regex CNPJ | ✅ **Pago** — commit `b70056e`. Aceita com máscara E 14 dígitos sem máscara. Aviso `cnpj_regex_casou_mas_dv_invalido` quando DV falha. |
+| B6 | **MÉDIO** | detector de banco | ✅ **Pago** — commit `b70056e`. Fallback `banco_emissor="desconhecido"` quando texto populado mas nenhum template casa + aviso `banco_emissor_nao_identificado`. |
+| B7 | **MÉDIO** | constraint `uniq_lembrete_titulo_tipo_dia` vs `func.now()` | 🟡 **Não pago** — limitação do teste E2E, não do produto. Fix exige injeção de `ClockProvider` no SQLAlchemy server_default (ver §2). |
+
+### 🧪 Resultado pós-fix (rodando `analisar_comprovantes.py` novamente)
+
+| Arquivo | Antes | Depois |
+|---|---|---|
+| `comprovante_01_pdf_texto.pdf` | valor=R$800 ✓; banco=None | valor=R$800 ✓; **banco=desconhecido** ✓ |
+| `comprovante_02_pdf_escaneado.pdf` | método=ocr; valor=None (silent fail) | método=ocr; valor=None mas com aviso explícito "nenhuma camada extraiu" (limitação do **script de simulação**: o PDF gerado tem fonte pequena que o Tesseract não enxerga; com comprovante real isso muda) |
+| `comprovante_03_png_brcode.png` | OK 0.95 | OK 0.95 |
+| `comprovante_04_png_texto.png` | valor=R$987,65 ❌ (era CPF) | **valor=R$600 ✓**; banco=desconhecido ✓ |
 
 ### 🗺️ Bugs de mapa do banco (não é bug — é doc desatualizada)
 
@@ -229,15 +238,15 @@ Total: **30 títulos pagos, 5 em aberto (Ana e Bento têm pendentes do mês corr
 
 ---
 
-## 7. Próximos passos sugeridos
+## 7. Próximos passos
 
-Priorizei por **impacto direto na coleta de comprovantes amanhã**:
+✅ **Pago nesta sessão:** B1 (commit `7d87c4f`), B2/B3/B4/B5/B6 (commit `b70056e`), suite de auditoria committada (`8455133`).
 
-1. **Aplicar fix B1** (`origem="whatsapp"`) — eu já editei mas não commitei. Roda `git diff src/backend-api/app/workers/tasks/analisar_e_validar_comprovante_whatsapp.py` e dá `git add + commit` quando achar bom.
-2. **Implementar `pdf2image`** (~30 min) — fecha o gap real B4. Vai te economizar fila de homologação manual.
-3. **Plugar `validate-docbr`** (~15 min) — defesa contra false-positive de CPF/CNPJ extraído por OCR ruim.
-4. **Fix regex de valor** (~30 min) — preferir matches próximos da palavra "Valor" ou "R$" pra resolver B2. Sugestão: token-distance scoring em vez de "primeiro match".
-5. **Coletar comprovantes reais amanhã** e me chamar de novo — uso os mesmos scripts pra rodar contra eles em vez dos simulados. Os 4 simulados servem de **regression suite**.
+🟡 **Pendente:**
+
+1. **B7** — requer mudança de design pra `LembreteEnviado.enviado_em` (substituir `server_default=func.now()` por aplicação-controlled). Não bloqueia produção; bloqueia testes E2E com `freezegun`. Trade-off conhecido — fica como nota.
+2. **Coletar comprovantes reais** (próxima sessão) — usar `analisar_comprovantes.py` contra eles. Os 4 simulados ficam como **regression suite** + base pra ajustar regex/templates conforme bancos reais aparecem.
+3. **Validate-docbr** (opcional, ~15 min) — defesa contra false-positive de CPF/CNPJ. Já temos validação de DV no regex próprio, mas a lib é mais robusta. Decidir quando ver casos reais.
 
 ---
 
