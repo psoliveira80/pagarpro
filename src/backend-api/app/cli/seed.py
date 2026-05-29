@@ -103,6 +103,12 @@ CONFIGURACOES_PADRAO: list[tuple[str, str, str, str, str]] = [
     # ── IA atendente (Story 13.26 — adiada V2; flag já registrada) ──
     ("ia_atendente_ativa", "comunicacao", "booleano", "false",
      "Toggle global de IA atendente (false = menu rígido apenas)"),
+    # ── WhatsApp multi-número (Story 13.21 + ajuste 2026-05-29) ──
+    ("max_clientes_por_numero_whatsapp", "whatsapp", "inteiro", "150",
+     "Capacidade máxima de clientes atribuídos por número WhatsApp. "
+     "Quando todos os números ativos atingem o teto, novos clientes ficam sem "
+     "atribuição e o gestor é notificado pra ativar mais um número. "
+     "Cliente já atribuído NUNCA migra por capacidade — só por banimento."),
 ]
 
 

@@ -27,6 +27,7 @@ import respx
 from sqlalchemy import text
 
 from app.application.services.servico_roteamento_numeros import (
+    LimiteClientesPorNumeroEsgotadoError,
     NenhumNumeroAtivoError,
     ServicoRoteamentoNumeros,
 )
@@ -561,5 +562,78 @@ async def test_listar_numeros_inclui_contagem_de_clientes():
             assert len(lista) == 2
             total = sum(n["clientes_atribuidos"] for n in lista)
             assert total == 4
+    finally:
+        await _cleanup(fx["empresa_id"])
+
+
+# ──────────────────────────────────────────────────────────────────
+# Limite de capacidade por número (ajuste 2026-05-29)
+# ──────────────────────────────────────────────────────────────────
+
+
+async def _configurar_limite(empresa_id: UUID, limite: int) -> None:
+    """Grava `max_clientes_por_numero_whatsapp` no nível da empresa."""
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.execute(text("SET LOCAL row_security = off"))
+        await conn.execute(
+            text(
+                "INSERT INTO config.configuracoes_sistema "
+                "  (empresa_id, slug, modulo, tipo_valor, valor) "
+                "VALUES (:e, 'max_clientes_por_numero_whatsapp', 'whatsapp', "
+                "        'inteiro', :v) "
+                "ON CONFLICT (empresa_id, slug) DO UPDATE SET valor = EXCLUDED.valor"
+            ),
+            {"e": str(empresa_id), "v": str(limite)},
+        )
+
+
+@pytest.mark.asyncio
+async def test_atribuir_respeita_limite_capacidade_por_numero():
+    """Com limite=2 e 2 números, o 3º cliente cai no 2º número (que ainda tem
+    capacidade), o 5º cliente já não cabe em nenhum → erro de limite."""
+    fx = await _criar_fixture(qtd_numeros=2, qtd_clientes=5)
+    await _configurar_limite(fx["empresa_id"], limite=2)
+    try:
+        sm = get_sessionmaker()
+        async with sm() as session:
+            await _set_tenant(session, fx["empresa_id"])
+            servico = ServicoRoteamentoNumeros(session, fx["empresa_id"])
+            atribuidos: list[UUID] = []
+            for cliente_id in fx["clientes"][:4]:
+                atribuidos.append(await servico.atribuir_numero(cliente_id))
+            await session.commit()
+            # 4 clientes em 2 números com limite 2 → exatamente cheio
+            assert sorted(atribuidos) == sorted(
+                [fx["credenciais"][0]] * 2 + [fx["credenciais"][1]] * 2
+            )
+            with pytest.raises(LimiteClientesPorNumeroEsgotadoError):
+                await servico.atribuir_numero(fx["clientes"][4])
+    finally:
+        await _cleanup(fx["empresa_id"])
+
+
+@pytest.mark.asyncio
+async def test_cliente_ja_atribuido_nao_perde_numero_quando_limite_esgota():
+    """Regra inegociável: cliente já vinculado a um número ATIVO mantém o
+    número mesmo quando todos estão no teto. Atribuição estável vence
+    capacidade. Só perde se o número for banido."""
+    fx = await _criar_fixture(qtd_numeros=1, qtd_clientes=2)
+    await _configurar_limite(fx["empresa_id"], limite=1)
+    try:
+        sm = get_sessionmaker()
+        async with sm() as session:
+            await _set_tenant(session, fx["empresa_id"])
+            servico = ServicoRoteamentoNumeros(session, fx["empresa_id"])
+            atribuido = await servico.atribuir_numero(fx["clientes"][0])
+            await session.commit()
+            assert atribuido == fx["credenciais"][0]
+            # Re-chamar pro MESMO cliente devolve o mesmo número (mesmo que
+            # o número esteja no teto agora — atribuição é estável).
+            reatribuido = await servico.atribuir_numero(fx["clientes"][0])
+            assert reatribuido == atribuido
+            # NOVO cliente, com número cheio, levanta erro de limite.
+            with pytest.raises(LimiteClientesPorNumeroEsgotadoError):
+                await servico.atribuir_numero(fx["clientes"][1])
     finally:
         await _cleanup(fx["empresa_id"])

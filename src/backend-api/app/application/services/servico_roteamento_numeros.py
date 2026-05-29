@@ -24,6 +24,7 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.services.servico_configuracao import ServicoConfiguracao
 from app.application.shared.audit_logger import AuditLogger
 from app.infrastructure.db.models.cadastro import Cliente
 from app.infrastructure.db.models.config import CredencialIntegracao
@@ -39,10 +40,26 @@ STATUS_BANIDO = "banido"            # WhatsApp baniu (detectado)
 STATUS_DESCONECTADO = "desconectado"  # sessão caiu, recuperável
 
 
+# Capacidade default por número (parametrizável por tenant via
+# config.configuracoes_sistema slug=max_clientes_por_numero_whatsapp).
+MAX_CLIENTES_POR_NUMERO_PADRAO = 150
+SLUG_LIMITE = "max_clientes_por_numero_whatsapp"
+MODULO_LIMITE = "whatsapp"
+
+
 class NenhumNumeroAtivoError(Exception):
     """Levantada quando a empresa não tem nenhum número WhatsApp ativo
     pra atender. Caller decide se notifica gestor ou silencia (ex.:
     inbound de cliente cujo número da empresa foi banido).
+    """
+
+
+class LimiteClientesPorNumeroEsgotadoError(NenhumNumeroAtivoError):
+    """Todos os números ativos atingiram `max_clientes_por_numero_whatsapp`.
+    Gestor precisa ativar novo número ou aumentar o limite.
+
+    Subclassa `NenhumNumeroAtivoError` pra que callers que já tratam a
+    falta de número continuem funcionando sem mudança.
     """
 
 
@@ -348,12 +365,15 @@ class ServicoRoteamentoNumeros:
 
         1. Lista credenciais ativas da empresa (categoria='whatsapp').
         2. Calcula contagem de clientes por credencial via subquery.
-        3. Ordena: menor contagem primeiro; em caso de empate, `eh_principal=true`
+        3. **Filtra candidatos cuja contagem `< max_clientes_por_numero_whatsapp`**
+           (capacidade parametrizada por tenant — default 150).
+        4. Ordena: menor contagem primeiro; em caso de empate, `eh_principal=true`
            primeiro; em segundo desempate, ordem alfabética de `instance_id`
            pra determinismo.
+
+        Levanta `LimiteClientesPorNumeroEsgotadoError` se TODOS os números
+        ativos atingiram o teto — gestor precisa ativar mais.
         """
-        # Pega ativas e em ordem alfabética por instance_id pra estabilidade
-        # nos testes.
         stmt = select(CredencialIntegracao).where(
             CredencialIntegracao.empresa_id == self.empresa_id,
             CredencialIntegracao.categoria == "whatsapp",
@@ -364,9 +384,6 @@ class ServicoRoteamentoNumeros:
 
         candidatos = list((await self.session.execute(stmt)).scalars().all())
 
-        # Filtra por status_whatsapp='ativo' no JSONB (não tem como filtrar
-        # eficientemente na query sem expressão; em volume baixo (poucos
-        # números por empresa) filtrar em Python é OK).
         candidatos = [
             c for c in candidatos
             if self._status_credencial(c) == STATUS_ATIVO
@@ -395,19 +412,51 @@ class ServicoRoteamentoNumeros:
             for row in (await self.session.execute(contagens_stmt)).all()
         }
 
+        # Filtra por capacidade: descarta números que já atingiram o teto
+        limite = await self._obter_limite_clientes_por_numero()
+        com_capacidade = [
+            c for c in candidatos
+            if int(contagens.get(c.id, 0)) < limite
+        ]
+        if not com_capacidade:
+            ocupacao = {str(c.id): int(contagens.get(c.id, 0)) for c in candidatos}
+            log.warning(
+                "limite_clientes_por_numero_esgotado",
+                empresa_id=str(self.empresa_id),
+                limite=limite,
+                ocupacao=ocupacao,
+            )
+            raise LimiteClientesPorNumeroEsgotadoError(
+                f"Empresa {self.empresa_id}: todos os {len(candidatos)} números "
+                f"ativos atingiram o limite de {limite} clientes. "
+                "Ative um novo número ou aumente "
+                f"`{SLUG_LIMITE}` em config."
+            )
+
         def _chave_ordenacao(cred: CredencialIntegracao) -> tuple:
             cnt = int(contagens.get(cred.id, 0))
             eh_principal = (cred.config or {}).get("eh_principal", False)
             instance_id = (cred.config or {}).get("instance_id", "") or ""
             return (cnt, 0 if eh_principal else 1, instance_id)
 
-        candidatos.sort(key=_chave_ordenacao)
-        escolhido = candidatos[0]
+        com_capacidade.sort(key=_chave_ordenacao)
+        escolhido = com_capacidade[0]
         log.debug(
             "numero_escolhido",
             empresa_id=str(self.empresa_id),
             credencial_id=str(escolhido.id),
             contagem=int(contagens.get(escolhido.id, 0)),
+            limite=limite,
             eh_principal=(escolhido.config or {}).get("eh_principal", False),
         )
         return escolhido.id
+
+    async def _obter_limite_clientes_por_numero(self) -> int:
+        """Lê config `max_clientes_por_numero_whatsapp` do tenant (com fallback
+        para o default global). Retorna `MAX_CLIENTES_POR_NUMERO_PADRAO` se
+        não configurado em lugar nenhum."""
+        svc = ServicoConfiguracao(self.session, self.empresa_id, redis=None)
+        valor = await svc.obter_inteiro(
+            SLUG_LIMITE, MODULO_LIMITE, padrao=MAX_CLIENTES_POR_NUMERO_PADRAO
+        )
+        return max(1, valor)  # defesa: nunca aceita ≤ 0
