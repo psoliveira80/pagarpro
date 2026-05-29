@@ -40,7 +40,10 @@ async def _process(event_id: str, provider: str) -> dict:
     from sqlalchemy import select
 
     from app.core.agent.conversation_store import ConversationStore
-    from app.infrastructure.adapters.whatsapp.whatsapp_factory import get_whatsapp_gateway
+    from app.infrastructure.adapters.whatsapp.whatsapp_factory import (
+        get_evolution_go_por_instance_id,
+        get_whatsapp_gateway,
+    )
     from app.infrastructure.db.models.customer import Customer
     from app.infrastructure.db.models.payable import WebhookEventRaw
     from app.infrastructure.db.session import get_sessionmaker
@@ -59,8 +62,41 @@ async def _process(event_id: str, provider: str) -> dict:
         payload = event.payload or {}
         headers = payload.pop("headers", {})
 
-        # Parse via adapter
-        adapter = await get_whatsapp_gateway(session, provider)
+        # Story 13.21 — para Evolution Go, identifica a credencial específica
+        # pelo `instanceId` no payload. Isso traz contexto multi-tenant +
+        # numero_origem_id pra timeline unificada.
+        numero_origem_id = None
+        if provider == "evolution_go":
+            instance_id = payload.get("instanceId") or payload.get("instance_id")
+            if not instance_id:
+                log.warning(
+                    "evolution_go_webhook_sem_instance_id",
+                    event_id=event_id,
+                )
+                event.processed = True
+                await session.commit()
+                return {"status": "skipped", "reason": "missing_instance_id"}
+
+            adapter, cred = await get_evolution_go_por_instance_id(session, instance_id)
+            if adapter is None or cred is None:
+                log.error(
+                    "evolution_go_instance_nao_cadastrada",
+                    instance_id=instance_id,
+                    event_id=event_id,
+                )
+                event.processed = True
+                await session.commit()
+                return {"status": "error", "reason": "instance_not_registered"}
+
+            # Tenant context vem da credencial
+            if event.empresa_id is None:
+                event.empresa_id = cred.empresa_id
+            numero_origem_id = cred.id
+        else:
+            # Fallback: providers legados (zapi/uazapi/evolution_api).
+            # `get_whatsapp_gateway` busca o primeiro ativo na tabela.
+            adapter = await get_whatsapp_gateway(session)
+
         if adapter is None:
             log.error("no_whatsapp_adapter", provider=provider)
             event.processed = True
@@ -163,7 +199,30 @@ async def _process(event_id: str, provider: str) -> dict:
             media_mime=msg.media_mime,
             external_id=msg.external_id,
             sent_by="customer",
+            numero_origem_id=numero_origem_id,
         )
+
+        # Story 13.21 — atribui o número ao cliente se for o primeiro contato.
+        # Idempotente: ServicoRoteamentoNumeros respeita atribuição estável.
+        if numero_origem_id is not None and customer_id is not None:
+            try:
+                from app.application.services.servico_roteamento_numeros import (
+                    ServicoRoteamentoNumeros,
+                )
+                # Carrega cliente atualizado pra checar se já tem número
+                from app.infrastructure.db.models.cadastro import Cliente
+                cliente = (await session.execute(
+                    select(Cliente).where(Cliente.id == customer_id)
+                )).scalar_one_or_none()
+                if cliente is not None and cliente.numero_origem_id is None:
+                    cliente.numero_origem_id = numero_origem_id
+                    log.info(
+                        "cliente_recebeu_numero_origem",
+                        cliente_id=str(customer_id),
+                        numero_origem_id=str(numero_origem_id),
+                    )
+            except Exception:
+                log.warning("atribuir_numero_origem_falhou", exc_info=True)
 
         event.processed = True
         await session.commit()

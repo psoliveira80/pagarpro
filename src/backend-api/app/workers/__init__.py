@@ -24,6 +24,7 @@ celery_app.conf.include = [
     "app.workers.tasks.verificar_saude_canais",
     "app.workers.tasks.alertar_vencimentos_proximos",
     "app.workers.tasks.processar_titulos_vencidos",
+    "app.workers.tasks.monitorar_saude_numeros",
     # Tasks system-wide (sem tenant)
     "app.workers.tasks.atualizar_views",
     "app.workers.tasks.backup",
@@ -84,6 +85,13 @@ celery_app.conf.beat_schedule = {
     "atualizar-views": {
         "task": "app.workers.tasks.atualizar_views.executar",
         "schedule": crontab(minute=0),
+    },
+    # A cada 15 minutos (Epic 13, Story 13.21) — saúde de todos os números
+    # WhatsApp (Evolution Go) cadastrados de todos os clientes. System-wide
+    # pois é responsabilidade do provedor SaaS (não rotaciona por empresa).
+    "monitorar-saude-numeros": {
+        "task": "app.workers.tasks.monitorar_saude_numeros.executar",
+        "schedule": crontab(minute="*/15"),
     },
     # Diariamente às 03:00 UTC — backup completo (system-wide).
     "daily-backup-03utc": {

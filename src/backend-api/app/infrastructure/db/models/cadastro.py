@@ -77,6 +77,13 @@ class Cliente(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     criado_por_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("acesso.usuarios.id"), nullable=True
     )
+    # Story 13.21 — número de WhatsApp da empresa atribuído a este cliente.
+    # Cliente fica fixo nesse número (atribuição estável); só migra se o número
+    # for marcado como banido pelo `ServicoRoteamentoNumeros`.
+    numero_origem_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("config.credenciais_integracao.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # --- Compat aliases (Story 12.3 transition) ---
     full_name = synonym("nome_completo")

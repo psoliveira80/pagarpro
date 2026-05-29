@@ -63,7 +63,14 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-4o"
 
     # WhatsApp Provider
-    WHATSAPP_PROVIDER: str = ""  # zapi | uazapi | evolution_api
+    WHATSAPP_PROVIDER: str = ""  # zapi | uazapi | evolution_api | evolution_go
+
+    # Evolution Go (Story 13.21) — gateway WhatsApp central do SaaS.
+    # api_url e admin_token são GLOBAIS do provedor (Pablo). Cada empresa cliente
+    # tem suas próprias instâncias dentro deste Evolution Go, e cada instância
+    # tem seu instance_id + instance_token armazenados em config.credenciais_integracao.
+    EVOLUTION_GO_API_URL: str = "https://evo-go.megaflow.work"
+    EVOLUTION_GO_ADMIN_TOKEN: str = ""
 
     # Agent
     AGENT_DRY_RUN: bool = False

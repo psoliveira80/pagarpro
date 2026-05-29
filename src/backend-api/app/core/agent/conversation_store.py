@@ -92,8 +92,13 @@ class ConversationStore:
         tool_name: str | None = None,
         sent_by: str | None = None,
         metadata_extra: dict | None = None,
+        numero_origem_id: UUID | None = None,
     ) -> ConversationMessage:
-        """Append a message to a conversation."""
+        """Append a message to a conversation.
+
+        Story 13.21: `numero_origem_id` indica qual número de WhatsApp (credencial
+        Evolution Go) processou a mensagem. Permite timeline unificada multi-número.
+        """
         now = datetime.now(timezone.utc)
         msg = ConversationMessage(
             conversation_id=conversation_id,
@@ -108,6 +113,7 @@ class ConversationStore:
             status="sent",
             metadata_extra=metadata_extra,
             sent_at=now,
+            numero_origem_id=numero_origem_id,
         )
         self.session.add(msg)
 

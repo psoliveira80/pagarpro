@@ -187,6 +187,11 @@ def create_app() -> FastAPI:
 
     app.include_router(conciliacao_router, prefix="/api/v1")
 
+    # API v1 — números de cobrança WhatsApp (Epic 13, Story 13.21)
+    from app.api.v1.numeros_cobranca_routes import router as numeros_cobranca_router
+
+    app.include_router(numeros_cobranca_router, prefix="/api/v1")
+
     # SSE routes
     from app.api.sse import router as sse_router
 
