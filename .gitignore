@@ -61,3 +61,8 @@ Thumbs.db
 # --- Output temporário do BMad ---
 _bmad-output/**/*.tmp
 evo-crm-community/
+
+# --- Artefatos de auditoria (runtime, não committar) ---
+_bmad-output/auditoria-*/logs/
+_bmad-output/auditoria-*/whatsapp-envios/
+_bmad-output/auditoria-*/comprovantes-simulados/

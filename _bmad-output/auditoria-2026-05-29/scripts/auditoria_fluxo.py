@@ -120,9 +120,13 @@ async def _limpar_uma_empresa(empresa_id) -> None:
     engine = get_engine()
     async with engine.connect() as conn:
         await conn.execute(text("SET row_security = off"))
+        # ATENÇÃO — schemas REAIS (não bate com a documentação):
+        #   comprovantes_pagamento e lembretes_enviados → schema FINANCEIRO
+        #   conversas e mensagens                       → schema COBRANCA
+        # Registrado em bugs.json como ACHADO #1 da auditoria.
         tabelas = [
-            ("cobranca", "comprovantes_pagamento"),
-            ("cobranca", "lembretes_enviados"),
+            ("financeiro", "comprovantes_pagamento"),
+            ("financeiro", "lembretes_enviados"),
             ("cobranca", "mensagens"),
             ("cobranca", "conversas"),
             ("financeiro", "movimentos_titulo_receber"),
@@ -477,7 +481,7 @@ async def cliente_envia_comprovante(
                 tipo_mime=mime,
                 arquivo_url=f"file://{arquivo}",
                 cliente_id=cliente_id,
-                origem="auditoria_e2e",
+                origem="whatsapp",  # constraint ck_comprovante_origem
                 telefone_remetente="5511988880002",
             )
             await s.commit()
@@ -624,14 +628,14 @@ async def coletar_metricas_finais(empresa_id: UUID) -> dict:
             "FROM cadastro.clientes WHERE empresa_id=:e ORDER BY score DESC", **eid)
         comprovantes = await q(
             "SELECT metodo_analise, status, count(*) "
-            "FROM cobranca.comprovantes_pagamento WHERE empresa_id=:e "
+            "FROM financeiro.comprovantes_pagamento WHERE empresa_id=:e "
             "GROUP BY metodo_analise, status", **eid)
         lembretes = await q(
-            "SELECT canal, sucesso, count(*) FROM cobranca.lembretes_enviados "
+            "SELECT canal, sucesso, count(*) FROM financeiro.lembretes_enviados "
             "WHERE empresa_id=:e GROUP BY canal, sucesso", **eid)
         execucoes_motor = await q(
-            "SELECT nome_tarefa, status, count(*) FROM motor.execucoes_motor "
-            "WHERE empresa_id=:e GROUP BY nome_tarefa, status", **eid)
+            "SELECT nome_tarefa, situacao, count(*) FROM motor.execucoes_motor "
+            "WHERE empresa_id=:e GROUP BY nome_tarefa, situacao", **eid)
         whatsapp_envios = len(list(PASTA_WHATSAPP.glob("*.txt")))
 
     return {
