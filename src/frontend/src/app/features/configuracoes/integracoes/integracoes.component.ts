@@ -1,5 +1,6 @@
 ﻿import { Component, ChangeDetectionStrategy, inject, signal, computed, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { UiIconComponent } from '../../../shared/components/icon/icon.component';
 import { CustomSelectComponent, SelectOption } from '../../../shared/components/custom-select/custom-select.component';
 import { ModalComponent } from '../../../shared/components/modal/modal.component';
@@ -33,7 +34,7 @@ interface CategoryDef {
 @Component({
   selector: 'app-integracoes',
   standalone: true,
-  imports: [UiIconComponent, DatePipe, CustomSelectComponent, ModalComponent, ToastComponent],
+  imports: [UiIconComponent, DatePipe, RouterLink, CustomSelectComponent, ModalComponent, ToastComponent],
   templateUrl: './integracoes.component.html',
   styleUrl: './integracoes.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -54,38 +55,9 @@ export class IntegracoesComponent implements OnInit {
   readonly formFields = signal<Record<string, string>>({});
 
   readonly categories: CategoryDef[] = [
-    {
-      id: 'whatsapp', label: 'WhatsApp', icon: 'heroChatBubbleLeftRight',
-      providers: [
-        {
-          id: 'zapi', label: 'Z-API',
-          helpText: 'Acesse z-api.io para obter suas credenciais',
-          fields: [
-            { key: 'instance_id', label: 'Instance ID', type: 'text', placeholder: 'Seu Instance ID', required: true },
-            { key: 'token', label: 'Token', type: 'password', placeholder: 'Token de acesso', required: true },
-            { key: 'client_token', label: 'Client Token', type: 'password', placeholder: 'Client Token (webhook)', required: false },
-          ],
-        },
-        {
-          id: 'uazapi', label: 'Uazapi',
-          helpText: 'Acesse uazapi.com para obter suas credenciais',
-          fields: [
-            { key: 'base_url', label: 'URL da API', type: 'url', placeholder: 'https://api.uazapi.com', required: true },
-            { key: 'api_key', label: 'API Key', type: 'password', placeholder: 'Sua chave de API', required: true },
-            { key: 'instance', label: 'Instância', type: 'text', placeholder: 'Nome da instância', required: true },
-          ],
-        },
-        {
-          id: 'evolution_api', label: 'Evolution API',
-          helpText: 'Self-hosted. Configure o endereço do seu servidor Evolution API',
-          fields: [
-            { key: 'base_url', label: 'URL do Servidor', type: 'url', placeholder: 'https://evolution.seuserver.com', required: true },
-            { key: 'api_key', label: 'API Key', type: 'password', placeholder: 'Chave de autenticação', required: true },
-            { key: 'instance', label: 'Nome da Instância', type: 'text', placeholder: 'default', required: true },
-          ],
-        },
-      ],
-    },
+    // WhatsApp foi removido daqui em 2026-05-29 — virou tela dedicada em
+    // Configurações › Canais › WhatsApp. Misturar provedor (config global)
+    // com instância (número específico) na mesma tela induzia erro de uso.
     {
       id: 'llm', label: 'Provedor de IA (LLM)', icon: 'heroSparkles',
       providers: [

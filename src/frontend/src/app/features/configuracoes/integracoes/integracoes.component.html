@@ -5,6 +5,29 @@
     <p class="text-sm text-[var(--text-muted)] mt-1">Conecte provedores externos ao sistema</p>
   </div>
 
+  <!-- Banner: WhatsApp foi movido pra Canais (Sally / decisão 2026-05-29) -->
+  <a
+    routerLink="/sistema/configuracoes/canais/whatsapp"
+    class="flex items-center gap-3 rounded-2xl border border-[var(--border)]
+           bg-[var(--surface-elevated)] px-4 py-3
+           hover:border-[var(--accent)] hover:shadow-md
+           transition-all cursor-pointer no-underline group"
+  >
+    <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--accent)]/10 shrink-0">
+      <ui-icon name="heroChatBubbleLeftRight" size="1.25rem" class="text-[var(--accent)]" />
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm font-semibold text-[var(--text-primary)]">
+        WhatsApp agora fica em Canais
+      </div>
+      <div class="text-xs text-[var(--text-muted)] mt-0.5">
+        Cadastro e monitoramento das instâncias (números) ficam em uma tela
+        dedicada com ocupação, status de saúde e ações de banimento.
+      </div>
+    </div>
+    <ui-icon name="heroArrowRight" size="1rem" class="text-[var(--text-muted)] group-hover:text-[var(--accent)] shrink-0" />
+  </a>
+
   <!-- Category Cards -->
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     @for (cat of categories; track cat.id) {
