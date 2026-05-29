@@ -87,23 +87,77 @@ export class ConversationService {
     let httpParams = new HttpParams();
     if (params.status) httpParams = httpParams.set('status', params.status);
     if (params.page !== undefined) httpParams = httpParams.set('page', params.page.toString());
-    if (params.size !== undefined) httpParams = httpParams.set('size', params.size.toString());
+    if (params.size !== undefined) httpParams = httpParams.set('page_size', params.size.toString());
 
-    return firstValueFrom(
-      this.http.get<ConversationListResponse>(this.apiUrl, { params: httpParams }),
+    const raw = await firstValueFrom(
+      this.http.get<{ items: any[]; total: number; page: number; page_size: number }>(
+        this.apiUrl,
+        { params: httpParams },
+      ),
     );
+    // Backend retorna shape ligeiramente diferente — normaliza pro front.
+    return {
+      items: raw.items.map((c) => this.normalizeConversation(c)),
+      total: raw.total,
+      page: raw.page,
+      size: raw.page_size,
+    };
+  }
+
+  private normalizeConversation(c: any): Conversation {
+    const agentMode: 'auto' | 'manual' = c.agent_active === false ? 'manual' : 'auto';
+    const status =
+      c.status === 'ativa' ? 'active'
+      : c.status === 'pausada' ? 'waiting'
+      : c.status === 'encerrada' ? 'closed'
+      : (c.status as Conversation['status']);
+    return {
+      id: c.id,
+      customer_id: c.customer_id ?? '',
+      customer: c.customer ?? null,
+      channel: c.channel,
+      status,
+      agent_mode: agentMode,
+      last_message_at: c.last_message_at ?? c.created_at,
+      unread_count: c.unread_count ?? 0,
+      last_message_preview: c.last_message_preview ?? null,
+      criado_em: c.created_at,
+      updated_at: c.updated_at ?? c.created_at,
+    };
   }
 
   async getMessages(conversationId: string): Promise<ConversationMessage[]> {
-    return firstValueFrom(
-      this.http.get<ConversationMessage[]>(`${this.apiUrl}/${conversationId}/messages`),
+    const raw = await firstValueFrom(
+      this.http.get<any[]>(`${this.apiUrl}/${conversationId}/messages`),
     );
+    // Backend retorna msgs em ordem desc; mostra ascendente (mais antigas em cima).
+    return raw
+      .map((m) => this.normalizeMessage(m, conversationId))
+      .sort((a, b) => a.criado_em.localeCompare(b.criado_em));
   }
 
   async sendMessage(conversationId: string, payload: SendMessagePayload): Promise<ConversationMessage> {
-    return firstValueFrom(
-      this.http.post<ConversationMessage>(`${this.apiUrl}/${conversationId}/messages`, payload),
+    const raw = await firstValueFrom(
+      this.http.post<any>(`${this.apiUrl}/${conversationId}/messages`, {
+        content_text: payload.content,
+      }),
     );
+    return this.normalizeMessage(raw, conversationId);
+  }
+
+  private normalizeMessage(m: any, conversationId: string): ConversationMessage {
+    const role: 'user' | 'assistant' | 'system' =
+      m.sent_by === 'customer' ? 'user'
+      : m.sent_by === 'agent' ? 'assistant'
+      : (m.role ?? 'system');
+    return {
+      id: m.id,
+      conversation_id: m.conversation_id ?? conversationId,
+      role,
+      content: m.content_text ?? m.content ?? '',
+      metadata: m.metadata ?? null,
+      criado_em: m.sent_at ?? m.created_at,
+    };
   }
 
   async takeover(conversationId: string): Promise<Conversation> {
