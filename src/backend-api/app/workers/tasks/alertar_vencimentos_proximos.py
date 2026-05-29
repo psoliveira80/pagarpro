@@ -144,6 +144,51 @@ async def _enviar_via_canal(
         return False, str(exc)
 
 
+async def _enviar_lembrete_whatsapp_com_botao(
+    session: AsyncSession,
+    empresa_id: UUID,
+    telefone: str,
+    mensagem: str,
+    titulo_id: UUID,
+) -> tuple[bool, str | None]:
+    """Story 13.25 — Envia o lembrete via Evolution Go com botão
+    'Confirmo recebimento'. O id do botão carrega o `titulo_id` para
+    o state machine processar quando o cliente clicar.
+
+    Se não há Evolution Go ativo para o tenant, retorna (False, motivo) e
+    o caller faz fallback pra `_enviar_via_canal` (texto puro).
+    """
+    from app.domain.comunicacao.maquina_numero_rigido import PREFIXO_RECEBIMENTO
+    from app.infrastructure.adapters.whatsapp.evolution_go_adapter import (
+        BotaoReply,
+        EvolutionGoAdapter,
+    )
+    from app.infrastructure.adapters.whatsapp.whatsapp_factory import (
+        get_evolution_go_por_credencial_telefone,
+    )
+
+    adapter = await get_evolution_go_por_credencial_telefone(
+        session, empresa_id, telefone
+    )
+    if not isinstance(adapter, EvolutionGoAdapter):
+        return False, "sem_evolution_go"
+
+    try:
+        await adapter.send_buttons_reply(
+            telefone,
+            descricao=mensagem,
+            botoes=[
+                BotaoReply(
+                    id=f"{PREFIXO_RECEBIMENTO}{titulo_id}",
+                    titulo="✓ Confirmo recebimento",
+                ),
+            ],
+        )
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+
 async def _processar_titulo(
     session: AsyncSession,
     titulo: TituloReceber,
@@ -180,9 +225,17 @@ async def _processar_titulo(
             tracker.registrar_erro({"titulo_id": str(titulo.id), "erro_template": str(exc)})
             return
 
-        # Envio com fallback
+        # Envio com fallback. Quando o canal principal é WhatsApp, tenta primeiro
+        # via Evolution Go com botão "Confirmo recebimento" (Story 13.25). Se
+        # não houver Evolution Go ativo, cai pra _enviar_via_canal (texto puro).
         canal_usado = canal_principal
-        sucesso, erro = await _enviar_via_canal(canal_principal, telefone, mensagem)
+        sucesso, erro = False, None
+        if canal_principal == "whatsapp":
+            sucesso, erro = await _enviar_lembrete_whatsapp_com_botao(
+                session, empresa_id, telefone, mensagem, titulo.id
+            )
+        if not sucesso:
+            sucesso, erro = await _enviar_via_canal(canal_principal, telefone, mensagem)
         if not sucesso and canal_fallback:
             log.warning(
                 "canal_principal_falhou_tentando_fallback",

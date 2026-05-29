@@ -71,6 +71,34 @@ CONFIGURACOES_PADRAO: list[tuple[str, str, str, str, str]] = [
      "Comprovantes com score abaixo deste valor geram notificação operacional"),
     ("threshold_alerta_critico", "comprovantes", "decimal", "0.40",
      "Comprovantes com score abaixo deste valor viram alerta crítico (revisão urgente)"),
+    # ── menu adaptativo do WhatsApp (Story 13.22) ──
+    ("score_minimo_adiar_vencimento", "cobranca", "decimal", "80",
+     "Score (0-100) mínimo para cliente ver botão 'Adiar próximo vencimento'"),
+    ("score_minimo_desbloqueio_confianca", "cobranca", "decimal", "65",
+     "Score mínimo para ver 'Desbloqueio em confiança'"),
+    ("score_minimo_pagamento_parcial", "cobranca", "decimal", "50",
+     "Score mínimo para ver 'Pagar parcial'"),
+    ("dias_maximos_adiamento", "cobranca", "inteiro", "5",
+     "Quantos dias o cliente pode adiar o vencimento via menu"),
+    ("valor_minimo_pagamento_parcial_pct", "cobranca", "decimal", "40.0",
+     "% mínimo do valor da parcela que cliente pode pagar como parcial"),
+    ("limite_usos_periodo_adiar", "cobranca", "inteiro", "1",
+     "Quantas vezes por período o cliente pode adiar"),
+    ("limite_usos_periodo_desbloqueio_confianca", "cobranca", "inteiro", "1",
+     "Quantas vezes por período o cliente pode pedir desbloqueio em confiança"),
+    ("periodo_limite_acoes_cliente", "cobranca", "string", "mensal",
+     "Período do contador (semanal/quinzenal/mensal/5d/Nd)"),
+    # ── comprovante via WhatsApp (Story 13.23) ──
+    ("timeout_aguardar_comprovante_min", "comunicacao", "inteiro", "5",
+     "Minutos que o sistema aguarda comprovante após cliente clicar 'Enviar comprovante'"),
+    ("desbloqueio_automatico_apos_validacao", "comprovantes", "booleano", "true",
+     "Quando true, valida comprovante e desbloqueia veículo automaticamente"),
+    ("score_minimo_auto_homologar", "comprovantes", "decimal", "0.80",
+     "Score (0-1) mínimo para auto-homologar comprovante (sem revisão humana). "
+     "Cliente em blacklist sempre vai pra fila manual independente do score."),
+    # ── IA atendente (Story 13.26 — adiada V2; flag já registrada) ──
+    ("ia_atendente_ativa", "comunicacao", "booleano", "false",
+     "Toggle global de IA atendente (false = menu rígido apenas)"),
 ]
 
 

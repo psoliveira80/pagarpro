@@ -44,6 +44,23 @@ class Conversa(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     situacao: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'ativa'")
     )
+    # Story 13.22 — estado da state machine do número rígido.
+    estado_maquina: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'idle'")
+    )
+    # Story 13.23 — cliente clicou "Enviar comprovante", mídia recebida
+    # antes deste timestamp vai direto pro pipeline de análise.
+    aguardando_comprovante_ate: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True,
+    )
+    # Story 13.25 — cliente clicou "Confirmo recebimento" no lembrete.
+    confirmacao_recebimento_em: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True,
+    )
+    confirmacao_recebimento_titulo_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("financeiro.titulos_receber.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     mensagens: Mapped[list["Mensagem"]] = relationship(
         back_populates="conversa",

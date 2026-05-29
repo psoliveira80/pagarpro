@@ -84,6 +84,21 @@ class Cliente(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         ForeignKey("config.credenciais_integracao.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Story 13.22 — blacklist de validação automática de comprovantes
+    # (bypassa score). Cliente em blacklist sempre exige homologação manual.
+    na_blacklist_comprovantes: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false"),
+    )
+    motivo_blacklist: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Limites por período parametrizado (semanal/quinzenal/mensal/Nd) —
+    # worker `reset_contadores_periodo_clientes` zera quando passa um período.
+    adiamentos_usados_no_periodo: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0"),
+    )
+    desbloqueios_confianca_usados_no_periodo: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0"),
+    )
+    inicio_periodo_acoes: Mapped[date | None] = mapped_column(nullable=True)
 
     # --- Compat aliases (Story 12.3 transition) ---
     full_name = synonym("nome_completo")

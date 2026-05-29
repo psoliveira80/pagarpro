@@ -34,6 +34,7 @@ celery_app.conf.include = [
     "app.workers.tasks.process_inbound_whatsapp",
     "app.workers.tasks.run_agent_turn",
     "app.workers.tasks.send_broadcast",
+    "app.workers.tasks.analisar_e_validar_comprovante_whatsapp",
 ]
 
 # Beat schedule — tasks por-empresa rodam via dispatch_por_empresa.

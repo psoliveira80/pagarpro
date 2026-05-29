@@ -159,3 +159,58 @@ async def get_evolution_go_por_instance_id(
     if adapter is None:
         return None, None
     return adapter, cred
+
+
+async def get_evolution_go_por_credencial_telefone(
+    session: AsyncSession,
+    empresa_id,
+    telefone: str,
+) -> IWhatsAppGateway | None:
+    """Encontra o adapter Evolution Go que o cliente identificado por
+    `telefone` está usando.
+
+    Lookup: cliente pelo telefone → cliente.numero_origem_id → credencial.
+    Se não encontrar (cliente não cadastrado ou sem número atribuído), faz
+    fallback: primeiro número ativo da empresa.
+
+    Usado pelas tasks que precisam enviar mensagem **fora** de um webhook
+    inbound (Stories 13.23 e 13.25).
+    """
+    from app.infrastructure.db.models.cadastro import Cliente
+    from app.infrastructure.db.models.integration_credential import IntegrationCredential
+
+    digits = "".join(c for c in telefone if c.isdigit())
+    candidatos = {
+        digits,
+        f"+{digits}",
+        digits[-11:],
+        digits[-10:],
+        digits[-9:],
+    }
+    cliente = (await session.execute(
+        select(Cliente).where(
+            Cliente.empresa_id == empresa_id,
+            Cliente.telefone.in_(candidatos),
+        )
+        .limit(1)
+    )).scalar_one_or_none()
+    cred_id = cliente.numero_origem_id if cliente is not None else None
+
+    cred: IntegrationCredential | None = None
+    if cred_id is not None:
+        cred = (await session.execute(
+            select(IntegrationCredential).where(IntegrationCredential.id == cred_id)
+        )).scalar_one_or_none()
+    if cred is None:
+        # Fallback: primeiro Evolution Go ativo da empresa
+        cred = (await session.execute(
+            select(IntegrationCredential).where(
+                IntegrationCredential.empresa_id == empresa_id,
+                IntegrationCredential.provedor == "evolution_go",
+                IntegrationCredential.ativo.is_(True),
+            )
+            .limit(1)
+        )).scalar_one_or_none()
+    if cred is None:
+        return None
+    return _build_adapter(cred.provedor, cred.config or {})

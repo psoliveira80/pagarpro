@@ -224,11 +224,30 @@ async def _process(event_id: str, provider: str) -> dict:
             except Exception:
                 log.warning("atribuir_numero_origem_falhou", exc_info=True)
 
+        # Story 13.22 — handler do menu rígido do Evolution Go.
+        # Só roda quando: (a) provider é evolution_go, (b) cliente identificado,
+        # (c) IA atendente está desativada (default). Quando IA ativa, deixa
+        # o AgentOrchestrator existente assumir.
+        if provider == "evolution_go" and customer_id is not None:
+            try:
+                await _processar_state_machine(
+                    session=session,
+                    empresa_id=empresa_id,
+                    cliente_id=customer_id,
+                    conversa=conv,
+                    msg=msg,
+                    adapter=adapter,
+                )
+            except Exception:
+                log.exception("state_machine_falhou")
+
         event.processed = True
         await session.commit()
 
-        # Enqueue agent turn if agent is active
-        if conv.agent_active:
+        # Enqueue agent turn if agent is active AND provider is legacy.
+        # Pro Evolution Go a state machine já cuidou (e só repassa pra IA se
+        # ia_atendente_ativa via tool — Story 13.26).
+        if conv.agent_active and provider != "evolution_go":
             try:
                 from app.workers import celery_app as celery
 
@@ -241,3 +260,314 @@ async def _process(event_id: str, provider: str) -> dict:
                 log.warning("agent_turn_enqueue_failed", exc_info=True)
 
         return {"status": "processed", "conversation_id": str(conv.id)}
+
+
+# ───────────────────── Story 13.22 — handler da state machine ─────────────────
+
+
+async def _processar_state_machine(
+    *,
+    session,
+    empresa_id,
+    cliente_id,
+    conversa,
+    msg,
+    adapter,
+):
+    """Aplica a state machine do número rígido sobre a mensagem inbound.
+
+    Estados são persistidos em `conversa.estado_maquina` e nos campos
+    auxiliares (`aguardando_comprovante_ate`, etc.). Cada ação é despachada
+    para o `ServicoAcoesCliente`, e a resposta sai pelo `adapter` (Evolution Go).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.application.services.servico_acoes_cliente import (
+        AcaoNaoPermitidaError,
+        ServicoAcoesCliente,
+    )
+    from app.application.services.servico_configuracao import ServicoConfiguracao
+    from app.application.services.servico_menu_adaptativo import (
+        ServicoMenuAdaptativo,
+    )
+    from app.domain.comunicacao.maquina_numero_rigido import (
+        AcaoMaquina,
+        EntradaEvento,
+        EstadoMaquina,
+        decidir,
+    )
+    from app.infrastructure.adapters.whatsapp.evolution_go_adapter import (
+        BotaoPix,
+        BotaoReply,
+        SecaoLista,
+    )
+
+    # ── Monta entrada da máquina ──────────────────────────────────────
+    if msg.text and msg.text.startswith("__btn__:"):
+        evento = EntradaEvento(tipo="botao", botao_id=msg.text[len("__btn__:"):])
+    elif msg.text and msg.text.startswith("__row__:"):
+        evento = EntradaEvento(tipo="botao", botao_id=msg.text[len("__row__:"):])
+    elif msg.media_url:
+        evento = EntradaEvento(
+            tipo="midia",
+            tem_midia=True,
+            midia_url=msg.media_url,
+        )
+    elif msg.text:
+        evento = EntradaEvento(tipo="texto", texto=msg.text)
+    else:
+        return  # nada a fazer
+
+    # ── Estado atual + configurações ──────────────────────────────────
+    try:
+        estado_atual = EstadoMaquina(conversa.estado_maquina or "idle")
+    except ValueError:
+        estado_atual = EstadoMaquina.IDLE
+
+    aguardando_valido = False
+    if (
+        conversa.aguardando_comprovante_ate is not None
+        and conversa.aguardando_comprovante_ate > datetime.now(timezone.utc)
+    ):
+        aguardando_valido = True
+
+    config = ServicoConfiguracao(session, empresa_id, redis=None)
+    ia_ativa = await config.obter_booleano(
+        "ia_atendente_ativa", "comunicacao", padrao=False
+    )
+
+    decisao = decidir(
+        estado_atual=estado_atual,
+        evento=evento,
+        ia_atendente_ativa=ia_ativa,
+        aguardando_comprovante_valido=aguardando_valido,
+    )
+
+    # ── Aplica efeitos ────────────────────────────────────────────────
+    servico_menu = ServicoMenuAdaptativo(session, empresa_id)
+    servico_acoes = ServicoAcoesCliente(session, empresa_id)
+    telefone = msg.sender_phone
+
+    async def _enviar_menu(prefixo: str | None = None):
+        menu = await servico_menu.montar_menu(cliente_id)
+        descricao = (prefixo + "\n\n" + menu.descricao) if prefixo else menu.descricao
+        if menu.eh_lista:
+            secao = SecaoLista(
+                titulo="Opções",
+                linhas=[{"id": o.id, "title": o.titulo[:24], "description": ""} for o in menu.opcoes],
+            )
+            await adapter.send_list(
+                telefone,
+                descricao=descricao,
+                secoes=[secao],
+                texto_botao="Ver opções",
+            )
+        else:
+            await adapter.send_buttons_reply(
+                telefone,
+                descricao=descricao,
+                botoes=[BotaoReply(id=o.id, titulo=o.titulo) for o in menu.opcoes],
+            )
+
+    if decisao.acao == AcaoMaquina.ENVIAR_MENU:
+        prefixo = (decisao.parametros or {}).get("explicacao")
+        await _enviar_menu(prefixo)
+
+    elif decisao.acao == AcaoMaquina.NAO_ENTENDEU:
+        await _enviar_menu(
+            "Use os botões abaixo para continuar. 🙂"
+        )
+
+    elif decisao.acao == AcaoMaquina.ENVIAR_EXTRATO:
+        texto = await servico_acoes.montar_extrato_saldo(cliente_id)
+        await adapter.send_text(telefone, texto)
+        await _enviar_menu()
+
+    elif decisao.acao == AcaoMaquina.ENVIAR_QR_PIX:
+        try:
+            dados = await servico_acoes.gerar_pix_para_proximo_titulo(cliente_id)
+            await adapter.send_button_pix(
+                telefone,
+                descricao=(
+                    f"{dados.descricao}\n\n"
+                    f"💰 Valor: R$ {dados.valor:.2f}\n"
+                    f"Toque no botão abaixo para pagar via PIX:"
+                ),
+                botao_pix=BotaoPix(
+                    nome_recebedor=dados.nome_recebedor,
+                    chave_pix=dados.chave_pix,
+                    tipo_chave=dados.tipo_chave,
+                ),
+            )
+        except AcaoNaoPermitidaError as exc:
+            await adapter.send_text(telefone, f"⚠️ {exc}")
+            await _enviar_menu()
+
+    elif decisao.acao == AcaoMaquina.INICIAR_CAPTURA_COMPROVANTE:
+        timeout_min = await config.obter_inteiro(
+            "timeout_aguardar_comprovante_min", "comunicacao", padrao=5
+        )
+        conversa.aguardando_comprovante_ate = datetime.now(timezone.utc) + timedelta(
+            minutes=timeout_min
+        )
+        await adapter.send_text(
+            telefone,
+            f"📎 Pode mandar a foto/PDF do comprovante agora.\n"
+            f"Vou processar automaticamente quando chegar! 🙂\n\n"
+            f"(Aguardo até {timeout_min} minutos.)",
+        )
+
+    elif decisao.acao == AcaoMaquina.PROCESSAR_COMPROVANTE:
+        # Limpa o flag antes de despachar
+        conversa.aguardando_comprovante_ate = None
+        # Story 13.23: dispara a task de análise. Por enquanto registra log
+        # — handler completo entra na 13.23.
+        log.info(
+            "comprovante_recebido_via_menu",
+            cliente_id=str(cliente_id),
+            midia_url=(decisao.parametros or {}).get("midia_url"),
+        )
+        await adapter.send_text(
+            telefone,
+            "📎 Recebi seu comprovante! Vou analisar e te aviso em instantes. 🙂",
+        )
+        # 13.23 dispara tarefa Celery a partir daqui.
+        try:
+            from app.workers import celery_app as celery
+            celery.send_task(
+                "app.workers.tasks.analisar_e_validar_comprovante_whatsapp.executar",
+                args=[
+                    str(empresa_id),
+                    str(cliente_id),
+                    (decisao.parametros or {}).get("midia_url"),
+                    telefone,
+                ],
+                queue="default",
+            )
+        except Exception:
+            log.exception("nao_conseguiu_disparar_analise_comprovante")
+
+    elif decisao.acao == AcaoMaquina.PEDIR_CONFIRMACAO_ADIAMENTO:
+        from app.domain.comunicacao.maquina_numero_rigido import (
+            ID_CONFIRMA_ADIAR_SIM,
+            ID_CONFIRMA_ADIAR_NAO,
+        )
+        dias = await config.obter_inteiro(
+            "dias_maximos_adiamento", "cobranca", padrao=5
+        )
+        await adapter.send_buttons_reply(
+            telefone,
+            descricao=(
+                f"Confirma adiar a próxima parcela em {dias} dias?\n"
+                f"(Você só pode usar essa opção uma vez no período.)"
+            ),
+            botoes=[
+                BotaoReply(id=ID_CONFIRMA_ADIAR_SIM, titulo="✓ Sim, adiar"),
+                BotaoReply(id=ID_CONFIRMA_ADIAR_NAO, titulo="✗ Cancelar"),
+            ],
+        )
+
+    elif decisao.acao == AcaoMaquina.APLICAR_ADIAMENTO:
+        try:
+            resultado = await servico_acoes.aplicar_adiamento(cliente_id)
+            await adapter.send_text(
+                telefone,
+                f"✓ Adiamento aplicado! Nova data de vencimento: "
+                f"{resultado['vencimento_novo']}.\n"
+                f"Continuamos contando contigo. 🙏",
+            )
+        except AcaoNaoPermitidaError as exc:
+            await adapter.send_text(telefone, f"⚠️ Não foi possível adiar: {exc}")
+            await _enviar_menu()
+
+    elif decisao.acao == AcaoMaquina.PEDIR_CONFIRMACAO_DESBLOQUEIO:
+        from app.domain.comunicacao.maquina_numero_rigido import (
+            ID_CONFIRMA_DESBLOQUEIO_SIM,
+            ID_CONFIRMA_DESBLOQUEIO_NAO,
+        )
+        dias = await config.obter_inteiro(
+            "desbloqueio_confianca_dias", "frota", padrao=3
+        )
+        await adapter.send_buttons_reply(
+            telefone,
+            descricao=(
+                f"Confirma desbloqueio em confiança por {dias} dias?\n"
+                f"Você compromete-se a pagar nesse período."
+            ),
+            botoes=[
+                BotaoReply(id=ID_CONFIRMA_DESBLOQUEIO_SIM, titulo="✓ Sim, libera"),
+                BotaoReply(id=ID_CONFIRMA_DESBLOQUEIO_NAO, titulo="✗ Cancelar"),
+            ],
+        )
+
+    elif decisao.acao == AcaoMaquina.APLICAR_DESBLOQUEIO_CONFIANCA:
+        try:
+            resultado = await servico_acoes.aplicar_desbloqueio_confianca(cliente_id)
+            await adapter.send_text(
+                telefone,
+                f"🔓 Veículo liberado por {resultado['dias_desbloqueio']} dias "
+                f"(até {resultado['validade_ate']}).\nValeu a confiança! 🙏",
+            )
+        except AcaoNaoPermitidaError as exc:
+            await adapter.send_text(telefone, f"⚠️ {exc}")
+            await _enviar_menu()
+
+    elif decisao.acao == AcaoMaquina.PEDIR_VALOR_PARCIAL:
+        await adapter.send_text(
+            telefone,
+            "💸 Digite o valor que você quer pagar agora (ex.: 250,00):",
+        )
+
+    elif decisao.acao == AcaoMaquina.APLICAR_PAGAMENTO_PARCIAL:
+        try:
+            dados = await servico_acoes.gerar_pix_parcial(
+                cliente_id,
+                (decisao.parametros or {}).get("texto_valor", ""),
+            )
+            await adapter.send_button_pix(
+                telefone,
+                descricao=(
+                    f"{dados.descricao}\n💰 Valor parcial: R$ {dados.valor:.2f}"
+                ),
+                botao_pix=BotaoPix(
+                    nome_recebedor=dados.nome_recebedor,
+                    chave_pix=dados.chave_pix,
+                    tipo_chave=dados.tipo_chave,
+                ),
+            )
+        except AcaoNaoPermitidaError as exc:
+            await adapter.send_text(telefone, f"⚠️ {exc}")
+            await _enviar_menu()
+
+    elif decisao.acao == AcaoMaquina.REGISTRAR_CONFIRMACAO_RECEBIMENTO:
+        # Story 13.25 — cliente clicou "Confirmo recebimento" no lembrete.
+        titulo_id_str = (decisao.parametros or {}).get("titulo_id")
+        try:
+            from uuid import UUID as _UUID
+            from app.infrastructure.db.models.financeiro import TituloReceber as _TR
+
+            tit_id = _UUID(titulo_id_str) if titulo_id_str else None
+            conversa.confirmacao_recebimento_em = datetime.now(timezone.utc)
+            if tit_id:
+                conversa.confirmacao_recebimento_titulo_id = tit_id
+            await adapter.send_text(
+                telefone,
+                "Obrigado! Avisaremos novamente próximo do vencimento. 🙂",
+            )
+        except Exception:
+            log.exception("falha_registrar_confirmacao")
+
+    elif decisao.acao == AcaoMaquina.INICIAR_ATENDIMENTO_IA:
+        # Story 13.26 (V2) — encaminhar para AgentOrchestrator existente.
+        # V1: só responde mensagem padrão até a IA ser totalmente plugada.
+        await adapter.send_text(
+            telefone,
+            "🤖 IA atendente em ativação. Em breve disponível! Use os botões por enquanto.",
+        )
+        await _enviar_menu()
+
+    # ── Persiste novo estado ──────────────────────────────────────────
+    if decisao.proximo_estado.value != conversa.estado_maquina:
+        conversa.estado_maquina = decisao.proximo_estado.value
+
+    await session.flush()
