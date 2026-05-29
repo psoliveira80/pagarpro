@@ -42,6 +42,11 @@ export const CONFIGURACOES_ROUTES: Routes = [
       import('./integracoes/integracoes.component').then((m) => m.IntegracoesComponent),
   },
   {
+    path: 'canais/whatsapp',
+    loadComponent: () =>
+      import('./canais-whatsapp/canais-whatsapp.component').then((m) => m.CanaisWhatsappComponent),
+  },
+  {
     path: 'log-auditoria',
     loadComponent: () =>
       import('./log-auditoria/log-auditoria.component').then((m) => m.LogAuditoriaComponent),

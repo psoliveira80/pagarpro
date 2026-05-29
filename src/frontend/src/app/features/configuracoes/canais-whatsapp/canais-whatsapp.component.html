@@ -1,0 +1,436 @@
+<app-toast />
+
+<!-- Banner global de capacidade esgotada (visível só quando 100%) -->
+@if (capacidadeEsgotada()) {
+  <div class="sticky top-0 z-30 -mx-4 md:-mx-6 mb-4 md:mb-6
+              bg-[var(--danger)] text-white px-4 md:px-6 py-3
+              flex items-center gap-3 shadow-md">
+    <ui-icon name="heroExclamationTriangle" class="w-5 h-5 shrink-0" />
+    <div class="flex-1 min-w-0">
+      <div class="font-semibold">Capacidade WhatsApp esgotada</div>
+      <div class="text-sm text-white/90">
+        Novos clientes não receberão mensagens automáticas. Ative outro número agora.
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Cabeçalho da página -->
+<header class="mb-4 md:mb-6">
+  <h1 class="text-2xl md:text-3xl font-semibold text-[var(--text-primary)]">
+    Canais &rsaquo; WhatsApp
+  </h1>
+  <p class="text-sm text-[var(--text-secondary)] mt-1">
+    Provedor: <strong>Evolution Go</strong> &middot; Tela de monitoramento
+    e administração dos números conectados.
+  </p>
+</header>
+
+<!-- Resumo + cabeçalho de capacidade -->
+@if (!isLoading()) {
+  <section class="bg-[var(--surface-elevated)] border border-[var(--border)]
+                  rounded-xl p-4 md:p-5 mb-4 md:mb-6 space-y-4">
+    <!-- linha 1: contagem por status -->
+    <div class="flex flex-wrap items-center gap-4 text-sm">
+      <span class="font-medium text-[var(--text-primary)]">
+        {{ resumoStatus().total }} {{ resumoStatus().total === 1 ? 'número' : 'números' }}
+      </span>
+      <span class="text-[var(--text-secondary)]">·</span>
+      <span class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-[var(--success)]"></span>
+        {{ resumoStatus().conectados }} conectado{{ resumoStatus().conectados === 1 ? '' : 's' }}
+      </span>
+      @if (resumoStatus().desconectados > 0) {
+        <span class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-[var(--warning)]"></span>
+          {{ resumoStatus().desconectados }} desconectado{{ resumoStatus().desconectados === 1 ? '' : 's' }}
+        </span>
+      }
+      @if (resumoStatus().banidos > 0) {
+        <span class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-[var(--danger)]"></span>
+          {{ resumoStatus().banidos }} banido{{ resumoStatus().banidos === 1 ? '' : 's' }}
+        </span>
+      }
+    </div>
+
+    <!-- linha 2: capacidade global -->
+    @if (resumoStatus().conectados > 0) {
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-[var(--text-secondary)]">
+            Capacidade global
+          </span>
+          <span class="font-medium text-[var(--text-primary)]">
+            {{ clientesAtribuidosAtivos() }} / {{ capacidadeTotal() }}
+            ({{ capacidadePctGlobal() }}%)
+          </span>
+        </div>
+        <div class="w-full h-2 rounded-full bg-[var(--border)] overflow-hidden">
+          <div
+            class="h-full rounded-full transition-all"
+            [class.bg-\[var\(--success\)\]]="capacidadePctGlobal() < 60"
+            [class.bg-yellow-500]="capacidadePctGlobal() >= 60 && capacidadePctGlobal() < 80"
+            [class.bg-\[var\(--warning\)\]]="capacidadePctGlobal() >= 80 && capacidadePctGlobal() < 100"
+            [class.bg-\[var\(--danger\)\]]="capacidadePctGlobal() >= 100"
+            [style.width.%]="capacidadePctGlobal()"
+          ></div>
+        </div>
+        <div class="text-xs text-[var(--text-secondary)]">
+          Limite atual: <strong>{{ limitePorNumero() }}</strong> clientes por número
+        </div>
+      </div>
+    }
+
+    <!-- alerta amarelo (>= 80% e < 100%) -->
+    @if (capacidadeAlerta()) {
+      <div class="flex items-start gap-2 px-3 py-2 rounded-lg
+                  bg-[var(--warning)]/10 border border-[var(--warning)]/30
+                  text-sm text-[var(--text-primary)]">
+        <ui-icon name="heroExclamationTriangle" class="w-4 h-4 mt-0.5 text-[var(--warning)] shrink-0" />
+        <div>
+          Capacidade acima de 80%. Considere ativar mais um número
+          antes que estoure.
+        </div>
+      </div>
+    }
+  </section>
+}
+
+<!-- Botão admin: adicionar número (modo SaaS) -->
+<div class="flex items-center justify-end mb-4">
+  <button
+    type="button"
+    class="inline-flex items-center gap-2 px-3 py-2 rounded-lg
+           border border-dashed border-[var(--border)]
+           text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]
+           hover:border-[var(--accent)] cursor-pointer transition-colors"
+    (click)="abrirFormNovoNumero()"
+  >
+    <ui-icon name="heroPlus" class="w-4 h-4" />
+    Adicionar número (admin SaaS)
+  </button>
+</div>
+
+<!-- Loading -->
+@if (isLoading()) {
+  <div class="flex items-center justify-center py-16">
+    <svg class="animate-spin h-8 w-8 text-[var(--accent)]" viewBox="0 0 24 24" fill="none">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+      </path>
+    </svg>
+  </div>
+}
+
+<!-- Empty state -->
+@else if (numeros().length === 0) {
+  <div class="text-center py-16 px-4">
+    <div class="mx-auto w-16 h-16 mb-4 rounded-full bg-[var(--surface-elevated)]
+                flex items-center justify-center">
+      <ui-icon name="heroChatBubbleLeftRight" class="w-8 h-8 text-[var(--text-muted)]" />
+    </div>
+    <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-2">
+      Nenhum número WhatsApp conectado
+    </h2>
+    <p class="text-sm text-[var(--text-secondary)] max-w-md mx-auto mb-6">
+      Suas cobranças automatizadas precisam de pelo menos um número
+      conectado para rodar. Conecte sua instância Evolution Go agora.
+    </p>
+    <button
+      type="button"
+      class="inline-flex items-center gap-2 px-4 py-2 rounded-lg
+             bg-[var(--accent)] text-white font-medium
+             hover:opacity-90 cursor-pointer transition-opacity"
+      (click)="abrirFormNovoNumero()"
+    >
+      <ui-icon name="heroPlus" class="w-5 h-5" />
+      Adicionar primeiro número
+    </button>
+  </div>
+}
+
+<!-- Lista de cards (mobile-first; desktop usa grid) -->
+@else {
+  <div class="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-2">
+    @for (n of numeros(); track n.credencial_id) {
+      <article
+        class="bg-[var(--surface-elevated)] border rounded-xl p-4 md:p-5
+               transition-shadow hover:shadow-md flex flex-col gap-3"
+        [class.border-\[var\(--border\)\]]="ocupacaoPct(n) < 100 && n.status_whatsapp !== 'banido'"
+        [class.border-\[var\(--danger\)\]]="ocupacaoPct(n) >= 100 || n.status_whatsapp === 'banido'"
+      >
+        <!-- Cabeçalho do card -->
+        <header class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              @if (n.eh_principal) {
+                <ui-icon
+                  name="heroStarSolid"
+                  class="w-4 h-4 text-[var(--warning)] shrink-0"
+                  title="Número padrão para novos clientes"
+                />
+              }
+              <h3 class="font-semibold text-[var(--text-primary)] truncate">
+                {{ apelidoOuPlaceholder(n) }}
+              </h3>
+            </div>
+            @if (n.numero_e164) {
+              <div class="text-sm text-[var(--text-secondary)] font-mono">
+                {{ n.numero_e164 }}
+              </div>
+            }
+          </div>
+          <span
+            class="text-xs font-medium px-2 py-1 rounded-full shrink-0"
+            [class]="statusBadgeClasse(n.status_whatsapp)"
+          >
+            {{ statusLabel(n.status_whatsapp) }}
+          </span>
+        </header>
+
+        <!-- Timestamp do último health check -->
+        @if (n.ultimo_health_check) {
+          <div class="text-xs text-[var(--text-muted)]">
+            Verificado em {{ n.ultimo_health_check | date:'dd/MM HH:mm' }}
+          </div>
+        } @else {
+          <div class="text-xs text-[var(--warning)]">
+            Nunca verificado &mdash; clique em "Testar conexão"
+          </div>
+        }
+
+        <!-- Ocupação -->
+        @if (n.status_whatsapp !== 'banido') {
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-[var(--text-secondary)]">Ocupação</span>
+              <span class="font-medium text-[var(--text-primary)]">
+                {{ n.clientes_atribuidos }} / {{ limitePorNumero() }}
+                <span class="text-[var(--text-muted)] ml-1">
+                  ({{ ocupacaoPct(n) }}%)
+                </span>
+              </span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-[var(--border)] overflow-hidden">
+              <div
+                class="h-full rounded-full transition-all"
+                [class]="ocupacaoCorClasse(n)"
+                [style.width.%]="ocupacaoPct(n)"
+              ></div>
+            </div>
+            @if (ocupacaoPct(n) >= 100) {
+              <div class="text-xs text-[var(--danger)]">
+                Lotado &mdash; novos clientes vão para outros números
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="text-sm text-[var(--text-secondary)]">
+            {{ n.clientes_atribuidos }} cliente(s) migrado(s)
+            @if (n.motivo_banimento) {
+              <div class="text-xs text-[var(--text-muted)] mt-1">
+                Motivo: {{ n.motivo_banimento }}
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Ações -->
+        <footer class="flex flex-wrap gap-2 pt-2 border-t border-[var(--border)] mt-auto">
+          @if (n.status_whatsapp === 'banido') {
+            <button
+              type="button"
+              class="flex-1 text-sm px-3 py-2 rounded-lg
+                     bg-[var(--accent)]/10 text-[var(--accent)]
+                     hover:bg-[var(--accent)]/20 cursor-pointer transition-colors"
+              (click)="marcarAtivo(n)"
+            >
+              Reativar
+            </button>
+          } @else {
+            <button
+              type="button"
+              class="flex-1 text-sm px-3 py-2 rounded-lg
+                     bg-[var(--surface)] border border-[var(--border)]
+                     text-[var(--text-primary)]
+                     hover:bg-[var(--surface-elevated)] disabled:opacity-50
+                     cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+              [disabled]="testandoId() === n.credencial_id"
+              (click)="testarConexao(n)"
+            >
+              @if (testandoId() === n.credencial_id) {
+                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                Testando&hellip;
+              } @else {
+                Testar conexão
+              }
+            </button>
+            @if (!n.eh_principal) {
+              <button
+                type="button"
+                class="text-sm px-3 py-2 rounded-lg
+                       text-[var(--text-secondary)] hover:text-[var(--text-primary)]
+                       hover:bg-[var(--surface)] cursor-pointer transition-colors"
+                (click)="marcarPrincipal(n)"
+                title="Definir como número padrão para novos clientes"
+              >
+                <ui-icon name="heroStar" class="w-4 h-4" />
+              </button>
+            }
+            <button
+              type="button"
+              class="text-sm px-3 py-2 rounded-lg
+                     text-[var(--text-secondary)] hover:text-[var(--danger)]
+                     hover:bg-[var(--danger)]/10 disabled:opacity-50
+                     cursor-pointer transition-colors flex items-center gap-1.5"
+              [disabled]="migrandoId() === n.credencial_id"
+              (click)="marcarBanido(n)"
+              title="Banir número (migra clientes vinculados)"
+            >
+              @if (migrandoId() === n.credencial_id) {
+                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                Migrando&hellip;
+              } @else {
+                <ui-icon name="heroNoSymbol" class="w-4 h-4" />
+                Banir
+              }
+            </button>
+          }
+        </footer>
+      </article>
+    }
+  </div>
+}
+
+<!-- Modal: adicionar número (admin SaaS) -->
+<app-modal
+  [open]="mostrarFormNovo()"
+  (closed)="fecharFormNovoNumero()"
+  size="md"
+  title="Adicionar número WhatsApp (Evolution Go)"
+>
+  <form
+    class="flex flex-col gap-4"
+    (ngSubmit)="salvarNovoNumero()"
+    (keydown.enter)="$event.preventDefault()"
+  >
+    <p class="text-sm text-[var(--text-secondary)]">
+      Use as credenciais da instância já provisionada em
+      <code class="font-mono text-xs">evo-go.megaflow.work</code>.
+    </p>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-medium text-[var(--text-primary)]">
+        Apelido <span class="text-[var(--text-muted)]">(opcional)</span>
+      </span>
+      <input
+        type="text"
+        class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
+               text-[var(--text-primary)] focus:outline-none
+               focus:border-[var(--accent)]"
+        placeholder="Ex: Cobrança 1"
+        [value]="novoApelido()"
+        (input)="novoApelido.set($any($event.target).value)"
+      />
+    </label>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-medium text-[var(--text-primary)]">
+        Instance ID <span class="text-[var(--danger)]">*</span>
+      </span>
+      <input
+        type="text"
+        class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
+               text-[var(--text-primary)] focus:outline-none
+               focus:border-[var(--accent)] font-mono text-sm"
+        placeholder="UUID da instância no Evolution Go"
+        [value]="novoInstanceId()"
+        (input)="novoInstanceId.set($any($event.target).value)"
+        required
+      />
+    </label>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-medium text-[var(--text-primary)]">
+        Instance Token <span class="text-[var(--danger)]">*</span>
+      </span>
+      <input
+        type="password"
+        class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
+               text-[var(--text-primary)] focus:outline-none
+               focus:border-[var(--accent)] font-mono text-sm"
+        placeholder="Token de autenticação (apikey)"
+        [value]="novoInstanceToken()"
+        (input)="novoInstanceToken.set($any($event.target).value)"
+        required
+      />
+    </label>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-medium text-[var(--text-primary)]">
+        Número E.164 <span class="text-[var(--danger)]">*</span>
+      </span>
+      <input
+        type="text"
+        class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)]
+               text-[var(--text-primary)] focus:outline-none
+               focus:border-[var(--accent)] font-mono text-sm"
+        placeholder="+5511987654321"
+        [value]="novoNumeroE164()"
+        (input)="novoNumeroE164.set($any($event.target).value)"
+        required
+      />
+    </label>
+
+    <label class="flex items-center gap-2 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        class="rounded border-[var(--border)] accent-[var(--accent)]"
+        [checked]="novoPrincipal()"
+        (change)="novoPrincipal.set($any($event.target).checked)"
+      />
+      <span class="text-sm text-[var(--text-primary)]">
+        Marcar como padrão para novos clientes
+      </span>
+    </label>
+
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm
+               text-[var(--text-secondary)] hover:text-[var(--text-primary)]
+               cursor-pointer transition-colors"
+        (click)="fecharFormNovoNumero()"
+      >
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        class="px-4 py-2 rounded-lg text-sm font-medium
+               bg-[var(--accent)] text-white
+               hover:opacity-90 disabled:opacity-50
+               cursor-pointer transition-opacity flex items-center gap-2"
+        [disabled]="!podeSalvarNovo || salvandoNovo()"
+      >
+        @if (salvandoNovo()) {
+          <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+        }
+        Adicionar número
+      </button>
+    </div>
+  </form>
+</app-modal>

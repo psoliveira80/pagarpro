@@ -90,6 +90,12 @@ export class AppShellComponent {
       ],
     },
     {
+      section: 'Canais',
+      items: [
+        { label: 'WhatsApp', route: '/sistema/configuracoes/canais/whatsapp' },
+      ],
+    },
+    {
       section: 'Parâmetros',
       items: [
         { label: 'Financeiro', route: '/sistema/configuracoes/financeiro' },
