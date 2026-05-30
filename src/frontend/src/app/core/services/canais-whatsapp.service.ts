@@ -7,6 +7,7 @@ import { environment } from '../../../environments/environment';
 export interface NumeroWhatsApp {
   credencial_id: string;
   provedor: string;
+  apelido: string | null;
   instance_id: string | null;
   numero_e164: string | null;
   status_whatsapp: string;
@@ -14,6 +15,12 @@ export interface NumeroWhatsApp {
   clientes_atribuidos: number;
   ultimo_health_check: string | null;
   motivo_banimento: string | null;
+}
+
+export interface EditarNumeroPayload {
+  apelido?: string | null;
+  numero_e164?: string | null;
+  config?: Record<string, string>;
 }
 
 export interface NovoNumeroPayload {
@@ -58,6 +65,31 @@ export class CanaisWhatsappService {
   async marcarPrincipal(credencialId: string): Promise<void> {
     return firstValueFrom(
       this.http.put<void>(`${this.baseUrl}/${credencialId}/marcar-principal`, {}),
+    );
+  }
+
+  async editar(credencialId: string, payload: EditarNumeroPayload): Promise<NumeroWhatsApp> {
+    return firstValueFrom(
+      this.http.put<NumeroWhatsApp>(`${this.baseUrl}/${credencialId}`, payload),
+    );
+  }
+
+  async excluir(credencialId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.delete<void>(`${this.baseUrl}/${credencialId}`),
+    );
+  }
+
+  async moverClientes(
+    credencialId: string,
+    destinoId: string,
+    motivo?: string,
+  ): Promise<{ clientes_migrados: number; destino: string }> {
+    return firstValueFrom(
+      this.http.post<{ clientes_migrados: number; destino: string }>(
+        `${this.baseUrl}/${credencialId}/mover-clientes`,
+        { destino_credencial_id: destinoId, motivo },
+      ),
     );
   }
 }

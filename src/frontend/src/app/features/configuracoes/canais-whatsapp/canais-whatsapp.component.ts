@@ -56,6 +56,30 @@ export class CanaisWhatsappComponent implements OnInit {
   readonly novoConfig = signal<Record<string, string>>({});
   readonly salvandoNovo = signal(false);
 
+  // ─── Menu de ações, edição, mover, excluir ───
+  readonly menuAbertoId = signal<string | null>(null);
+
+  readonly editandoNumero = signal<NumeroWhatsApp | null>(null);
+  readonly editApelido = signal('');
+  readonly editNumeroE164 = signal('');
+  readonly editConfig = signal<Record<string, string>>({});
+  readonly salvandoEdicao = signal(false);
+
+  readonly movendoNumero = signal<NumeroWhatsApp | null>(null);
+  readonly destinoMover = signal<string>('');
+  readonly motivoMover = signal('');
+  readonly salvandoMover = signal(false);
+
+  readonly destinosDisponiveis = computed(() => {
+    const origem = this.movendoNumero();
+    if (!origem) return [];
+    return this.numeros().filter(
+      (n) =>
+        n.credencial_id !== origem.credencial_id &&
+        n.status_whatsapp === 'ativo',
+    );
+  });
+
   readonly opcaoProvedorAtivo = computed<OpcaoProvedor | null>(() => {
     const cfg = this.provedorConfig();
     if (!cfg) return null;
@@ -171,7 +195,143 @@ export class CanaisWhatsappComponent implements OnInit {
   }
 
   apelidoOuPlaceholder(n: NumeroWhatsApp): string {
-    return n.instance_id ?? '(sem nome)';
+    return n.apelido?.trim() || n.instance_id || '(sem nome)';
+  }
+
+  numeroOuPlaceholder(n: NumeroWhatsApp): string {
+    return n.numero_e164?.trim() || '(número não informado)';
+  }
+
+  toggleMenu(id: string): void {
+    this.menuAbertoId.update((cur) => (cur === id ? null : id));
+  }
+
+  fecharMenu(): void {
+    this.menuAbertoId.set(null);
+  }
+
+  // ─── Editar ───
+  abrirEdicao(n: NumeroWhatsApp): void {
+    this.fecharMenu();
+    this.editandoNumero.set(n);
+    this.editApelido.set(n.apelido ?? '');
+    this.editNumeroE164.set(n.numero_e164 ?? '');
+    const op = this.opcaoProvedorAtivo();
+    const cfg: Record<string, string> = {};
+    if (op) {
+      for (const f of op.campos_instancia) {
+        if (f.key === 'instance_id' && n.instance_id) cfg[f.key] = n.instance_id;
+      }
+    }
+    this.editConfig.set(cfg);
+  }
+
+  fecharEdicao(): void {
+    this.editandoNumero.set(null);
+  }
+
+  setEditConfig(key: string, value: string): void {
+    this.editConfig.update((c) => ({ ...c, [key]: value }));
+  }
+
+  getEditConfig(key: string): string {
+    return this.editConfig()[key] ?? '';
+  }
+
+  async salvarEdicao(): Promise<void> {
+    const n = this.editandoNumero();
+    if (!n) return;
+    this.salvandoEdicao.set(true);
+    try {
+      const cfg = this.editConfig();
+      const payload = {
+        apelido: this.editApelido().trim() || null,
+        numero_e164: this.editNumeroE164().trim() || null,
+        config: Object.keys(cfg).length > 0 ? cfg : undefined,
+      };
+      await this.service.editar(n.credencial_id, payload);
+      this.toast.show({ message: 'Número atualizado', type: 'success' });
+      this.fecharEdicao();
+      await this.carregar();
+    } catch (err) {
+      const detalhe =
+        (err as { error?: { detail?: string } })?.error?.detail ?? 'Erro ao salvar';
+      this.toast.show({ message: detalhe, type: 'error' });
+    } finally {
+      this.salvandoEdicao.set(false);
+    }
+  }
+
+  // ─── Excluir ───
+  async excluir(n: NumeroWhatsApp): Promise<void> {
+    this.fecharMenu();
+    if (n.clientes_atribuidos > 0) {
+      this.toast.show({
+        message: `Este número tem ${n.clientes_atribuidos} cliente(s) atribuído(s). Mova ou banir antes de excluir.`,
+        type: 'warning',
+      });
+      return;
+    }
+    const ok = await this.confirm.confirm({
+      text: `Excluir ${this.apelidoOuPlaceholder(n)}? Esta ação é permanente.`,
+      type: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await this.service.excluir(n.credencial_id);
+      this.toast.show({ message: 'Número excluído', type: 'success' });
+      await this.carregar();
+    } catch (err) {
+      const detalhe =
+        (err as { error?: { detail?: { message?: string } | string } })?.error?.detail;
+      const msg = typeof detalhe === 'string' ? detalhe : detalhe?.message ?? 'Erro ao excluir';
+      this.toast.show({ message: msg, type: 'error' });
+    }
+  }
+
+  // ─── Mover clientes ───
+  abrirMover(n: NumeroWhatsApp): void {
+    this.fecharMenu();
+    if (n.clientes_atribuidos === 0) {
+      this.toast.show({
+        message: 'Este número não tem clientes para mover.',
+        type: 'info',
+      });
+      return;
+    }
+    this.movendoNumero.set(n);
+    this.destinoMover.set('');
+    this.motivoMover.set('');
+  }
+
+  fecharMover(): void {
+    this.movendoNumero.set(null);
+  }
+
+  async confirmarMover(): Promise<void> {
+    const origem = this.movendoNumero();
+    const destinoId = this.destinoMover();
+    if (!origem || !destinoId) return;
+    this.salvandoMover.set(true);
+    try {
+      const r = await this.service.moverClientes(
+        origem.credencial_id,
+        destinoId,
+        this.motivoMover().trim() || undefined,
+      );
+      this.toast.show({
+        message: `${r.clientes_migrados} cliente(s) migrado(s).`,
+        type: 'success',
+      });
+      this.fecharMover();
+      await this.carregar();
+    } catch (err) {
+      const detalhe =
+        (err as { error?: { detail?: string } })?.error?.detail ?? 'Erro ao mover clientes';
+      this.toast.show({ message: detalhe, type: 'error' });
+    } finally {
+      this.salvandoMover.set(false);
+    }
   }
 
   async testarConexao(n: NumeroWhatsApp): Promise<void> {

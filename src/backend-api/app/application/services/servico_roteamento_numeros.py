@@ -316,6 +316,7 @@ class ServicoRoteamentoNumeros:
             {
                 "credencial_id": str(c.id),
                 "provedor": c.provedor,
+                "apelido": (c.config or {}).get("apelido"),
                 "instance_id": (c.config or {}).get("instance_id"),
                 "numero_e164": (c.config or {}).get("numero_e164"),
                 "status_whatsapp": (c.config or {}).get(
@@ -323,7 +324,12 @@ class ServicoRoteamentoNumeros:
                 ),
                 "eh_principal": (c.config or {}).get("eh_principal", False),
                 "clientes_atribuidos": int(contagens.get(c.id, 0)),
-                "ultimo_health_check": (c.config or {}).get("ultimo_health_check"),
+                # ultimo_health_check vive na COLUNA, não no JSONB
+                # (test_integration grava `cred.ultimo_health_check = now()`).
+                "ultimo_health_check": (
+                    c.ultimo_health_check.isoformat()
+                    if c.ultimo_health_check else None
+                ),
                 "motivo_banimento": (c.config or {}).get("motivo_banimento"),
             }
             for c in creds

@@ -188,162 +188,123 @@
   </div>
 }
 
-<!-- Lista de cards (mobile-first; desktop usa grid) -->
+<!-- Lista de cards no mesmo grid das Integrações -->
 @else {
-  <div class="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-2">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     @for (n of numeros(); track n.credencial_id) {
-      <article
-        class="bg-[var(--surface-elevated)] border rounded-xl p-4 md:p-5
-               transition-shadow hover:shadow-md flex flex-col gap-3"
-        [class.border-\[var\(--border\)\]]="ocupacaoPct(n) < 100 && n.status_whatsapp !== 'banido'"
-        [class.border-\[var\(--danger\)\]]="ocupacaoPct(n) >= 100 || n.status_whatsapp === 'banido'"
-      >
-        <!-- Cabeçalho do card -->
-        <header class="flex items-start justify-between gap-3">
+      <article class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 hover:shadow-lg transition-shadow flex flex-col gap-3">
+        <!-- Cabeçalho -->
+        <div class="flex items-start justify-between gap-2">
           <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2 mb-1">
+            <div class="flex items-center gap-1.5 mb-0.5">
               @if (n.eh_principal) {
-                <ui-icon
-                  name="heroStarSolid"
-                  class="w-4 h-4 text-[var(--warning)] shrink-0"
-                  title="Número padrão para novos clientes"
-                />
+                <span class="text-[10px] font-bold uppercase tracking-wide text-[var(--warning)] bg-[var(--warning)]/10 px-1.5 py-0.5 rounded">
+                  Padrão
+                </span>
               }
-              <h3 class="font-semibold text-[var(--text-primary)] truncate">
+              <h3 class="text-sm font-semibold text-[var(--text-primary)] truncate">
                 {{ apelidoOuPlaceholder(n) }}
               </h3>
             </div>
-            @if (n.numero_e164) {
-              <div class="text-sm text-[var(--text-secondary)] font-mono">
-                {{ n.numero_e164 }}
+            <div class="text-sm text-[var(--text-secondary)] font-mono truncate">
+              {{ numeroOuPlaceholder(n) }}
+            </div>
+          </div>
+
+          <!-- Menu de ações -->
+          <div class="relative shrink-0">
+            <button type="button"
+                    class="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)] cursor-pointer transition-colors"
+                    (click)="toggleMenu(n.credencial_id)">
+              <ui-icon name="heroEllipsisVertical" class="w-4 h-4" />
+            </button>
+
+            @if (menuAbertoId() === n.credencial_id) {
+              <div class="absolute right-0 top-full mt-1 z-[1100] w-48 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-lg py-1 text-sm">
+                <button type="button" class="w-full text-left px-3 py-2 hover:bg-[var(--surface)] cursor-pointer flex items-center gap-2"
+                        (click)="abrirEdicao(n)">
+                  <ui-icon name="heroPencilSquare" class="w-4 h-4" /> Editar
+                </button>
+                @if (n.status_whatsapp !== 'banido' && !n.eh_principal) {
+                  <button type="button" class="w-full text-left px-3 py-2 hover:bg-[var(--surface)] cursor-pointer flex items-center gap-2"
+                          (click)="marcarPrincipal(n); fecharMenu()">
+                    <ui-icon name="heroStar" class="w-4 h-4" /> Marcar como padrão
+                  </button>
+                }
+                @if (n.clientes_atribuidos > 0 && n.status_whatsapp === 'ativo') {
+                  <button type="button" class="w-full text-left px-3 py-2 hover:bg-[var(--surface)] cursor-pointer flex items-center gap-2"
+                          (click)="abrirMover(n)">
+                    <ui-icon name="heroArrowsRightLeft" class="w-4 h-4" /> Mover clientes
+                  </button>
+                }
+                @if (n.status_whatsapp === 'banido') {
+                  <button type="button" class="w-full text-left px-3 py-2 hover:bg-[var(--surface)] cursor-pointer flex items-center gap-2 text-[var(--accent)]"
+                          (click)="marcarAtivo(n); fecharMenu()">
+                    <ui-icon name="heroCheckCircle" class="w-4 h-4" /> Reativar
+                  </button>
+                } @else {
+                  <button type="button" class="w-full text-left px-3 py-2 hover:bg-[var(--danger)]/10 text-[var(--danger)] cursor-pointer flex items-center gap-2"
+                          (click)="marcarBanido(n); fecharMenu()">
+                    <ui-icon name="heroNoSymbol" class="w-4 h-4" /> Banir
+                  </button>
+                }
+                <button type="button" class="w-full text-left px-3 py-2 hover:bg-[var(--danger)]/10 text-[var(--danger)] cursor-pointer flex items-center gap-2 border-t border-[var(--border)]"
+                        (click)="excluir(n)">
+                  <ui-icon name="heroTrash" class="w-4 h-4" /> Excluir
+                </button>
               </div>
             }
           </div>
-          <span
-            class="text-xs font-medium px-2 py-1 rounded-full shrink-0"
-            [class]="statusBadgeClasse(n.status_whatsapp)"
-          >
+        </div>
+
+        <!-- Status + último health check -->
+        <div class="flex items-center justify-between gap-2 text-xs">
+          <span class="font-medium px-2 py-0.5 rounded-full" [class]="statusBadgeClasse(n.status_whatsapp)">
             {{ statusLabel(n.status_whatsapp) }}
           </span>
-        </header>
-
-        <!-- Timestamp do último health check -->
-        @if (n.ultimo_health_check) {
-          <div class="text-xs text-[var(--text-muted)]">
-            Verificado em {{ n.ultimo_health_check | date:'dd/MM HH:mm' }}
-          </div>
-        } @else {
-          <div class="text-xs text-[var(--warning)]">
-            Nunca verificado &mdash; clique em "Testar conexão"
-          </div>
-        }
-
-        <!-- Ocupação -->
-        @if (n.status_whatsapp !== 'banido') {
-          <div class="space-y-1.5">
-            <div class="flex items-center justify-between text-sm">
-              <span class="text-[var(--text-secondary)]">Ocupação</span>
-              <span class="font-medium text-[var(--text-primary)]">
-                {{ n.clientes_atribuidos }} / {{ limitePorNumero() }}
-                <span class="text-[var(--text-muted)] ml-1">
-                  ({{ ocupacaoPct(n) }}%)
-                </span>
-              </span>
-            </div>
-            <div class="w-full h-2 rounded-full bg-[var(--border)] overflow-hidden">
-              <div
-                class="h-full rounded-full transition-all"
-                [class]="ocupacaoCorClasse(n)"
-                [style.width.%]="ocupacaoPct(n)"
-              ></div>
-            </div>
-            @if (ocupacaoPct(n) >= 100) {
-              <div class="text-xs text-[var(--danger)]">
-                Lotado &mdash; novos clientes vão para outros números
-              </div>
-            }
-          </div>
-        } @else {
-          <div class="text-sm text-[var(--text-secondary)]">
-            {{ n.clientes_atribuidos }} cliente(s) migrado(s)
-            @if (n.motivo_banimento) {
-              <div class="text-xs text-[var(--text-muted)] mt-1">
-                Motivo: {{ n.motivo_banimento }}
-              </div>
-            }
-          </div>
-        }
-
-        <!-- Ações -->
-        <footer class="flex flex-wrap gap-2 pt-2 border-t border-[var(--border)] mt-auto">
-          @if (n.status_whatsapp === 'banido') {
-            <button
-              type="button"
-              class="flex-1 text-sm px-3 py-2 rounded-lg
-                     bg-[var(--accent)]/10 text-[var(--accent)]
-                     hover:bg-[var(--accent)]/20 cursor-pointer transition-colors"
-              (click)="marcarAtivo(n)"
-            >
-              Reativar
-            </button>
+          @if (n.ultimo_health_check) {
+            <span class="text-[var(--text-muted)]">
+              Verificado {{ n.ultimo_health_check | date:'dd/MM HH:mm' }}
+            </span>
           } @else {
-            <button
-              type="button"
-              class="flex-1 text-sm px-3 py-2 rounded-lg
-                     bg-[var(--surface)] border border-[var(--border)]
-                     text-[var(--text-primary)]
-                     hover:bg-[var(--surface-elevated)] disabled:opacity-50
-                     cursor-pointer transition-colors flex items-center justify-center gap-1.5"
-              [disabled]="testandoId() === n.credencial_id"
-              (click)="testarConexao(n)"
-            >
-              @if (testandoId() === n.credencial_id) {
-                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
-                Testando&hellip;
-              } @else {
-                Testar conexão
-              }
-            </button>
-            @if (!n.eh_principal) {
-              <button
-                type="button"
-                class="text-sm px-3 py-2 rounded-lg
-                       text-[var(--text-secondary)] hover:text-[var(--text-primary)]
-                       hover:bg-[var(--surface)] cursor-pointer transition-colors"
-                (click)="marcarPrincipal(n)"
-                title="Definir como número padrão para novos clientes"
-              >
-                <ui-icon name="heroStar" class="w-4 h-4" />
-              </button>
-            }
-            <button
-              type="button"
-              class="text-sm px-3 py-2 rounded-lg
-                     text-[var(--text-secondary)] hover:text-[var(--danger)]
-                     hover:bg-[var(--danger)]/10 disabled:opacity-50
-                     cursor-pointer transition-colors flex items-center gap-1.5"
-              [disabled]="migrandoId() === n.credencial_id"
-              (click)="marcarBanido(n)"
-              title="Banir número (migra clientes vinculados)"
-            >
-              @if (migrandoId() === n.credencial_id) {
-                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
-                Migrando&hellip;
-              } @else {
-                <ui-icon name="heroNoSymbol" class="w-4 h-4" />
-                Banir
-              }
-            </button>
+            <span class="text-[var(--warning)]">Nunca verificado</span>
           }
-        </footer>
+        </div>
+
+        <!-- Ocupação (compacta) -->
+        @if (n.status_whatsapp !== 'banido') {
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-[var(--text-secondary)]">
+                {{ n.clientes_atribuidos }} / {{ limitePorNumero() }} clientes
+              </span>
+              <span class="text-[var(--text-muted)]">{{ ocupacaoPct(n) }}%</span>
+            </div>
+            <div class="w-full h-1.5 rounded-full bg-[var(--border)] overflow-hidden">
+              <div class="h-full rounded-full transition-all" [class]="ocupacaoCorClasse(n)" [style.width.%]="ocupacaoPct(n)"></div>
+            </div>
+          </div>
+        } @else if (n.motivo_banimento) {
+          <div class="text-xs text-[var(--text-muted)]">
+            Motivo: {{ n.motivo_banimento }}
+          </div>
+        }
+
+        <!-- Botão primário: Testar conexão -->
+        <button type="button"
+                class="w-full text-xs font-medium px-3 py-2 rounded-xl border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] disabled:opacity-50 cursor-pointer transition flex items-center justify-center gap-1.5"
+                [disabled]="testandoId() === n.credencial_id"
+                (click)="testarConexao(n)">
+          @if (testandoId() === n.credencial_id) {
+            <svg class="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            Testando&hellip;
+          } @else {
+            Testar conexão
+          }
+        </button>
       </article>
     }
   </div>
@@ -465,3 +426,111 @@
     </div>
   </form>
 </app-modal>
+
+<!-- Modal: editar número -->
+@if (editandoNumero(); as ed) {
+  <app-modal [open]="true" (closed)="fecharEdicao()" size="md" title="Editar número">
+    <form class="flex flex-col gap-4" (ngSubmit)="salvarEdicao()" (keydown.enter)="$event.preventDefault()">
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-medium text-[var(--text-primary)]">Apelido</span>
+        <input type="text"
+               class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+               placeholder="Ex: Cobrança 1"
+               [value]="editApelido()" (input)="editApelido.set($any($event.target).value)" />
+      </label>
+
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-medium text-[var(--text-primary)]">Número E.164</span>
+        <input type="text"
+               class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-mono text-sm"
+               placeholder="+5511987654321"
+               [value]="editNumeroE164()" (input)="editNumeroE164.set($any($event.target).value)" />
+      </label>
+
+      @if (opcaoProvedorAtivo(); as op) {
+        @for (campo of op.campos_instancia; track campo.key) {
+          <label class="flex flex-col gap-1">
+            <span class="text-sm font-medium text-[var(--text-primary)]">{{ campo.label }}</span>
+            <input [type]="campo.type"
+                   class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-mono text-sm"
+                   [value]="getEditConfig(campo.key)"
+                   (input)="setEditConfig(campo.key, $any($event.target).value)" />
+          </label>
+        }
+      }
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
+        <button type="button" class="px-4 py-2 rounded-lg text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                (click)="fecharEdicao()">Cancelar</button>
+        <button type="submit" [disabled]="salvandoEdicao()"
+                class="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent)] text-white hover:opacity-90 disabled:opacity-50 cursor-pointer flex items-center gap-2">
+          @if (salvandoEdicao()) {
+            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+          }
+          Salvar
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}
+
+<!-- Modal: mover clientes -->
+@if (movendoNumero(); as orig) {
+  <app-modal [open]="true" (closed)="fecharMover()" size="md" title="Mover clientes para outro número">
+    <form class="flex flex-col gap-4" (ngSubmit)="confirmarMover()" (keydown.enter)="$event.preventDefault()">
+      <p class="text-sm text-[var(--text-secondary)]">
+        Os <strong>{{ orig.clientes_atribuidos }}</strong> cliente(s) atribuídos a
+        <strong>{{ apelidoOuPlaceholder(orig) }}</strong> serão migrados para o número escolhido.
+      </p>
+
+      @if (destinosDisponiveis().length === 0) {
+        <div class="rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/30 px-3 py-2 text-sm">
+          Nenhum outro número ativo disponível. Adicione outro número antes.
+        </div>
+      } @else {
+        <label class="flex flex-col gap-1">
+          <span class="text-sm font-medium text-[var(--text-primary)]">Destino <span class="text-[var(--danger)]">*</span></span>
+          <select
+            class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+            [value]="destinoMover()"
+            (change)="destinoMover.set($any($event.target).value)">
+            <option value="">Selecione…</option>
+            @for (dest of destinosDisponiveis(); track dest.credencial_id) {
+              <option [value]="dest.credencial_id">
+                {{ apelidoOuPlaceholder(dest) }} — {{ numeroOuPlaceholder(dest) }}
+                ({{ dest.clientes_atribuidos }}/{{ limitePorNumero() }})
+              </option>
+            }
+          </select>
+        </label>
+      }
+
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-medium text-[var(--text-primary)]">Motivo (opcional)</span>
+        <input type="text"
+               class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+               placeholder="Ex: redistribuição de carga"
+               [value]="motivoMover()" (input)="motivoMover.set($any($event.target).value)" />
+      </label>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
+        <button type="button" class="px-4 py-2 rounded-lg text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                (click)="fecharMover()">Cancelar</button>
+        <button type="submit"
+                [disabled]="!destinoMover() || salvandoMover()"
+                class="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent)] text-white hover:opacity-90 disabled:opacity-50 cursor-pointer flex items-center gap-2">
+          @if (salvandoMover()) {
+            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+          }
+          Mover {{ orig.clientes_atribuidos }} cliente(s)
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}
