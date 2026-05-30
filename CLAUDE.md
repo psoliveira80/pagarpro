@@ -10,7 +10,7 @@ Antes de responder a QUALQUER tarefa em uma sessão nova, você DEVE:
 
 1. **Ler `_bmad-output/planning-artifacts/ARCHITECTURE.md`** — a arquitetura macro do sistema.
 2. **Ler `docs/manual-desenvolvedor-tecnico.md`** — convenções e padrões técnicos do projeto.
-3. **Se a tarefa toca frontend**: ler `docs/frontend-rules/frontend_architecture_manifesto.md` E `docs/frontend-rules/angular-structure.md`.
+3. **Se a tarefa toca frontend**: ler `docs/frontend-rules/frontend_architecture_manifesto.md` E `docs/frontend-rules/angular-structure.md`. **Toda alteração de frontend DEVE considerar mobile e responsividade desde o desenho da solução** — não como ajuste posterior.
 4. **Se a tarefa toca regras de negócio**: ler `docs/manual-desenvolvedor-funcional.md`.
 5. **Se a tarefa toca cobrança, recorrência ou mensageria**: ler `docs/architecture-recurrence-and-collection.md` e/ou `docs/architecture-messaging-channels.md`.
 6. **Sempre consultar `docs/glossario-ptbr.md`** para garantir uso correto dos termos de domínio.
@@ -41,10 +41,11 @@ Antes de declarar qualquer tarefa como concluída, você DEVE:
 3. **Rode lint e testes existentes** que possam ter sido afetados pela mudança.
 4. **Confirme que a mudança respeita** as convenções dos manuais e do manifesto de frontend (se aplicável).
 5. **Se houver UI nova**: verifique que segue o padrão de UX em `docs/ux-pattern-overlay-sidebar.md` e similares.
-6. **Se houver mudança de schema do banco**: confirme que há migração Alembic correspondente e que respeita a estrutura multi-tenant com RLS.
-7. **Confirme nomenclatura PT-BR** contra `docs/glossario-ptbr.md`.
+6. **Se houver qualquer alteração de frontend**: confirme que a interface é responsiva e funciona bem em mobile. Verifique explicitamente os breakpoints principais (mobile, tablet, desktop), ausência de overflow horizontal, tamanho adequado dos alvos de toque, e comportamento correto de overlays/sidebars em telas pequenas. Responsividade não é opcional nem "ajuste depois" — é parte do pronto.
+7. **Se houver mudança de schema do banco**: confirme que há migração Alembic correspondente e que respeita a estrutura multi-tenant com RLS.
+8. **Confirme nomenclatura PT-BR** contra `docs/glossario-ptbr.md`.
 
-Só declare concluído depois desses 7 passos.
+Só declare concluído depois desses 8 passos.
 
 ---
 

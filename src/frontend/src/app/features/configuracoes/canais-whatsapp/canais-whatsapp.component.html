@@ -16,15 +16,50 @@
 }
 
 <!-- Cabeçalho da página -->
-<header class="mb-4 md:mb-6">
-  <h1 class="text-2xl md:text-3xl font-semibold text-[var(--text-primary)]">
-    Canais &rsaquo; WhatsApp
-  </h1>
-  <p class="text-sm text-[var(--text-secondary)] mt-1">
-    Provedor em uso: <strong>{{ labelProvedorPrincipal() }}</strong>
-    &middot; Monitora e administra os números conectados.
-  </p>
+<header class="mb-4 md:mb-6 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+  <div>
+    <h1 class="text-2xl md:text-3xl font-semibold text-[var(--text-primary)]">
+      Canais &rsaquo; WhatsApp
+    </h1>
+    @if (temProvedorConfigurado()) {
+      <p class="text-sm text-[var(--text-secondary)] mt-1">
+        Provedor: <strong>{{ labelProvedorAtivo() }}</strong>
+        &middot;
+        <a routerLink="/sistema/configuracoes/integracoes"
+           class="text-[var(--accent)] hover:underline">Mudar em Integrações &rarr;</a>
+      </p>
+    } @else {
+      <p class="text-sm text-[var(--text-secondary)] mt-1">
+        Configure um provedor em Integrações antes de adicionar números.
+      </p>
+    }
+  </div>
 </header>
+
+<!-- Estado vazio: sem provedor configurado -->
+@if (!isLoading() && !temProvedorConfigurado()) {
+  <section class="bg-[var(--surface-elevated)] border border-dashed border-[var(--border)]
+                  rounded-2xl p-6 md:p-10 text-center mb-4 md:mb-6">
+    <div class="mx-auto w-14 h-14 mb-4 rounded-full bg-[var(--accent)]/10
+                flex items-center justify-center">
+      <ui-icon name="heroChatBubbleLeftRight" class="w-7 h-7 text-[var(--accent)]" />
+    </div>
+    <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-2">
+      Nenhum provedor WhatsApp configurado
+    </h2>
+    <p class="text-sm text-[var(--text-secondary)] max-w-md mx-auto mb-5">
+      Antes de cadastrar números aqui, escolha qual API o sistema vai usar
+      pra enviar mensagens (Evolution Go, Evolution API, Z-API, Uazapi).
+    </p>
+    <a routerLink="/sistema/configuracoes/integracoes"
+       class="inline-flex items-center gap-2 px-4 py-2 rounded-lg
+              bg-[var(--accent)] text-white font-medium
+              hover:opacity-90 transition-opacity">
+      <ui-icon name="heroAdjustmentsHorizontal" class="w-5 h-5" />
+      Configurar provedor &rarr;
+    </a>
+  </section>
+}
 
 <!-- Resumo + cabeçalho de capacidade -->
 @if (!isLoading()) {
@@ -97,20 +132,22 @@
   </section>
 }
 
-<!-- Botão admin: adicionar número (modo SaaS) -->
-<div class="flex items-center justify-end mb-4">
-  <button
-    type="button"
-    class="inline-flex items-center gap-2 px-3 py-2 rounded-lg
-           border border-dashed border-[var(--border)]
-           text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]
-           hover:border-[var(--accent)] cursor-pointer transition-colors"
-    (click)="abrirFormNovoNumero()"
-  >
-    <ui-icon name="heroPlus" class="w-4 h-4" />
-    Adicionar número (admin SaaS)
-  </button>
-</div>
+<!-- Botão: adicionar número (desabilitado sem provedor) -->
+@if (temProvedorConfigurado()) {
+  <div class="flex items-center justify-end mb-4">
+    <button
+      type="button"
+      class="inline-flex items-center gap-2 px-3 py-2 rounded-lg
+             border border-dashed border-[var(--border)]
+             text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]
+             hover:border-[var(--accent)] cursor-pointer transition-colors"
+      (click)="abrirFormNovoNumero()"
+    >
+      <ui-icon name="heroPlus" class="w-4 h-4" />
+      Adicionar número
+    </button>
+  </div>
+}
 
 <!-- Loading -->
 @if (isLoading()) {
@@ -324,29 +361,13 @@
     (ngSubmit)="salvarNovoNumero()"
     (keydown.enter)="$event.preventDefault()"
   >
-    <!-- Seletor de provedor — form dinâmico abaixo -->
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-medium text-[var(--text-primary)]">
-        Provedor <span class="text-[var(--danger)]">*</span>
-      </span>
-      <app-select
-        [options]="provedorOptions()"
-        [value]="novoProvedorId()"
-        (valueChange)="onProvedorNovoChange($event)"
-        placeholder="Selecione o provedor"
-      />
-    </label>
-
-    @if (provedorSelecionado(); as prov) {
-      <p class="text-xs text-[var(--text-secondary)]">{{ prov.help }}</p>
-
-      @if (!prov.disponivel) {
-        <div class="rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/30
-                    px-3 py-2 text-sm text-[var(--text-primary)]">
-          Este provedor está reservado mas ainda não tem adapter implementado.
-          Cadastro desabilitado.
-        </div>
-      }
+    @if (opcaoProvedorAtivo(); as prov) {
+      <p class="text-xs text-[var(--text-secondary)]">
+        Provedor: <strong>{{ prov.label }}</strong>
+        &middot;
+        <a routerLink="/sistema/configuracoes/integracoes"
+           class="text-[var(--accent)] hover:underline">Mudar &rarr;</a>
+      </p>
 
       <label class="flex flex-col gap-1">
         <span class="text-sm font-medium text-[var(--text-primary)]">
@@ -379,8 +400,7 @@
         />
       </label>
 
-      <!-- Campos dinâmicos do provedor -->
-      @for (campo of prov.campos; track campo.key) {
+      @for (campo of prov.campos_instancia; track campo.key) {
         <label class="flex flex-col gap-1">
           <span class="text-sm font-medium text-[var(--text-primary)]">
             {{ campo.label }}
@@ -398,7 +418,6 @@
             [value]="getNovoConfig(campo.key)"
             (input)="setNovoConfig(campo.key, $any($event.target).value)"
             [required]="campo.required"
-            [disabled]="!prov.disponivel"
           />
         </label>
       }
@@ -408,7 +427,6 @@
           type="checkbox"
           class="rounded border-[var(--border)] accent-[var(--accent)]"
           [checked]="novoPrincipal()"
-          [disabled]="!prov.disponivel"
           (change)="novoPrincipal.set($any($event.target).checked)"
         />
         <span class="text-sm text-[var(--text-primary)]">

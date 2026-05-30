@@ -192,6 +192,11 @@ def create_app() -> FastAPI:
 
     app.include_router(numeros_cobranca_router, prefix="/api/v1")
 
+    # API v1 — config de provedor WhatsApp 1:1 por empresa
+    from app.api.v1.whatsapp_provedor_routes import router as whatsapp_provedor_router
+
+    app.include_router(whatsapp_provedor_router, prefix="/api/v1")
+
     # SSE routes
     from app.api.sse import router as sse_router
 

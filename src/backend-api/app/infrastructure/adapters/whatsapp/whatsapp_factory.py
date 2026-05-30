@@ -38,7 +38,12 @@ _ADAPTER_REGISTRY: dict[str, type] = {
 }
 
 def _build_adapter(provider: str, config: dict) -> IWhatsAppGateway | None:
-    """Instantiate adapter from provider name + config dict."""
+    """Instantiate adapter from provider name + ALREADY-MERGED config dict.
+
+    O `config` aqui já deve ser o resultado do merge `provider_config |
+    instance_config` (instance prevalece). Use `_build_adapter_para_credencial`
+    quando partir de uma credencial — ela faz o merge antes.
+    """
     if provider == "zapi":
         return ZapiAdapter(
             instance_id=config.get("instance_id", ""),
@@ -71,6 +76,34 @@ def _build_adapter(provider: str, config: dict) -> IWhatsAppGateway | None:
     else:
         log.error("unknown_whatsapp_provider", provider=provider)
         return None
+
+
+async def _carregar_provider_config(
+    session: AsyncSession, empresa_id
+) -> dict:
+    """Carrega `WhatsappProvedorConfig` da empresa e devolve só o dict de
+    config global. Retorna `{}` se não houver entry (empresa sem provider
+    configurado em Integrações)."""
+    from app.infrastructure.db.models.config import WhatsappProvedorConfig
+
+    stmt = select(WhatsappProvedorConfig).where(
+        WhatsappProvedorConfig.empresa_id == empresa_id,
+        WhatsappProvedorConfig.ativo.is_(True),
+    )
+    cfg = (await session.execute(stmt)).scalar_one_or_none()
+    return dict(cfg.config or {}) if cfg is not None else {}
+
+
+async def _build_adapter_para_credencial(
+    session: AsyncSession, cred
+) -> IWhatsAppGateway | None:
+    """Cria o adapter pra uma `IntegrationCredential` fazendo merge:
+    provider config (global da empresa) | instance config (da credencial).
+    Instance prevalece em conflito.
+    """
+    provider_cfg = await _carregar_provider_config(session, cred.empresa_id)
+    merged = {**provider_cfg, **(cred.config or {})}
+    return _build_adapter(cred.provedor, merged)
 
 
 async def get_whatsapp_gateway(
@@ -112,7 +145,7 @@ async def get_whatsapp_gateway(
         log.warning("no_active_whatsapp_provider", empresa_id=str(empresa_id))
         return None
 
-    return _build_adapter(cred.provedor, cred.config or {})
+    return await _build_adapter_para_credencial(session, cred)
 
 
 def clear_adapter_cache() -> None:
@@ -145,7 +178,7 @@ async def get_adapter_por_credencial_id(
     if cred is None:
         log.warning("credencial_nao_encontrada", credencial_id=str(credencial_id))
         return None
-    return _build_adapter(cred.provedor, cred.config or {})
+    return await _build_adapter_para_credencial(session, cred)
 
 
 async def get_evolution_go_por_instance_id(
@@ -170,7 +203,7 @@ async def get_evolution_go_por_instance_id(
         log.warning("evolution_go_credencial_nao_encontrada", instance_id=instance_id)
         return None, None
 
-    adapter = _build_adapter(cred.provedor, cred.config or {})
+    adapter = await _build_adapter_para_credencial(session, cred)
     if adapter is None:
         return None, None
     return adapter, cred
@@ -235,4 +268,4 @@ async def get_evolution_go_por_credencial_telefone(
         )).scalar_one_or_none()
     if cred is None:
         return None
-    return _build_adapter(cred.provedor, cred.config or {})
+    return await _build_adapter_para_credencial(session, cred)

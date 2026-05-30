@@ -7,6 +7,12 @@ import { ModalComponent } from '../../../shared/components/modal/modal.component
 import { ToastService } from '../../../shared/components/toast/toast.service';
 import { ToastComponent } from '../../../shared/components/toast/toast.component';
 import { AdminService, Integration } from '../../../core/services/admin.service';
+import {
+  OpcaoProvedor,
+  ProvedorConfig,
+  WhatsappProvedorConflitoError,
+  WhatsappProvedorService,
+} from '../../../core/services/whatsapp-provedor.service';
 import { ConfirmService } from '../../../shared/services/confirm.service';
 
 interface ProviderField {
@@ -41,6 +47,7 @@ interface CategoryDef {
 })
 export class IntegracoesComponent implements OnInit {
   private readonly adminService = inject(AdminService);
+  private readonly whatsappProvedorService = inject(WhatsappProvedorService);
   private readonly toastService = inject(ToastService);
   private readonly confirmService = inject(ConfirmService);
 
@@ -53,6 +60,31 @@ export class IntegracoesComponent implements OnInit {
   readonly formCategory = signal('');
   readonly formProvider = signal('');
   readonly formFields = signal<Record<string, string>>({});
+
+  // ─── WhatsApp provedor (card próprio acima dos demais) ───
+  readonly whatsappProvedorConfig = signal<ProvedorConfig | null>(null);
+  readonly whatsappOpcoes = signal<OpcaoProvedor[]>([]);
+  readonly mostrarFormWhatsapp = signal(false);
+  readonly formWhatsappProvedor = signal('evolution_go');
+  readonly formWhatsappConfig = signal<Record<string, string>>({});
+  readonly salvandoWhatsapp = signal(false);
+
+  readonly whatsappProvedorOpcoes = computed<SelectOption[]>(() =>
+    this.whatsappOpcoes().map((o) => ({
+      value: o.id,
+      label: o.disponivel ? o.label : `${o.label} — em breve`,
+    })),
+  );
+
+  readonly whatsappOpcaoSelecionada = computed<OpcaoProvedor | null>(() =>
+    this.whatsappOpcoes().find((o) => o.id === this.formWhatsappProvedor()) ?? null,
+  );
+
+  readonly whatsappOpcaoAtiva = computed<OpcaoProvedor | null>(() => {
+    const cfg = this.whatsappProvedorConfig();
+    if (!cfg) return null;
+    return this.whatsappOpcoes().find((o) => o.id === cfg.provedor) ?? null;
+  });
 
   readonly categories: CategoryDef[] = [
     // WhatsApp foi removido daqui em 2026-05-29 — virou tela dedicada em
@@ -141,7 +173,7 @@ export class IntegracoesComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    await this.load();
+    await Promise.all([this.load(), this.carregarWhatsappProvedor()]);
   }
 
   async load(): Promise<void> {
@@ -152,6 +184,81 @@ export class IntegracoesComponent implements OnInit {
       this.toastService.show({ message: 'Erro ao carregar integrações', type: 'error' });
     } finally {
       this.isLoading.set(false);
+    }
+  }
+
+  async carregarWhatsappProvedor(): Promise<void> {
+    try {
+      const r = await this.whatsappProvedorService.obter();
+      this.whatsappProvedorConfig.set(r.config);
+      this.whatsappOpcoes.set(r.opcoes);
+    } catch {
+      // Silencioso
+    }
+  }
+
+  abrirFormWhatsapp(): void {
+    const cfg = this.whatsappProvedorConfig();
+    this.formWhatsappProvedor.set(cfg?.provedor ?? 'evolution_go');
+    this.formWhatsappConfig.set(cfg?.config ? { ...cfg.config } : {});
+    this.mostrarFormWhatsapp.set(true);
+  }
+
+  fecharFormWhatsapp(): void {
+    this.mostrarFormWhatsapp.set(false);
+  }
+
+  onWhatsappProvedorChange(id: string): void {
+    this.formWhatsappProvedor.set(id);
+    this.formWhatsappConfig.set({});
+  }
+
+  setWhatsappConfig(key: string, value: string): void {
+    this.formWhatsappConfig.update((c) => ({ ...c, [key]: value }));
+  }
+
+  getWhatsappConfig(key: string): string {
+    return this.formWhatsappConfig()[key] ?? '';
+  }
+
+  get podeSalvarWhatsapp(): boolean {
+    const op = this.whatsappOpcaoSelecionada();
+    if (!op || !op.disponivel) return false;
+    return op.campos_provedor
+      .filter((f) => f.required)
+      .every((f) => this.getWhatsappConfig(f.key).trim().length > 0);
+  }
+
+  async salvarWhatsapp(forcar = false): Promise<void> {
+    if (!this.podeSalvarWhatsapp) return;
+    const op = this.whatsappOpcaoSelecionada()!;
+    const config: Record<string, string> = {};
+    for (const f of op.campos_provedor) {
+      const v = this.getWhatsappConfig(f.key).trim();
+      if (v.length > 0) config[f.key] = v;
+    }
+    this.salvandoWhatsapp.set(true);
+    try {
+      await this.whatsappProvedorService.salvar({ provedor: op.id, config, forcar });
+      this.toastService.show({ message: 'Provedor WhatsApp salvo', type: 'success' });
+      this.fecharFormWhatsapp();
+      await this.carregarWhatsappProvedor();
+    } catch (err) {
+      if (err instanceof WhatsappProvedorConflitoError) {
+        const ok = await this.confirmService.confirm({
+          text: `${err.detalhe.message} ${err.detalhe.instancias_afetadas} instância(s) serão desativadas. Confirma?`,
+          type: 'danger',
+        });
+        if (ok) {
+          await this.salvarWhatsapp(true);
+        }
+      } else {
+        const detalhe =
+          (err as { error?: { detail?: string } })?.error?.detail ?? 'Erro ao salvar provedor';
+        this.toastService.show({ message: detalhe, type: 'error' });
+      }
+    } finally {
+      this.salvandoWhatsapp.set(false);
     }
   }
 

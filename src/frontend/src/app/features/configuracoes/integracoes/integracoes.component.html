@@ -5,28 +5,55 @@
     <p class="text-sm text-[var(--text-muted)] mt-1">Conecte provedores externos ao sistema</p>
   </div>
 
-  <!-- Banner: WhatsApp foi movido pra Canais (Sally / decisão 2026-05-29) -->
-  <a
-    routerLink="/sistema/configuracoes/canais/whatsapp"
-    class="flex items-center gap-3 rounded-2xl border border-[var(--border)]
-           bg-[var(--surface-elevated)] px-4 py-3
-           hover:border-[var(--accent)] hover:shadow-md
-           transition-all cursor-pointer no-underline group"
-  >
-    <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--accent)]/10 shrink-0">
-      <ui-icon name="heroChatBubbleLeftRight" size="1.25rem" class="text-[var(--accent)]" />
-    </div>
-    <div class="flex-1 min-w-0">
-      <div class="text-sm font-semibold text-[var(--text-primary)]">
-        WhatsApp agora fica em Canais
+  <!-- Card WhatsApp Provedor (config global da empresa) -->
+  <section class="rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-5">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--accent)]/10">
+        <ui-icon name="heroChatBubbleLeftRight" size="1.25rem" class="text-[var(--accent)]" />
       </div>
-      <div class="text-xs text-[var(--text-muted)] mt-0.5">
-        Cadastro e monitoramento das instâncias (números) ficam em uma tela
-        dedicada com ocupação, status de saúde e ações de banimento.
+      <div class="flex-1">
+        <h3 class="text-sm font-semibold text-[var(--text-primary)]">WhatsApp</h3>
+        <p class="text-xs text-[var(--text-muted)]">
+          Qual API o sistema usa pra enviar/receber mensagens
+        </p>
       </div>
     </div>
-    <ui-icon name="heroArrowRight" size="1rem" class="text-[var(--text-muted)] group-hover:text-[var(--accent)] shrink-0" />
-  </a>
+
+    @if (whatsappOpcaoAtiva(); as op) {
+      <div class="rounded-xl bg-green-500/5 border border-green-500/20 px-3 py-2.5 mb-3">
+        <div class="flex items-center gap-2">
+          <span class="h-2 w-2 rounded-full bg-green-400"></span>
+          <span class="text-xs font-medium text-green-400">Configurado</span>
+        </div>
+        <p class="text-sm font-medium text-[var(--text-primary)] mt-1">{{ op.label }}</p>
+      </div>
+      <p class="text-xs text-[var(--text-muted)] mb-3">
+        Cadastre os números/instâncias em
+        <a routerLink="/sistema/configuracoes/canais/whatsapp"
+           class="text-[var(--accent)] hover:underline">Canais &rsaquo; WhatsApp &rarr;</a>
+      </p>
+      <button
+        (click)="abrirFormWhatsapp()"
+        class="w-full px-3 py-2 rounded-xl border border-[var(--border)] text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] transition cursor-pointer"
+      >
+        Mudar provedor
+      </button>
+    } @else {
+      <div class="rounded-xl bg-[var(--surface)] border border-[var(--border)] px-3 py-2.5 mb-3">
+        <div class="flex items-center gap-2">
+          <span class="h-2 w-2 rounded-full bg-[var(--text-muted)]"></span>
+          <span class="text-xs text-[var(--text-muted)]">Não configurado</span>
+        </div>
+      </div>
+      <button
+        (click)="abrirFormWhatsapp()"
+        class="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-[var(--accent)]/40 px-3 py-2 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent)]/5 transition cursor-pointer"
+      >
+        <ui-icon name="heroPlus" size="0.75rem" />
+        Configurar
+      </button>
+    }
+  </section>
 
   <!-- Category Cards -->
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -182,6 +209,82 @@
       [disabled]="!canSave"
       class="px-4 py-2 text-sm font-medium text-white bg-[var(--accent)] rounded-xl hover:opacity-90 transition cursor-pointer disabled:opacity-50"
     >
+      Salvar
+    </button>
+  </div>
+</app-modal>
+
+<!-- Modal WhatsApp Provedor -->
+<app-modal
+  [open]="mostrarFormWhatsapp()"
+  (closed)="fecharFormWhatsapp()"
+  size="md"
+  title="Configurar provedor WhatsApp"
+>
+  <form class="flex flex-col gap-4 p-1"
+        (ngSubmit)="salvarWhatsapp()"
+        (keydown.enter)="$event.preventDefault()">
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-medium text-[var(--text-primary)]">
+        Provedor <span class="text-[var(--danger)]">*</span>
+      </span>
+      <app-select
+        [options]="whatsappProvedorOpcoes()"
+        [value]="formWhatsappProvedor()"
+        (valueChange)="onWhatsappProvedorChange($event)"
+        placeholder="Selecione o provedor"
+      />
+    </label>
+
+    @if (whatsappOpcaoSelecionada(); as op) {
+      <p class="text-xs text-[var(--text-secondary)]">{{ op.help }}</p>
+
+      @if (!op.disponivel) {
+        <div class="rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/30 px-3 py-2 text-sm text-[var(--text-primary)]">
+          Este provedor ainda não tem adapter implementado — em breve.
+        </div>
+      }
+
+      @if (op.campos_provedor.length === 0 && op.disponivel) {
+        <div class="rounded-lg bg-green-500/5 border border-green-500/20 px-3 py-2 text-xs text-green-400">
+          Sem campos globais — os dados de conexão vão por instância em
+          Canais &rsaquo; WhatsApp.
+        </div>
+      }
+
+      @for (campo of op.campos_provedor; track campo.key) {
+        <label class="flex flex-col gap-1">
+          <span class="text-sm font-medium text-[var(--text-primary)]">
+            {{ campo.label }}
+            @if (campo.required) { <span class="text-[var(--danger)]">*</span> }
+          </span>
+          <input
+            [type]="campo.type"
+            class="px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-mono text-sm"
+            [value]="getWhatsappConfig(campo.key)"
+            (input)="setWhatsappConfig(campo.key, $any($event.target).value)"
+            [required]="campo.required"
+            [disabled]="!op.disponivel"
+          />
+        </label>
+      }
+    }
+  </form>
+
+  <div modal-footer class="flex justify-end gap-3 px-6 py-4 border-t border-[var(--border)]">
+    <button type="button" (click)="fecharFormWhatsapp()"
+            class="px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] rounded-xl transition cursor-pointer">
+      Cancelar
+    </button>
+    <button (click)="salvarWhatsapp()"
+            [disabled]="!podeSalvarWhatsapp || salvandoWhatsapp()"
+            class="px-4 py-2 text-sm font-medium text-white bg-[var(--accent)] rounded-xl hover:opacity-90 transition cursor-pointer disabled:opacity-50 flex items-center gap-2">
+      @if (salvandoWhatsapp()) {
+        <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+      }
       Salvar
     </button>
   </div>

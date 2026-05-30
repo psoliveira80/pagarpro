@@ -16,24 +16,7 @@ export interface NumeroWhatsApp {
   motivo_banimento: string | null;
 }
 
-export interface CampoProvedor {
-  key: string;
-  label: string;
-  type: 'text' | 'password' | 'url';
-  required: boolean;
-}
-
-export interface ProvedorWhatsApp {
-  id: string;
-  label: string;
-  help: string;
-  campos: CampoProvedor[];
-  disponivel: boolean;
-  multi_numero: boolean;
-}
-
 export interface NovoNumeroPayload {
-  provedor: string;
   apelido?: string | null;
   numero_e164: string;
   eh_principal?: boolean;
@@ -49,12 +32,6 @@ export class CanaisWhatsappService {
 
   async listar(): Promise<NumeroWhatsApp[]> {
     return firstValueFrom(this.http.get<NumeroWhatsApp[]>(this.baseUrl));
-  }
-
-  async listarProvedores(): Promise<ProvedorWhatsApp[]> {
-    return firstValueFrom(
-      this.http.get<ProvedorWhatsApp[]>(`${this.baseUrl}/provedores`),
-    );
   }
 
   async cadastrar(payload: NovoNumeroPayload): Promise<NumeroWhatsApp> {

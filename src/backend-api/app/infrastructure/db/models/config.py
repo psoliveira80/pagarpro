@@ -80,3 +80,39 @@ class CredencialIntegracao(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     ultimo_health_check: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
     )
+
+
+class WhatsappProvedorConfig(UUIDPrimaryKeyMixin, Base):
+    """Configuração de provedor WhatsApp por empresa — 1:1.
+
+    Separa a escolha "qual API conectar + chaves globais" da relação com
+    instâncias específicas. Cada empresa tem no máximo 1 entrada. As
+    instâncias (números) ficam em `credenciais_integracao` (categoria=
+    whatsapp) e herdam dessa config no `_build_adapter` via merge.
+    """
+
+    __tablename__ = "whatsapp_provedor_config"
+    __table_args__ = (
+        UniqueConstraint("empresa_id", name="uq_whatsapp_provedor_config_empresa"),
+        {"schema": "config"},
+    )
+
+    empresa_id: Mapped[UUID] = mapped_column(
+        ForeignKey("comercial.empresas.id", ondelete="CASCADE"), nullable=False
+    )
+    provedor: Mapped[str] = mapped_column(Text, nullable=False)
+    config: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    ativo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    criado_em: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    atualizado_em: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    atualizado_por_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("acesso.usuarios.id"), nullable=True
+    )
